@@ -13,5 +13,7 @@ ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+RUN npx prisma generate
+
 EXPOSE 8080
 CMD ["node", "server/index.mjs"]
