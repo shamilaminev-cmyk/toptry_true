@@ -35,6 +35,7 @@ jobs:
             --exclude ".github" \
             --exclude ".env" \
             --exclude ".env.*" \
+            --exclude "node_modules/" \
             -e "$RSYNC_RSH" \
             ./ "${USER}@${HOST}:/opt/toptry-ai/"
 
