@@ -1,0 +1,65 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ssh + rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync openssh-client
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync code to server (exclude secrets)
+        run: |
+          rsync -az --delete \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude ".env" \
+            --exclude ".env.*" \
+            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/toptry-ai/
+
+      - name: Deploy (restart container)
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+
+          if [ "$BRANCH" = "main" ]; then
+            CONTAINER="toptry-ai-ai-1"
+            ENV_FILE="/opt/toptry-ai/.env"
+            PORT_BIND="127.0.0.1:8080:8080"
+            ALIAS="ai"
+          else
+            CONTAINER="toptry-ai-staging"
+            ENV_FILE="/opt/toptry-ai/.env.staging"
+            PORT_BIND="127.0.0.1:8081:8080"
+            ALIAS="ai-staging"
+          fi
+
+          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" bash -lc "set -e
+            echo Deploying branch: $BRANCH container: $CONTAINER
+            docker rm -f $CONTAINER >/dev/null 2>&1 || true
+            docker run -d \
+              --name $CONTAINER \
+              --restart unless-stopped \
+              --network toptry-ai_default \
+              --network-alias $ALIAS \
+              --env-file $ENV_FILE \
+              -v /opt/toptry-ai:/app:rw \
+              -w /app \
+              -p $PORT_BIND \
+              node:20-alpine \
+              sh -c 'npm install && node server.mjs'
+          "

@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id
+  email         String         @unique
+  passwordHash  String
+  username      String         @unique
+  avatarUrl     String?
+  isPublic      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  comments      Comment[]
+  following     Follow[]       @relation("following")
+  followers     Follow[]       @relation("followers")
+  likes         Like[]
+  looks         Look[]
+  wardrobeItems WardrobeItem[]
+}
+
+model WardrobeItem {
+  id          String   @id
+  userId      String
+  title       String
+  category    String
+  gender      String
+  tags        String[]
+  color       String?
+  material    String?
+  notes       String?
+  originalKey String
+  cutoutKey   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Look {
+  id              String    @id
+  userId          String
+  title           String
+  itemIds         String[]
+  resultImageKey  String?
+  isPublic        Boolean   @default(false)
+  userDescription String?
+  aiDescription   String?
+  priceBuyNowRUB  Int       @default(0)
+  buyLinks        String[]
+  likesCount      Int       @default(0)
+  commentsCount   Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  comments        Comment[]
+  likes           Like[]
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Like {
+  id        String   @id
+  userId    String
+  lookId    String
+  createdAt DateTime @default(now())
+  look      Look     @relation(fields: [lookId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lookId])
+  @@index([lookId])
+}
+
+model Comment {
+  id        String   @id
+  userId    String
+  lookId    String
+  text      String
+  createdAt DateTime @default(now())
+  look      Look     @relation(fields: [lookId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lookId])
+}
+
+model Follow {
+  id          String   @id
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  follower    User     @relation("following", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
+model Clickout {
+  id        String   @id
+  userId    String?
+  productId String?
+  createdAt DateTime @default(now())
+  meta      Json?
+}
