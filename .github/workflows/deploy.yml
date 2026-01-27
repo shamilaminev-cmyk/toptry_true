@@ -21,18 +21,22 @@ jobs:
           printf "%s" "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
           echo >> ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p 2222 -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "$(printf "%s" "${{ secrets.SSH_PORT }}" | tr -d '\r\n')" -H "$(printf "%s" "${{ secrets.SSH_HOST }}" | tr -d '\r\n')" >> ~/.ssh/known_hosts
 
       - name: Sync code to server (exclude secrets)
         run: |
-          RSYNC_RSH="ssh -i ~/.ssh/id_ed25519 -p 2222 -o StrictHostKeyChecking=yes"
+          HOST="$(printf "%s" "${{ secrets.SSH_HOST }}" | tr -d '\r\n')"
+          USER="$(printf "%s" "${{ secrets.SSH_USER }}" | tr -d '\r\n')"
+          PORT="$(printf "%s" "${{ secrets.SSH_PORT }}" | tr -d '\r\n')"
+
+          RSYNC_RSH="ssh -i ~/.ssh/id_ed25519 -p ${PORT} -o StrictHostKeyChecking=yes"
           rsync -az --delete \
             --exclude ".git" \
             --exclude ".github" \
             --exclude ".env" \
             --exclude ".env.*" \
             -e "$RSYNC_RSH" \
-            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/toptry-ai/"
+            ./ "${USER}@${HOST}:/opt/toptry-ai/"
 
 
       - name: Deploy (restart container)
