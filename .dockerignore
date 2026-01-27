@@ -1,0 +1,15 @@
+.git
+.github
+.vs
+.idea
+
+node_modules
+dist
+build
+.next
+.cache
+
+.env
+.env.*
+*.log
+.DS_Store
