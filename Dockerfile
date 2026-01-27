@@ -14,4 +14,4 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 EXPOSE 8080
-CMD ["node", "server.mjs"]
+CMD ["node", "server/index.mjs"]
