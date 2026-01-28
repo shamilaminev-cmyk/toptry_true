@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { useAppState } from '../store';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const Auth = () => {
   const { actions } = useAppState();
   const navigate = useNavigate();
+  const location = useLocation();
+  // откуда пришли (из RequireAuth)
+  const from = (location.state as any)?.from || '/';
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -22,7 +25,7 @@ const Auth = () => {
       } else {
         await actions.register(email.trim(), username.trim(), password);
       }
-      navigate('/');
+      navigate(from, { replace: true });
     } catch (e: any) {
       setError(e?.message || 'Ошибка');
     } finally {
