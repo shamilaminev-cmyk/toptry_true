@@ -27,13 +27,13 @@ jobs:
             TAG="prod"
             CONTAINER="toptry-ai-prod"
             ENV_FILE="/opt/toptry-ai/.env"
-            PORT_BIND="127.0.0.1:8080:8080"
+            PORT_BIND="127.0.0.1:8080:5174"
             ALIAS="ai"
           else
             TAG="staging"
             CONTAINER="toptry-ai-staging"
             ENV_FILE="/opt/toptry-ai/.env.staging"
-            PORT_BIND="127.0.0.1:8081:8080"
+            PORT_BIND="127.0.0.1:8081:5174"
             ALIAS="ai-staging"
           fi
 
