@@ -12,7 +12,7 @@ export function getAuthConfig() {
     cookieOptions: {
       httpOnly: true,
       sameSite: 'lax',
-      secure: false, // set true behind HTTPS in prod
+      secure: (process.env.NODE_ENV !== 'development'), // true on staging/prod (HTTPS)
       path: '/',
       maxAge: 60 * 60 * 24 * 14, // 14 days
     },
