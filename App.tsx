@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AppProvider, useAppState } from './store';
 import { ICONS } from './constants';
 import Home from './pages/Home';
@@ -85,16 +85,56 @@ const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   );
 };
 
+import { Navigate, useLocation } from 'react-router-dom';
+
+const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { user, loading } = useAppState();
+  const location = useLocation();
+
+  // пока гидратация/восстановление — не дёргаем редиректы
+  if (loading) return null; // или красивый <Splash/> — сделаем позже
+
+  if (!user) {
+    return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
+  }
+
+  return children;
+};
+
+const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { user, loading } = useAppState();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-screen-sm mx-auto">
+        <div className="animate-pulse space-y-4">
+          <div className="h-6 w-40 bg-zinc-100 rounded" />
+          <div className="h-24 bg-zinc-100 rounded-xl" />
+          <div className="h-10 bg-zinc-100 rounded-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
+  }
+
+  return children;
+};
+
+
 const AppRoutes = () => {
   return (
     <Layout>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/catalog" element={<Catalog />} />
-        <Route path="/wardrobe" element={<Wardrobe />} />
-        <Route path="/create-look" element={<CreateLook />} />
+        <Route path="/wardrobe" element={<RequireAuth><Wardrobe /></RequireAuth>} />
+        <Route path="/create-look" element={<RequireAuth><CreateLook /></RequireAuth>} />
         <Route path="/looks" element={<Looks />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/look/:id" element={<LookDetails />} />
       </Routes>

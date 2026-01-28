@@ -80,6 +80,33 @@ function clampArray<T>(arr: T[], max: number): T[] {
   if (arr.length <= max) return arr;
   return arr.slice(0, max);
 }
+async function apiFetch(input: string, init: RequestInit = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const resp = await fetch(input, {
+      ...init,
+      credentials: 'include',
+      signal: controller.signal,
+      headers: {
+        ...(init.headers || {}),
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      },
+    });
+
+    // централизованный 401
+    if (resp.status === 401) {
+      // ничего не кидаем наружу как "stacktrace"
+      throw new Error('AUTH_REQUIRED');
+    }
+
+    return resp;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -119,7 +146,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch('/api/auth/me');
+        const resp = await apiFetch('/api/auth/me');
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
         if (!data?.user) return;
@@ -150,7 +177,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!user?.id) return;
     (async () => {
       try {
-        const resp = await fetch(`/api/wardrobe/list`);
+        const resp = await apiFetch(`/api/wardrobe/list`);
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
         const items = Array.isArray(data?.items) ? data.items : [];
@@ -179,7 +206,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!user?.id) return;
     (async () => {
       try {
-        const resp = await fetch('/api/looks/my');
+        const resp = await apiFetch('/api/looks/my');
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
         const serverLooks = Array.isArray(data?.looks) ? data.looks : [];
@@ -223,9 +250,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const actions = useMemo(() => ({
     login: async (emailOrUsername: string, password: string) => {
-      const resp = await fetch('/api/auth/login', {
+      const resp = await apiFetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emailOrUsername, password }),
       });
       const data = await resp.json().catch(() => ({}));
@@ -245,9 +271,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
     },
     register: async (email: string, username: string, password: string) => {
-      const resp = await fetch('/api/auth/register', {
+      const resp = await apiFetch('/api/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, username, password }),
       });
       const data = await resp.json().catch(() => ({}));
