@@ -348,10 +348,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         itemIds,
         aspectRatio: '3:4',
         priceBuyNowRUB,
-       }),
-      }, 35000);
+        }),
+       }, 35000);
 
-        });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data?.error || `AI server error (${resp.status})`);
         const look = data?.look;
