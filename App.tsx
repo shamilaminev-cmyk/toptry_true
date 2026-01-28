@@ -91,20 +91,6 @@ const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) =
   const { user, loading } = useAppState();
   const location = useLocation();
 
-  // пока гидратация/восстановление — не дёргаем редиректы
-  if (loading) return null; // или красивый <Splash/> — сделаем позже
-
-  if (!user) {
-    return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
-  }
-
-  return children;
-};
-
-const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { user, loading } = useAppState();
-  const location = useLocation();
-
   if (loading) {
     return (
       <div className="p-6 max-w-screen-sm mx-auto">
