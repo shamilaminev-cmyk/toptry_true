@@ -6,18 +6,26 @@ const JWT_SECRET = process.env.JWT_SECRET || '';
 const COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'toptry_session';
 
 export function getAuthConfig() {
+  const cookieName = process.env.AUTH_COOKIE_NAME || 'toptry_session';
+
+  // We run behind nginx with HTTPS on staging/prod.
+  // In local development (http), Secure cookies would be ignored.
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const isLocalDev = nodeEnv === 'development' || nodeEnv === 'dev';
+
   return {
-    jwtSecret: JWT_SECRET,
-    cookieName: COOKIE_NAME,
+    jwtSecret: process.env.JWT_SECRET || '',
+    cookieName,
     cookieOptions: {
       httpOnly: true,
+      secure: !isLocalDev,      // ? staging/prod => true, dev => false
       sameSite: 'lax',
-      secure: (process.env.NODE_ENV !== 'development'), // true on staging/prod (HTTPS)
       path: '/',
       maxAge: 60 * 60 * 24 * 14, // 14 days
     },
   };
 }
+
 
 export function requireJwtSecret() {
   if (!JWT_SECRET) throw new Error('JWT_SECRET is not configured');

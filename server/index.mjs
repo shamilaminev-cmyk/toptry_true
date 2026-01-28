@@ -30,6 +30,8 @@ app.use(
 app.use(cookieParser());
 app.use(authMiddleware);
 app.use(express.json({ limit: '20mb' }));
+app.set('trust proxy', 1);
+
 
 // Initialize optional infrastructure (MinIO bucket, Prisma)
 (async () => {
