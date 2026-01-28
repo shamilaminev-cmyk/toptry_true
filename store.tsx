@@ -85,7 +85,7 @@ async function apiFetch(input: string, init: RequestInit = {}, timeoutMs = 15000
   const t = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const resp = await fetch(input, {
+    const resp = await apiFetch(input, {
       ...init,
       credentials: 'include',
       signal: controller.signal,
@@ -292,7 +292,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
     },
     logout: async () => {
-      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
+      await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
       setUser(null);
     },
     toggleHomeLayout: () => setHomeLayout(prev => 
@@ -340,16 +340,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const itemImageUrls = selectedItems.map((i) => i.images?.[0]).filter(Boolean);
         const itemIds = selectedItems.map((i) => i.id);
         const priceBuyNowRUB = selectedItems.filter((i) => i.isCatalog).reduce((s, i) => s + (i.price || 0), 0);
-        const resp = await fetch('/api/looks/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            selfieDataUrl: user.selfieUrl,
-            itemImageUrls,
-            itemIds,
-            aspectRatio: '3:4',
-            priceBuyNowRUB,
-          }),
+        const resp = await apiFetch('/api/looks/create', {
+        method: 'POST',
+        body: JSON.stringify({
+        selfieDataUrl: user.selfieUrl,
+        itemImageUrls,
+        itemIds,
+        aspectRatio: '3:4',
+        priceBuyNowRUB,
+       }),
+      }, 35000);
+
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data?.error || `AI server error (${resp.status})`);
@@ -384,7 +385,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
     likeLook: async (id: string) => {
       try {
-        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/like`, { method: 'POST' });
+        const resp = await apiFetch(`/api/looks/${encodeURIComponent(id)}/like`, { method: 'POST' });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data?.error || 'Like failed');
         setLooks((prev) => prev.map((l) => (l.id === id ? { ...l, likes: data.likes } : l)));
