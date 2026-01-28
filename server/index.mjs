@@ -13,6 +13,9 @@ dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env.local' });
 
 const PORT = Number(process.env.API_PORT || 5174);
 
+const GEMINI_MODEL_TEXT = process.env.GEMINI_MODEL_TEXT || 'gemini-2.5-flash';
+const GEMINI_MODEL_IMAGE = process.env.GEMINI_MODEL_IMAGE || 'gemini-2.5-flash-image';
+const GEMINI_MODEL_CUTOUT = process.env.GEMINI_MODEL_CUTOUT || 'gemini-3-pro-image-preview';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
   // Server can still start (so the app boots), but AI endpoints will error.
@@ -276,7 +279,7 @@ Requirements:
 If multiple items are visible, choose the most prominent garment.`;
 
     const cutoutResp = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: GEMINI_MODEL_CUTOUT,
       contents: {
         parts: [
           { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
@@ -300,7 +303,9 @@ If multiple items are visible, choose the most prominent garment.`;
         break;
       }
     }
-    if (!cutoutDataUrl) return res.status(502).json({ error: 'Gemini did not return cutout image' });
+    if (!cutoutDataUrl) {
+  cutoutDataUrl = photoDataUrl;
+}
 
     // 2) Extract attributes as strict JSON
     const attrPrompt = `Analyze the clothing item in the image.
@@ -320,7 +325,7 @@ Hints:
 - hintGender: ${hintGender || 'none'}`;
 
     const attrResp = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: GEMINI_MODEL_TEXT,
       contents: {
         parts: [
           { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
@@ -533,7 +538,7 @@ async function generateLookAiDescription({ tryOnImageDataUrl, itemsSummary }) {
     const img = await imageToBase64(tryOnImageDataUrl);
     const prompt = `Ты — стилист. Опиши образ на фото в 1-2 предложениях по-русски: настроение, куда подходит, ключевые детали. Без упоминания брендов.\nСписок вещей: ${itemsSummary}`;
     const resp = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: GEMINI_MODEL_TEXT,
       contents: { parts: [{ inlineData: { data: img.base64, mimeType: img.mimeType } }, { text: prompt }] },
     });
     return (resp?.candidates?.[0]?.content?.parts || []).map((p) => p.text).filter(Boolean).join('').trim();
