@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useAppState } from '../store';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const Auth: React.FC = () => {
   const { actions } = useAppState();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -14,25 +15,34 @@ const Auth: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // ✅ реальный счётчик рендеров (должен быть небольшой)
-console.count('AUTH render');
+  // ✅ реальный счётчик рендеров (если улетает в сотни — есть render-loop)
+  console.count('AUTH render');
 
-const submit = async () => {
-  console.count('AUTH submit');
-  if (busy) return;
+  const from = (location.state as any)?.from || '/';
 
-  setError(null);
-  setBusy(true);
-  try {
-    ...
-  } catch (e:any) {
-    console.error('AUTH submit error:', e);
-    setError(e?.stack || e?.message || String(e) || 'Ошибка');
-  } finally {
-    setBusy(false);
-  }
-};
+  const submit = async () => {
+    console.count('AUTH submit');
 
+    // ✅ предохранитель от лавины повторных submit
+    if (busy) return;
+
+    setError(null);
+    setBusy(true);
+
+    try {
+      if (mode === 'login') {
+        await actions.login(emailOrUsername.trim(), password);
+      } else {
+        await actions.register(email.trim(), username.trim(), password);
+      }
+      navigate(from, { replace: true });
+    } catch (e: any) {
+      console.error('AUTH submit error:', e);
+      setError(e?.stack || e?.message || String(e) || 'Ошибка');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const buttonText = useMemo(() => {
     if (busy) return '...';
@@ -43,13 +53,11 @@ const submit = async () => {
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-3 mb-8">
-          {/* Лого + fallback */}
           <img
             src="/toptry.png"
             alt="toptry"
             className="w-10 h-10 rounded-xl object-cover"
             onError={(e) => {
-              // спрятать картинку, показать fallback (следующий элемент)
               (e.currentTarget as HTMLImageElement).style.display = 'none';
               const fallback = (e.currentTarget as HTMLImageElement)
                 .nextElementSibling as HTMLElement | null;
@@ -95,7 +103,7 @@ const submit = async () => {
           </div>
         )}
 
-        {/* ✅ Form: чтобы исключить клик-ловушки и Enter работал */}
+        {/* ✅ Form: Enter работает, и нет ловушек onClick={submit()} */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
