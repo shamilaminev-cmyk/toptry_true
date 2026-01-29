@@ -119,7 +119,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch('/api/auth/me');
+        const resp = await fetch('/api/auth/me', { credentials: 'include' });
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
         if (!data?.user) return;
@@ -225,6 +225,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     login: async (emailOrUsername: string, password: string) => {
       const resp = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emailOrUsername, password }),
       });
@@ -247,6 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     register: async (email: string, username: string, password: string) => {
       const resp = await fetch('/api/auth/register', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, username, password }),
       });
@@ -267,7 +269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
     },
     logout: async () => {
-      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
       setUser(null);
     },
     toggleHomeLayout: () => setHomeLayout(prev => 
@@ -317,6 +319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const priceBuyNowRUB = selectedItems.filter((i) => i.isCatalog).reduce((s, i) => s + (i.price || 0), 0);
         const resp = await fetch('/api/looks/create', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             selfieDataUrl: user.selfieUrl,
@@ -359,7 +362,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
     likeLook: async (id: string) => {
       try {
-        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/like`, { method: 'POST' });
+        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/like`, { method: 'POST' , credentials: 'include' });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data?.error || 'Like failed');
         setLooks((prev) => prev.map((l) => (l.id === id ? { ...l, likes: data.likes } : l)));
