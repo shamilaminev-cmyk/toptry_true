@@ -1,6 +1,7 @@
 import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+build: { sourcemap: true, minify: false }
 
 export default defineConfig(({ mode }) => {
     return {
