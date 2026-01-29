@@ -12,6 +12,7 @@ import { authMiddleware, requireAuth, getAuthConfig, registerUser, loginUser, si
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env.local' });
 
 const PORT = Number(process.env.API_PORT || 5174);
+const DEMO_MODE = process.env.DEMO_MODE === '1';
 
 const GEMINI_MODEL_TEXT = process.env.GEMINI_MODEL_TEXT || 'gemini-2.5-flash';
 const GEMINI_MODEL_IMAGE = process.env.GEMINI_MODEL_IMAGE || 'gemini-2.5-flash-image';
@@ -23,6 +24,21 @@ if (!GEMINI_API_KEY) {
 }
 
 const app = express();
+
+function demoFallbackExtract(photoDataUrl, hintCategory, hintGender, reason) {
+  return {
+    cutoutDataUrl: photoDataUrl,
+    attributes: {
+      title: 'Предмет одежды',
+      category: hintCategory || 'Аксессуары',
+      gender: hintGender || 'UNISEX',
+      tags: ['demo', 'fallback'],
+      color: 'не определён',
+      material: 'не определён',
+    },
+    warning: `demo_fallback: ${reason}`,
+  };
+}
 
 app.use(
   cors({
@@ -305,6 +321,12 @@ If multiple items are visible, choose the most prominent garment.`;
     }
     if (!cutoutDataUrl) {
   cutoutDataUrl = photoDataUrl;
+}
+
+if (!cutoutDataUrl && DEMO_MODE) {
+  return res.json(
+    demoFallbackExtract(photoDataUrl, hintCategory, hintGender, 'cutout_failed')
+  );
 }
 
     // 2) Extract attributes as strict JSON
