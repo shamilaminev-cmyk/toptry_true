@@ -9,6 +9,8 @@ interface AppState {
   looks: Look[];
   homeLayout: HomeLayout;
   loading: boolean;
+  meLoaded: boolean; 
+  meLoading: boolean;
   aiBusy: boolean;
   aiError: string | null;
   actions: {
@@ -114,6 +116,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [looks, setLooks] = useState<Look[]>(MOCK_LOOKS);
   const [homeLayout, setHomeLayout] = useState<HomeLayout>(HomeLayout.DASHBOARD);
   const [loading, setLoading] = useState(true);
+  const [meLoaded, setMeLoaded] = useState(false); 
+  const [meLoading, setMeLoading] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -142,34 +146,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearTimeout(t);
   }, []);
 
-  // Restore server session (JWT in httpOnly cookie)
-  useEffect(() => {
-    (async () => {
-      try {
-        const resp = await apiFetch('/api/auth/me');
-        if (!resp.ok) return;
-        const data = await resp.json().catch(() => null);
-        if (!data?.user) return;
-        const u = data.user;
-        setUser((prev) => {
-          return {
-            id: u.id,
-            email: u.email,
-            name: prev?.name || u.username,
-            username: u.username,
-            phone: prev?.phone || '',
-            avatarUrl: u.avatarUrl || prev?.avatarUrl,
-            selfieUrl: prev?.selfieUrl,
-            tier: prev?.tier || SubscriptionTier.FREE,
-            limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
-            isPublic: !!u.isPublic,
-          };
-        });
-      } catch {
-        // ignore
-      }
-    })();
-  }, []);
+// Restore server session (JWT in httpOnly cookie)
+useEffect(() => {
+  (async () => {
+    setMeLoading(true);
+    try {
+      const resp = await fetch('/api/auth/me');
+      if (!resp.ok) return;
+
+      const data = await resp.json().catch(() => null);
+      if (!data?.user) return;
+
+      const u = data.user;
+      setUser((prev) => {
+        return {
+          id: u.id,
+          email: u.email,
+          name: prev?.name || u.username,
+          username: u.username,
+          phone: prev?.phone || '',
+          avatarUrl: u.avatarUrl || prev?.avatarUrl,
+          selfieUrl: prev?.selfieUrl,
+          tier: prev?.tier || SubscriptionTier.FREE,
+          limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
+          isPublic: !!u.isPublic,
+        };
+      });
+    } catch {
+      // ignore
+    } finally {
+      setMeLoaded(true);
+      setMeLoading(false);
+    }
+  })();
+}, []);
 
   // Optional: sync wardrobe from server DB (if enabled)
   useEffect(() => {
@@ -394,11 +404,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
   }), [user, looks, wardrobe, homeLayout]);
 
-  return (
-    <AppContext.Provider value={{ user, products: MOCK_PRODUCTS, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
-      {children}
-    </AppContext.Provider>
-  );
+return (
+  <AppContext.Provider
+    value={{
+      user,
+      products: MOCK_PRODUCTS,
+      wardrobe,
+      looks,
+      homeLayout,
+      loading,
+      meLoaded,
+      meLoading,
+      aiBusy,
+      aiError,
+      actions,
+    }}
+  >
+    {children}
+  </AppContext.Provider>
+);
+
 };
 
 export const useAppState = () => {

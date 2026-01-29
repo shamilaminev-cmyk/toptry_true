@@ -88,20 +88,10 @@ const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
 import { Navigate, useLocation } from 'react-router-dom';
 
 const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { user, loading } = useAppState();
+  const { user, meLoaded } = useAppState();
   const location = useLocation();
 
-  if (loading) {
-    return (
-      <div className="p-6 max-w-screen-sm mx-auto">
-        <div className="animate-pulse space-y-4">
-          <div className="h-6 w-40 bg-zinc-100 rounded" />
-          <div className="h-24 bg-zinc-100 rounded-xl" />
-          <div className="h-10 bg-zinc-100 rounded-full" />
-        </div>
-      </div>
-    );
-  }
+  if (!meLoaded) return null; // ждём /api/auth/me
 
   if (!user) {
     return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
@@ -109,6 +99,7 @@ const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) =
 
   return children;
 };
+
 
 
 const AppRoutes = () => {
