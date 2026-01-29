@@ -9,8 +9,6 @@ interface AppState {
   looks: Look[];
   homeLayout: HomeLayout;
   loading: boolean;
-  meLoaded: boolean; 
-  meLoading: boolean;
   aiBusy: boolean;
   aiError: string | null;
   actions: {
@@ -82,33 +80,6 @@ function clampArray<T>(arr: T[], max: number): T[] {
   if (arr.length <= max) return arr;
   return arr.slice(0, max);
 }
-async function apiFetch(input: string, init: RequestInit = {}, timeoutMs = 15000) {
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const resp = await apiFetch(input, {
-      ...init,
-      credentials: 'include',
-      signal: controller.signal,
-      headers: {
-        ...(init.headers || {}),
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      },
-    });
-
-    // централизованный 401
-    if (resp.status === 401) {
-      // ничего не кидаем наружу как "stacktrace"
-      throw new Error('AUTH_REQUIRED');
-    }
-
-    return resp;
-  } finally {
-    clearTimeout(t);
-  }
-}
-
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -116,8 +87,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [looks, setLooks] = useState<Look[]>(MOCK_LOOKS);
   const [homeLayout, setHomeLayout] = useState<HomeLayout>(HomeLayout.DASHBOARD);
   const [loading, setLoading] = useState(true);
-  const [meLoaded, setMeLoaded] = useState(false); 
-  const [meLoading, setMeLoading] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -146,40 +115,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearTimeout(t);
   }, []);
 
-// Restore server session (JWT in httpOnly cookie)
-useEffect(() => {
-  (async () => {
-    setMeLoading(true);
-    try {
-      const resp = await fetch('/api/auth/me');
-      if (!resp.ok) return;
-
-      const data = await resp.json().catch(() => null);
-      if (!data?.user) return;
-
-      const u = data.user;
-      setUser((prev) => {
-        return {
-          id: u.id,
-          email: u.email,
-          name: prev?.name || u.username,
-          username: u.username,
-          phone: prev?.phone || '',
-          avatarUrl: u.avatarUrl || prev?.avatarUrl,
-          selfieUrl: prev?.selfieUrl,
-          tier: prev?.tier || SubscriptionTier.FREE,
-          limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
-          isPublic: !!u.isPublic,
-        };
-      });
-    } catch {
-      // ignore
-    } finally {
-      setMeLoaded(true);
-      setMeLoading(false);
-    }
-  })();
-}, []);
+  // Restore server session (JWT in httpOnly cookie)
+  useEffect(() => {
+    (async () => {
+      try {
+        const resp = await fetch('/api/auth/me', { credentials: 'include' });
+        if (!resp.ok) return;
+        const data = await resp.json().catch(() => null);
+        if (!data?.user) return;
+        const u = data.user;
+        setUser((prev) => {
+          return {
+            id: u.id,
+            email: u.email,
+            name: prev?.name || u.username,
+            username: u.username,
+            phone: prev?.phone || '',
+            avatarUrl: u.avatarUrl || prev?.avatarUrl,
+            selfieUrl: prev?.selfieUrl,
+            tier: prev?.tier || SubscriptionTier.FREE,
+            limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
+            isPublic: !!u.isPublic,
+          };
+        });
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
 
   // Optional: sync wardrobe from server DB (if enabled)
   useEffect(() => {
@@ -187,7 +150,7 @@ useEffect(() => {
     if (!user?.id) return;
     (async () => {
       try {
-        const resp = await apiFetch(`/api/wardrobe/list`);
+        const resp = await fetch(`/api/wardrobe/list`);
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
         const items = Array.isArray(data?.items) ? data.items : [];
@@ -216,7 +179,7 @@ useEffect(() => {
     if (!user?.id) return;
     (async () => {
       try {
-        const resp = await apiFetch('/api/looks/my');
+        const resp = await fetch('/api/looks/my');
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
         const serverLooks = Array.isArray(data?.looks) ? data.looks : [];
@@ -260,8 +223,10 @@ useEffect(() => {
 
   const actions = useMemo(() => ({
     login: async (emailOrUsername: string, password: string) => {
-      const resp = await apiFetch('/api/auth/login', {
+      const resp = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emailOrUsername, password }),
       });
       const data = await resp.json().catch(() => ({}));
@@ -281,8 +246,10 @@ useEffect(() => {
       }));
     },
     register: async (email: string, username: string, password: string) => {
-      const resp = await apiFetch('/api/auth/register', {
+      const resp = await fetch('/api/auth/register', {
         method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, username, password }),
       });
       const data = await resp.json().catch(() => ({}));
@@ -302,7 +269,7 @@ useEffect(() => {
       }));
     },
     logout: async () => {
-      await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
       setUser(null);
     },
     toggleHomeLayout: () => setHomeLayout(prev => 
@@ -350,17 +317,18 @@ useEffect(() => {
         const itemImageUrls = selectedItems.map((i) => i.images?.[0]).filter(Boolean);
         const itemIds = selectedItems.map((i) => i.id);
         const priceBuyNowRUB = selectedItems.filter((i) => i.isCatalog).reduce((s, i) => s + (i.price || 0), 0);
-        const resp = await apiFetch('/api/looks/create', {
-        method: 'POST',
-        body: JSON.stringify({
-        selfieDataUrl: user.selfieUrl,
-        itemImageUrls,
-        itemIds,
-        aspectRatio: '3:4',
-        priceBuyNowRUB,
-        }),
-       }, 35000);
-
+        const resp = await fetch('/api/looks/create', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            selfieDataUrl: user.selfieUrl,
+            itemImageUrls,
+            itemIds,
+            aspectRatio: '3:4',
+            priceBuyNowRUB,
+          }),
+        });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data?.error || `AI server error (${resp.status})`);
         const look = data?.look;
@@ -394,7 +362,7 @@ useEffect(() => {
     },
     likeLook: async (id: string) => {
       try {
-        const resp = await apiFetch(`/api/looks/${encodeURIComponent(id)}/like`, { method: 'POST' });
+        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/like`, { method: 'POST' , credentials: 'include' });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data?.error || 'Like failed');
         setLooks((prev) => prev.map((l) => (l.id === id ? { ...l, likes: data.likes } : l)));
@@ -404,26 +372,11 @@ useEffect(() => {
     },
   }), [user, looks, wardrobe, homeLayout]);
 
-return (
-  <AppContext.Provider
-    value={{
-      user,
-      products: MOCK_PRODUCTS,
-      wardrobe,
-      looks,
-      homeLayout,
-      loading,
-      meLoaded,
-      meLoading,
-      aiBusy,
-      aiError,
-      actions,
-    }}
-  >
-    {children}
-  </AppContext.Provider>
-);
-
+  return (
+    <AppContext.Provider value={{ user, products: MOCK_PRODUCTS, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
+      {children}
+    </AppContext.Provider>
+  );
 };
 
 export const useAppState = () => {
