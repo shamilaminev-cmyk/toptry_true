@@ -27,8 +27,10 @@ const Auth = () => {
       }
       navigate(from, { replace: true });
     } catch (e: any) {
-      setError(e?.message || 'Ошибка');
+      console.error('AUTH submit error:', e); // ✅ чтобы было видно в Console
+      setError(e?.stack || e?.message || String(e) || 'Ошибка'); // ✅ чтобы был стек в окошке под кнопками
     } finally {
+
       setBusy(false);
     }
   };
