@@ -15,30 +15,24 @@ const Auth: React.FC = () => {
   const [busy, setBusy] = useState(false);
 
   // ✅ реальный счётчик рендеров (должен быть небольшой)
-  console.count('AUTH render');
+console.count('AUTH render');
 
-  const submit = async () => {
-    console.count('AUTH submit');
+const submit = async () => {
+  console.count('AUTH submit');
+  if (busy) return;
 
-    // ✅ предохранитель от лавины
-    if (busy) return;
+  setError(null);
+  setBusy(true);
+  try {
+    ...
+  } catch (e:any) {
+    console.error('AUTH submit error:', e);
+    setError(e?.stack || e?.message || String(e) || 'Ошибка');
+  } finally {
+    setBusy(false);
+  }
+};
 
-    setError(null);
-    setBusy(true);
-    try {
-      if (mode === 'login') {
-        await actions.login(emailOrUsername.trim(), password);
-      } else {
-        await actions.register(email.trim(), username.trim(), password);
-      }
-      navigate('/', { replace: true });
-    } catch (e: any) {
-      console.error('AUTH submit error:', e);
-      setError(e?.stack || e?.message || String(e) || 'Ошибка');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const buttonText = useMemo(() => {
     if (busy) return '...';
