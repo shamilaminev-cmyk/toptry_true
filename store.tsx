@@ -222,52 +222,103 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [user, wardrobe, looks, homeLayout]);
 
   const actions = useMemo(() => ({
-    login: async (emailOrUsername: string, password: string) => {
-      const resp = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailOrUsername, password }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(data?.error || 'Login failed');
-      const u = data.user;
-      setUser((prev) => ({
-        id: u.id,
-        email: u.email,
-        name: prev?.name || u.username,
-        username: u.username,
-        phone: prev?.phone || '',
-        avatarUrl: u.avatarUrl || prev?.avatarUrl,
-        selfieUrl: prev?.selfieUrl,
-        tier: prev?.tier || SubscriptionTier.FREE,
-        limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
-        isPublic: u.isPublic ?? true,
-      }));
-    },
-    register: async (email: string, username: string, password: string) => {
-      const resp = await fetch('/api/auth/register', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, username, password }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(data?.error || 'Registration failed');
-      const u = data.user;
-      setUser((prev) => ({
-        id: u.id,
-        email: u.email,
-        name: prev?.name || u.username,
-        username: u.username,
-        phone: prev?.phone || '',
-        avatarUrl: u.avatarUrl || prev?.avatarUrl,
-        selfieUrl: prev?.selfieUrl,
-        tier: prev?.tier || SubscriptionTier.FREE,
-        limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
-        isPublic: u.isPublic ?? true,
-      }));
-    },
+login: async (emailOrUsername: string, password: string) => {
+  console.log('[auth] login start');
+
+  const resp = await fetch('/api/auth/login', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emailOrUsername, password }),
+  });
+
+  console.log('[auth] login response', resp.status);
+
+  const raw = await resp.text();
+  console.log('[auth] login body len', raw?.length ?? 0);
+
+  let data: any = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    console.error('[auth] login JSON parse failed. First 300 chars:', raw?.slice(0, 300));
+    throw new Error(`Login: invalid JSON (status ${resp.status})`);
+  }
+
+  if (!resp.ok) {
+    console.error('[auth] login not ok', data);
+    throw new Error(data?.error || `Login failed (${resp.status})`);
+  }
+
+  const u = data.user;
+  if (!u?.id) throw new Error('Login: server did not return user');
+
+  console.log('[auth] login setUser');
+
+  setUser((prev) => ({
+    id: u.id,
+    email: u.email,
+    name: prev?.name || u.username,
+    username: u.username,
+    phone: prev?.phone || '',
+    avatarUrl: u.avatarUrl || prev?.avatarUrl,
+    selfieUrl: prev?.selfieUrl,
+    tier: prev?.tier || SubscriptionTier.FREE,
+    limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
+    isPublic: u.isPublic ?? true,
+  }));
+
+  console.log('[auth] login done');
+},
+
+register: async (email: string, username: string, password: string) => {
+  console.log('[auth] register start');
+
+  const resp = await fetch('/api/auth/register', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, username, password }),
+  });
+
+  console.log('[auth] register response', resp.status);
+
+  const raw = await resp.text();
+  console.log('[auth] register body len', raw?.length ?? 0);
+
+  let data: any = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    console.error('[auth] register JSON parse failed. First 300 chars:', raw?.slice(0, 300));
+    throw new Error(`Register: invalid JSON (status ${resp.status})`);
+  }
+
+  if (!resp.ok) {
+    console.error('[auth] register not ok', data);
+    throw new Error(data?.error || `Registration failed (${resp.status})`);
+  }
+
+  const u = data.user;
+  if (!u?.id) throw new Error('Register: server did not return user');
+
+  console.log('[auth] register setUser');
+
+  setUser((prev) => ({
+    id: u.id,
+    email: u.email,
+    name: prev?.name || u.username,
+    username: u.username,
+    phone: prev?.phone || '',
+    avatarUrl: u.avatarUrl || prev?.avatarUrl,
+    selfieUrl: prev?.selfieUrl,
+    tier: prev?.tier || SubscriptionTier.FREE,
+    limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
+    isPublic: u.isPublic ?? true,
+  }));
+
+  console.log('[auth] register done');
+},
     logout: async () => {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
       setUser(null);
