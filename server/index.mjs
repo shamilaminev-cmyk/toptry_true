@@ -100,14 +100,24 @@ async function imageToBase64(input) {
 
     buf = Buffer.from(raw, 'base64');
   } else {
-    const res = await fetch(input);
-    if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+    // ✅ Node fetch не умеет относительные URL типа "/media/..."
+    // поэтому делаем абсолютный URL через base.
+    const base =
+      process.env.INTERNAL_BASE_URL ||
+      process.env.PUBLIC_BASE_URL ||
+      `http://127.0.0.1:${process.env.PORT || 5174}`;
+
+    const url = input.startsWith('http://') || input.startsWith('https://')
+      ? input
+      : new URL(input, base).toString();
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} (${url})`);
     const arrayBuffer = await res.arrayBuffer();
     buf = Buffer.from(arrayBuffer);
     mimeType = res.headers.get('content-type') || 'image/jpeg';
   }
 
-  // 🔥 ключевое ускорение
   const norm = await normalizeToWebp(buf);
   return { base64: norm.buffer.toString('base64'), mimeType: norm.mimeType };
 }
