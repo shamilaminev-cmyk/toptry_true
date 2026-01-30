@@ -1,62 +1,94 @@
-// server/auth.mjs
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { getPrisma } from './db.mjs';
 
+const JWT_SECRET = process.env.JWT_SECRET || '';
 const COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'toptry_session';
 
-function isTrue(v) {
-  return String(v || '').toLowerCase() === 'true' || String(v || '') === '1';
-}
-
 export function getAuthConfig() {
-  const secure = isTrue(process.env.COOKIE_SECURE) || process.env.NODE_ENV === 'production';
-
   return {
+    jwtSecret: JWT_SECRET,
     cookieName: COOKIE_NAME,
     cookieOptions: {
       httpOnly: true,
-      secure,
-      // ✅ критично для Chromium/Яндекс на XHR: SameSite=None требует Secure=true
-      sameSite: secure ? 'none' : 'lax',
+      sameSite: 'lax',
+      secure: false, // set true behind HTTPS in prod
       path: '/',
-      maxAge: 20 * 60 * 1000, // 20 minutes
+      maxAge: 60 * 60 * 24 * 14, // 14 days
     },
   };
 }
 
+export function requireJwtSecret() {
+  if (!JWT_SECRET) throw new Error('JWT_SECRET is not configured');
+}
+
 export function signSession(user) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error('JWT_SECRET is not configured');
+  requireJwtSecret();
+  return jwt.sign(
+    { sub: user.id, username: user.username, email: user.email },
+    JWT_SECRET,
+    { expiresIn: '14d' }
+  );
+}
 
-  // keep payload small
-  const payload = {
-    sub: user.id,
-    username: user.username,
-    email: user.email,
-  };
-
-  // 20 minutes
-  return jwt.sign(payload, secret, { expiresIn: '20m' });
+export function parseSessionToken(token) {
+  if (!token || !JWT_SECRET) return null;
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch {
+    return null;
+  }
 }
 
 export function authMiddleware(req, _res, next) {
-  try {
-    const { cookieName } = getAuthConfig();
-    const token = req.cookies?.[cookieName];
-    if (!token) return next();
-
-    const secret = process.env.JWT_SECRET;
-    if (!secret) return next();
-
-    const decoded = jwt.verify(token, secret);
-    req.auth = { userId: decoded?.sub };
-    return next();
-  } catch (_e) {
-    // invalid/expired token — treat as unauthenticated
-    return next();
-  }
+  const { cookieName } = getAuthConfig();
+  const token = req.cookies?.[cookieName];
+  const payload = parseSessionToken(token);
+  req.auth = payload ? { userId: payload.sub } : null;
+  next();
 }
 
 export function requireAuth(req, res, next) {
   if (!req.auth?.userId) return res.status(401).json({ error: 'Unauthorized' });
-  return next();
+  next();
+}
+
+export async function registerUser({ email, password, username }) {
+  const p = getPrisma();
+  if (!p) throw new Error('Database is not configured');
+  requireJwtSecret();
+
+  const passwordHash = await bcrypt.hash(String(password), 10);
+  const id = `u-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const user = await p.user.create({
+    data: {
+      id,
+      email: String(email).toLowerCase(),
+      username: String(username),
+      passwordHash,
+      isPublic: true,
+    },
+    select: { id: true, email: true, username: true, avatarUrl: true, isPublic: true, createdAt: true },
+  });
+  return user;
+}
+
+export async function loginUser({ emailOrUsername, password }) {
+  const p = getPrisma();
+  if (!p) throw new Error('Database is not configured');
+  requireJwtSecret();
+
+  const q = String(emailOrUsername).toLowerCase();
+  const user = await p.user.findFirst({
+    where: {
+      OR: [{ email: q }, { username: String(emailOrUsername) }],
+    },
+    select: { id: true, email: true, username: true, passwordHash: true, avatarUrl: true, isPublic: true, createdAt: true },
+  });
+  if (!user) return null;
+  const ok = await bcrypt.compare(String(password), user.passwordHash);
+  if (!ok) return null;
+  const { passwordHash, ...safe } = user;
+  return safe;
 }
