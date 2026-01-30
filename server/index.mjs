@@ -8,15 +8,13 @@ import { GoogleGenAI } from '@google/genai';
 import { ensureBucket, putDataUrl, getObjectStream } from './storage.mjs';
 import { getPrisma, getPublicUserById } from './db.mjs';
 import { authMiddleware, requireAuth, getAuthConfig, registerUser, loginUser, signSession } from './auth.mjs';
+import sharp from 'sharp';
+
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env.local' });
 
 const PORT = Number(process.env.API_PORT || 5174);
-const DEMO_MODE = process.env.DEMO_MODE === '1';
 
-const GEMINI_MODEL_TEXT = process.env.GEMINI_MODEL_TEXT || 'gemini-2.5-flash';
-const GEMINI_MODEL_IMAGE = process.env.GEMINI_MODEL_IMAGE || 'gemini-2.5-flash-image';
-const GEMINI_MODEL_CUTOUT = process.env.GEMINI_MODEL_CUTOUT || 'gemini-3-pro-image-preview';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
   // Server can still start (so the app boots), but AI endpoints will error.
@@ -24,21 +22,6 @@ if (!GEMINI_API_KEY) {
 }
 
 const app = express();
-
-function demoFallbackExtract(photoDataUrl, hintCategory, hintGender, reason) {
-  return {
-    cutoutDataUrl: photoDataUrl,
-    attributes: {
-      title: 'Предмет одежды',
-      category: hintCategory || 'Аксессуары',
-      gender: hintGender || 'UNISEX',
-      tags: ['demo', 'fallback'],
-      color: 'не определён',
-      material: 'не определён',
-    },
-    warning: `demo_fallback: ${reason}`,
-  };
-}
 
 app.use(
   cors({
@@ -49,8 +32,6 @@ app.use(
 app.use(cookieParser());
 app.use(authMiddleware);
 app.use(express.json({ limit: '20mb' }));
-app.set('trust proxy', 1);
-
 
 // Initialize optional infrastructure (MinIO bucket, Prisma)
 (async () => {
@@ -78,25 +59,57 @@ if (!process.env.DATABASE_URL) {
  * Convert a remote image URL or a data URL to base64 (without data: prefix).
  * This runs on the server, so CORS is not a problem.
  */
+// --- try-on image normalization (speed-up) ---
+const TRYON_MAX_SIDE = Number(process.env.TRYON_MAX_SIDE || 1024); // 768 = ещё быстрее
+const TRYON_WEBP_QUALITY = Number(process.env.TRYON_WEBP_QUALITY || 80);
+
+async function normalizeToWebp(buffer) {
+  const out = await sharp(buffer, { failOnError: false })
+    .rotate() // EXIF orientation
+    .resize({
+      width: TRYON_MAX_SIDE,
+      height: TRYON_MAX_SIDE,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .webp({ quality: TRYON_WEBP_QUALITY })
+    .toBuffer();
+
+  return { buffer: out, mimeType: 'image/webp' };
+}
+
+/**
+ * Convert a remote image URL or a data URL to base64 (without data: prefix),
+ * and normalize it (resize + compress) to speed up Gemini try-on.
+ */
 async function imageToBase64(input) {
   if (typeof input !== 'string') throw new Error('Invalid image input');
+
+  let buf;
+  let mimeType = 'image/jpeg';
+
   if (input.startsWith('data:')) {
     const comma = input.indexOf(',');
     if (comma === -1) throw new Error('Invalid data URL');
+
     const meta = input.slice(0, comma);
-    const mimeType = meta.match(/data:([^;]+);base64/)
-      ? meta.match(/data:([^;]+);base64/)[1]
-      : 'image/png';
-    const base64 = input.slice(comma + 1);
-    return { base64, mimeType };
+    const raw = input.slice(comma + 1);
+
+    const m = meta.match(/data:([^;]+);base64/i);
+    mimeType = m?.[1] || 'image/png';
+
+    buf = Buffer.from(raw, 'base64');
+  } else {
+    const res = await fetch(input);
+    if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+    const arrayBuffer = await res.arrayBuffer();
+    buf = Buffer.from(arrayBuffer);
+    mimeType = res.headers.get('content-type') || 'image/jpeg';
   }
 
-  const res = await fetch(input);
-  if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
-  const arrayBuffer = await res.arrayBuffer();
-  const buf = Buffer.from(arrayBuffer);
-  const contentType = res.headers.get('content-type') || 'image/jpeg';
-  return { base64: buf.toString('base64'), mimeType: contentType };
+  // 🔥 ключевое ускорение
+  const norm = await normalizeToWebp(buf);
+  return { base64: norm.buffer.toString('base64'), mimeType: norm.mimeType };
 }
 
 app.get('/api/health', (_req, res) => {
@@ -295,7 +308,7 @@ Requirements:
 If multiple items are visible, choose the most prominent garment.`;
 
     const cutoutResp = await ai.models.generateContent({
-      model: GEMINI_MODEL_CUTOUT,
+      model: 'gemini-3-pro-image-preview',
       contents: {
         parts: [
           { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
@@ -319,15 +332,7 @@ If multiple items are visible, choose the most prominent garment.`;
         break;
       }
     }
-    if (!cutoutDataUrl) {
-  cutoutDataUrl = photoDataUrl;
-}
-
-if (!cutoutDataUrl && DEMO_MODE) {
-  return res.json(
-    demoFallbackExtract(photoDataUrl, hintCategory, hintGender, 'cutout_failed')
-  );
-}
+    if (!cutoutDataUrl) return res.status(502).json({ error: 'Gemini did not return cutout image' });
 
     // 2) Extract attributes as strict JSON
     const attrPrompt = `Analyze the clothing item in the image.
@@ -347,7 +352,7 @@ Hints:
 - hintGender: ${hintGender || 'none'}`;
 
     const attrResp = await ai.models.generateContent({
-      model: GEMINI_MODEL_TEXT,
+      model: 'gemini-2.5-flash',
       contents: {
         parts: [
           { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
@@ -560,7 +565,7 @@ async function generateLookAiDescription({ tryOnImageDataUrl, itemsSummary }) {
     const img = await imageToBase64(tryOnImageDataUrl);
     const prompt = `Ты — стилист. Опиши образ на фото в 1-2 предложениях по-русски: настроение, куда подходит, ключевые детали. Без упоминания брендов.\nСписок вещей: ${itemsSummary}`;
     const resp = await ai.models.generateContent({
-      model: GEMINI_MODEL_TEXT,
+      model: 'gemini-2.5-flash',
       contents: { parts: [{ inlineData: { data: img.base64, mimeType: img.mimeType } }, { text: prompt }] },
     });
     return (resp?.candidates?.[0]?.content?.parts || []).map((p) => p.text).filter(Boolean).join('').trim();
