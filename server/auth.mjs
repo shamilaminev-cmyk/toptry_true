@@ -6,18 +6,22 @@ const JWT_SECRET = process.env.JWT_SECRET || '';
 const COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'toptry_session';
 
 export function getAuthConfig() {
+  const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true' || process.env.NODE_ENV === 'production';
+
   return {
     jwtSecret: JWT_SECRET,
     cookieName: COOKIE_NAME,
     cookieOptions: {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: false, // set true behind HTTPS in prod
+      // ✅ для Яндекс/Chromium на HTTPS
+      sameSite: secure ? 'none' : 'lax',
+      secure,
       path: '/',
       maxAge: 60 * 60 * 24 * 14, // 14 days
     },
   };
 }
+
 
 export function requireJwtSecret() {
   if (!JWT_SECRET) throw new Error('JWT_SECRET is not configured');
