@@ -73,48 +73,59 @@ const Wardrobe = () => {
     }
   };
 
-  const confirmAddition = async () => {
-    if (!extracted) return;
-    if (!user?.id) {
-      setExtractError('Чтобы добавлять свои вещи, нужно войти в аккаунт');
-      return;
+const confirmAddition = async () => {
+  if (!extracted) return;
+  if (!user?.id) {
+    setExtractError('Чтобы добавлять свои вещи, нужно войти в аккаунт');
+    return;
+  }
+  setExtractError(null);
+  setIsRecognizing(true);
+
+  try {
+    const saveResp = await fetch('/api/wardrobe/save', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: draftTitle,
+        category: draftCategory,
+        gender: draftGender,
+        tags: draftTags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
+        color: draftColor || undefined,
+        material: draftMaterial || undefined,
+        originalDataUrl: extracted.original,
+        cutoutDataUrl: extracted.cutout,
+      }),
+    });
+
+    if (!saveResp.ok) {
+      const data = await saveResp.json().catch(() => ({}));
+      if (saveResp.status === 401)
+        throw new Error('Нужно войти, чтобы добавлять свои вещи');
+      throw new Error(data?.error || `Ошибка сохранения (${saveResp.status})`);
     }
-    setExtractError(null);
-    setIsRecognizing(true);
-    try {
-      const saveResp = await fetch('/api/wardrobe/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: draftTitle,
-          category: draftCategory,
-          gender: draftGender,
-          tags: draftTags.split(',').map(t => t.trim()).filter(Boolean),
-          color: draftColor || undefined,
-          material: draftMaterial || undefined,
-          originalDataUrl: extracted.original,
-          cutoutDataUrl: extracted.cutout,
-        }),
-      });
-      if (!saveResp.ok) {
-        const data = await saveResp.json().catch(() => ({}));
-        if (saveResp.status === 401) throw new Error('Нужно войти, чтобы добавлять свои вещи');
-        throw new Error(data?.error || `Ошибка сохранения (${saveResp.status})`);
-      }
-      const data = await saveResp.json();
-      const item = data?.item;
-      if (!item) throw new Error('Сервер не вернул сохраненную вещь');
-      actions.upsertWardrobeItem({
-        ...item,
-        addedAt: item?.addedAt ? new Date(item.addedAt) : new Date(),
-      } as WardrobeItem);
-      setExtracted(null);
-    } catch (err: any) {
-      setExtractError(err?.message || 'Не удалось добавить вещь');
-    } finally {
-      setIsRecognizing(false);
-    }
-  };
+
+    const data = await saveResp.json();
+    const item = data?.item;
+    if (!item) throw new Error('Сервер не вернул сохраненную вещь');
+
+    actions.upsertWardrobeItem({
+      ...item,
+      addedAt: item?.addedAt ? new Date(item.addedAt) : new Date(),
+    } as WardrobeItem);
+
+    setExtracted(null);
+  } catch (err: any) {
+    setExtractError(err?.message || 'Не удалось добавить вещь');
+  } finally {
+    setIsRecognizing(false);
+  }
+};
+
 
   return (
     <div className="pb-24">
