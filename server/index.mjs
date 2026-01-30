@@ -85,15 +85,18 @@ async function normalizeToWebp(buffer) {
 async function imageToBase64(input) {
   if (typeof input !== 'string') throw new Error('Invalid image input');
 
+  // ✅ важно: убираем пробелы/переводы строк, которые ломают new URL(...)
+  const clean = input.trim();
+
   let buf;
   let mimeType = 'image/jpeg';
 
-  if (input.startsWith('data:')) {
-    const comma = input.indexOf(',');
+  if (clean.startsWith('data:')) {
+    const comma = clean.indexOf(',');
     if (comma === -1) throw new Error('Invalid data URL');
 
-    const meta = input.slice(0, comma);
-    const raw = input.slice(comma + 1);
+    const meta = clean.slice(0, comma);
+    const raw = clean.slice(comma + 1);
 
     const m = meta.match(/data:([^;]+);base64/i);
     mimeType = m?.[1] || 'image/png';
@@ -107,9 +110,9 @@ async function imageToBase64(input) {
       process.env.PUBLIC_BASE_URL ||
       `http://127.0.0.1:${process.env.PORT || 5174}`;
 
-    const url = input.startsWith('http://') || input.startsWith('https://')
-      ? input
-      : new URL(input, base).toString();
+    const url = clean.startsWith('http://') || clean.startsWith('https://')
+      ? clean
+      : new URL(clean, base).toString();
 
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} (${url})`);
