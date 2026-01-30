@@ -365,7 +365,23 @@ register: async (email: string, username: string, password: string) => {
       setAiError(null);
       setAiBusy(true);
       try {
-        const itemImageUrls = selectedItems.map((i) => i.images?.[0]).filter(Boolean);
+        const itemImageUrls = selectedItems
+      .map((i) => {
+      // 1) user-upload (обычно есть cutoutUrl/originalUrl)
+      const maybe =
+      (i as any).cutoutUrl ||
+      (i as any).originalUrl ||
+      (i as any).imageUrl ||
+      (i.images && i.images[0]);
+
+       return typeof maybe === 'string' ? maybe : null;
+       })
+       .filter(Boolean) as string[];
+       if (!itemImageUrls.length) {
+       throw new Error('Не найдены изображения выбранных вещей (ожидаются cutoutUrl/originalUrl или images[0])');
+       }
+
+
         const itemIds = selectedItems.map((i) => i.id);
         const priceBuyNowRUB = selectedItems.filter((i) => i.isCatalog).reduce((s, i) => s + (i.price || 0), 0);
         const resp = await fetch('/api/looks/create', {
