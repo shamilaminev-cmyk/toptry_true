@@ -23,8 +23,6 @@ if (!GEMINI_API_KEY) {
 
 const app = express();
 
-import cors from 'cors';
-
 app.set('trust proxy', 1);
 
 const allowedOrigins = (process.env.CORS_ORIGINS ||
