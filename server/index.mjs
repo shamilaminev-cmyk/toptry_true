@@ -23,6 +23,30 @@ if (!GEMINI_API_KEY) {
 
 const app = express();
 
+import cors from 'cors';
+
+app.set('trust proxy', 1);
+
+const allowedOrigins = (process.env.CORS_ORIGINS ||
+  'https://toptry.ru,https://www.toptry.ru').split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // запросы без Origin (healthcheck, curl)
+    if (!origin) return cb(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return cb(null, true);
+    }
+
+    return cb(new Error(`CORS blocked: ${origin}`));
+  },
+  credentials: true,
+}));
+
+
 app.use(
   cors({
     origin: true,
@@ -141,7 +165,13 @@ app.post('/api/auth/register', async (req, res) => {
     const user = await registerUser({ email, password, username });
     const token = signSession(user);
     const { cookieName, cookieOptions } = getAuthConfig();
-    res.cookie(cookieName, token, cookieOptions);
+    const isProd = process.env.NODE_ENV === 'production';
+
+res.cookie(cookieName, token, {
+  ...cookieOptions,
+  ...(isProd ? { domain: '.toptry.ru' } : {}),
+});
+
     res.json({ user });
   } catch (e) {
     const msg = String(e?.message || e);
@@ -173,7 +203,13 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/logout', (req, res) => {
   const { cookieName } = getAuthConfig();
-  res.clearCookie(cookieName, { path: '/' });
+  const isProd = process.env.NODE_ENV === 'production';
+
+res.clearCookie(cookieName, {
+  path: '/',
+  ...(isProd ? { domain: '.toptry.ru' } : {}),
+});
+
   res.json({ ok: true });
 });
 
