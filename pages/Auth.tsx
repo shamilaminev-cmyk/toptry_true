@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppState } from '../store';
 import { useNavigate } from 'react-router-dom';
+import Logo from '../components/Logo';
 
 const Auth = () => {
   const { actions } = useAppState();
@@ -33,31 +34,32 @@ const Auth = () => {
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 space-y-10">
       <div className="text-center space-y-4">
-        <img
-          src="logo.png"
-          alt="toptry"
-          className="h-16 w-auto mx-auto object-contain block"
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-            const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
-            if (fallback) fallback.classList.remove('hidden');
-          }}
-        />
+        {/* ✅ Новый логотип */}
+        <Logo className="h-16 w-auto mx-auto object-contain block" alt="toptry" />
+
+        {/* Фолбэк-текст (на случай, если логотип не загрузился) */}
         <h1 className="hidden text-5xl font-black uppercase tracking-tighter">toptry</h1>
-        <p className="text-xs text-zinc-400 uppercase tracking-[0.3em] font-black">AI Virtual Fitting</p>
+
+        <p className="text-xs text-zinc-400 uppercase tracking-[0.3em] font-black">
+          AI Virtual Fitting
+        </p>
       </div>
 
       <div className="w-full max-w-sm space-y-4">
         <div className="flex gap-2 bg-zinc-100 p-1 rounded-full">
           <button
             onClick={() => setMode('login')}
-            className={`flex-1 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${mode === 'login' ? 'bg-white shadow-sm' : 'text-zinc-500'}`}
+            className={`flex-1 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+              mode === 'login' ? 'bg-white shadow-sm' : 'text-zinc-500'
+            }`}
           >
             Войти
           </button>
           <button
             onClick={() => setMode('register')}
-            className={`flex-1 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${mode === 'register' ? 'bg-white shadow-sm' : 'text-zinc-500'}`}
+            className={`flex-1 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+              mode === 'register' ? 'bg-white shadow-sm' : 'text-zinc-500'
+            }`}
           >
             Регистрация
           </button>
@@ -73,7 +75,9 @@ const Auth = () => {
           {mode === 'register' ? (
             <>
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">Email</label>
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
+                  Email
+                </label>
                 <input
                   type="email"
                   placeholder="name@example.com"
@@ -82,8 +86,11 @@ const Auth = () => {
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
+
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">Никнейм</label>
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
+                  Никнейм
+                </label>
                 <input
                   type="text"
                   placeholder="toptry_user"
@@ -95,7 +102,9 @@ const Auth = () => {
             </>
           ) : (
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">Email или ник</label>
+              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
+                Email или ник
+              </label>
               <input
                 type="text"
                 placeholder="name@example.com / username"
@@ -107,7 +116,9 @@ const Auth = () => {
           )}
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">Пароль</label>
+            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
+              Пароль
+            </label>
             <input
               type="password"
               placeholder="••••••••"
@@ -121,7 +132,9 @@ const Auth = () => {
         <button
           onClick={submit}
           disabled={busy}
-          className={`w-full bg-zinc-900 text-white py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:scale-[0.98] transition-all shadow-lg active:scale-95 ${busy ? 'opacity-60 pointer-events-none' : ''}`}
+          className={`w-full bg-zinc-900 text-white py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:scale-[0.98] transition-all shadow-lg active:scale-95 ${
+            busy ? 'opacity-60 pointer-events-none' : ''
+          }`}
         >
           {busy ? '...' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
         </button>

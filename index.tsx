@@ -1,6 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { patchFetchForApi } from './fetchPatch';
+import './index.css';
+
+patchFetchForApi();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
