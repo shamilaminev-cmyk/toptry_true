@@ -9,6 +9,12 @@ ARG BUILD_TIME=unknown
 ENV GIT_SHA=${GIT_SHA}
 ENV BUILD_TIME=${BUILD_TIME}
 
+# ✅ ВАЖНО:
+# В CI/BuildKit иногда NODE_ENV=production прокидывается глобально,
+# и тогда npm может не поставить devDependencies.
+# А Vite+Tailwind/PostCSS нужны именно devDependencies на этапе сборки.
+ENV NODE_ENV=development
+
 # Dependences first (лучше кэш)
 COPY package*.json ./
 RUN npm ci
