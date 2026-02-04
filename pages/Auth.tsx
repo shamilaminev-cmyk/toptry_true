@@ -1,12 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useAppState } from '../store';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import Logo from '../components/Logo';
 
-const Auth: React.FC = () => {
+const Auth = () => {
   const { actions } = useAppState();
   const navigate = useNavigate();
-  const location = useLocation();
-
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -15,69 +14,40 @@ const Auth: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // ✅ реальный счётчик рендеров (если улетает в сотни — есть render-loop)
-  console.count('AUTH render');
-
-  const from = (location.state as any)?.from || '/';
-
   const submit = async () => {
-    console.count('AUTH submit');
-
-    // ✅ предохранитель от лавины повторных submit
-    if (busy) return;
-
     setError(null);
     setBusy(true);
-
     try {
       if (mode === 'login') {
         await actions.login(emailOrUsername.trim(), password);
       } else {
         await actions.register(email.trim(), username.trim(), password);
       }
-      navigate(from, { replace: true });
+      navigate('/');
     } catch (e: any) {
-      console.error('AUTH submit error:', e);
-      setError(e?.stack || e?.message || String(e) || 'Ошибка');
+      setError(e?.message || 'Ошибка');
     } finally {
       setBusy(false);
     }
   };
 
-  const buttonText = useMemo(() => {
-    if (busy) return '...';
-    return mode === 'login' ? 'Войти' : 'Создать аккаунт';
-  }, [busy, mode]);
-
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-8">
-          <img
-            src="/toptry.png"
-            alt="toptry"
-            className="w-10 h-10 rounded-xl object-cover"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = 'none';
-              const fallback = (e.currentTarget as HTMLImageElement)
-                .nextElementSibling as HTMLElement | null;
-              if (fallback) fallback.classList.remove('hidden');
-            }}
-          />
-          <div className="hidden w-10 h-10 rounded-xl bg-zinc-900 text-white items-center justify-center font-bold">
-            t
-          </div>
+    <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 space-y-10">
+      <div className="text-center space-y-4">
+        {/* ✅ Новый логотип */}
+        <Logo className="h-16 w-auto mx-auto object-contain block" alt="toptry" />
 
-          <div>
-            <div className="text-base font-black tracking-tight">toptry</div>
-            <div className="text-xs text-zinc-500">AI Virtual Fitting</div>
-          </div>
-        </div>
+        {/* Фолбэк-текст (на случай, если логотип не загрузился) */}
+        <h1 className="hidden text-5xl font-black uppercase tracking-tighter">toptry</h1>
 
-        {/* Tabs */}
-        <div className="bg-zinc-100 rounded-full p-1 flex mb-6">
+        <p className="text-xs text-zinc-400 uppercase tracking-[0.3em] font-black">
+          AI Virtual Fitting
+        </p>
+      </div>
+
+      <div className="w-full max-w-sm space-y-4">
+        <div className="flex gap-2 bg-zinc-100 p-1 rounded-full">
           <button
-            type="button"
             onClick={() => setMode('login')}
             className={`flex-1 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
               mode === 'login' ? 'bg-white shadow-sm' : 'text-zinc-500'
@@ -86,7 +56,6 @@ const Auth: React.FC = () => {
             Войти
           </button>
           <button
-            type="button"
             onClick={() => setMode('register')}
             className={`flex-1 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
               mode === 'register' ? 'bg-white shadow-sm' : 'text-zinc-500'
@@ -96,91 +65,84 @@ const Auth: React.FC = () => {
           </button>
         </div>
 
-        {/* Error */}
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800 whitespace-pre-wrap">
+          <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-700">
             {error}
           </div>
         )}
 
-        {/* ✅ Form: Enter работает, и нет ловушек onClick={submit()} */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-          className="space-y-4"
-        >
+        <div className="space-y-3">
           {mode === 'register' ? (
             <>
-              <label className="block">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
                   Email
-                </div>
+                </label>
                 <input
+                  type="email"
+                  placeholder="name@example.com"
+                  className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm outline-none focus:border-zinc-900"
-                  autoComplete="email"
-                  disabled={busy}
                 />
-              </label>
+              </div>
 
-              <label className="block">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
                   Никнейм
-                </div>
+                </label>
                 <input
+                  type="text"
+                  placeholder="toptry_user"
+                  className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm outline-none focus:border-zinc-900"
-                  autoComplete="username"
-                  disabled={busy}
                 />
-              </label>
+              </div>
             </>
           ) : (
-            <label className="block">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
                 Email или ник
-              </div>
+              </label>
               <input
+                type="text"
+                placeholder="name@example.com / username"
+                className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
                 value={emailOrUsername}
                 onChange={(e) => setEmailOrUsername(e.target.value)}
-                className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm outline-none focus:border-zinc-900"
-                autoComplete="username"
-                disabled={busy}
               />
-            </label>
+            </div>
           )}
 
-          <label className="block">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
               Пароль
-            </div>
+            </label>
             <input
               type="password"
+              placeholder="••••••••"
+              className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm outline-none focus:border-zinc-900"
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              disabled={busy}
             />
-          </label>
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-2xl bg-zinc-900 text-white py-3 text-xs font-bold uppercase tracking-widest hover:opacity-95 disabled:opacity-60"
-          >
-            {buttonText}
-          </button>
-        </form>
-
-        <div className="mt-4 text-[10px] text-zinc-500">
-          Продолжая, вы соглашаетесь с правилами сервиса и обработкой данных.
+          </div>
         </div>
+
+        <button
+          onClick={submit}
+          disabled={busy}
+          className={`w-full bg-zinc-900 text-white py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:scale-[0.98] transition-all shadow-lg active:scale-95 ${
+            busy ? 'opacity-60 pointer-events-none' : ''
+          }`}
+        >
+          {busy ? '...' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
+        </button>
       </div>
+
+      <p className="text-[10px] text-center text-zinc-300 leading-relaxed max-w-[280px] uppercase tracking-widest font-medium">
+        Продолжая, вы соглашаетесь с правилами сервиса и обработкой данных.
+      </p>
     </div>
   );
 };
