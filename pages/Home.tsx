@@ -1,9 +1,9 @@
-
 import React, { useState, useRef } from 'react';
 import { useAppState } from '../store';
 import { HomeLayout, SubscriptionTier } from '../types';
 import { ICONS, CURRENCY } from '../constants';
 import { Link } from 'react-router-dom';
+import { withApiOrigin } from '../utils/withApiOrigin';
 
 const Hero = () => {
   const { user, actions } = useAppState();
@@ -18,15 +18,15 @@ const Hero = () => {
       setError(null);
       setShowOptions(false);
       setShowCamera(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1350 } } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1350 } },
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      console.error("Error accessing camera:", err);
-      setError("Не удалось получить доступ к камере");
+      console.error('Error accessing camera:', err);
+      setError('Не удалось получить доступ к камере');
       setShowCamera(false);
     }
   };
@@ -34,7 +34,7 @@ const Hero = () => {
   const stopCamera = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach((track) => track.stop());
     }
     setShowCamera(false);
   };
@@ -75,17 +75,22 @@ const Hero = () => {
               <div className="w-full h-full rounded-full border-4 border-white shadow-xl overflow-hidden bg-zinc-200">
                 <img src={user.selfieUrl} alt="Your Selfie" className="w-full h-full object-cover" />
               </div>
-              <button 
+              <button
                 onClick={() => setShowOptions(true)}
                 className="absolute bottom-0 right-0 bg-zinc-900 text-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                </svg>
               </button>
             </div>
             <h1 className="text-3xl font-bold tracking-tight">Твой аватар готов</h1>
             <p className="text-zinc-500">Пора примерить новые образы из каталога или создать свои.</p>
             <div className="flex gap-2 justify-center">
-              <Link to="/catalog" className="inline-block bg-zinc-900 text-white px-8 py-3 rounded-full font-bold uppercase tracking-widest text-sm hover:scale-105 transition-transform">
+              <Link
+                to="/catalog"
+                className="inline-block bg-zinc-900 text-white px-8 py-3 rounded-full font-bold uppercase tracking-widest text-sm hover:scale-105 transition-transform"
+              >
                 В каталог
               </Link>
             </div>
@@ -93,12 +98,14 @@ const Hero = () => {
         ) : (
           <div className="space-y-4">
             <div className="w-20 h-20 mx-auto bg-zinc-200 rounded-3xl flex items-center justify-center">
-               <ICONS.User className="w-10 h-10 text-zinc-400" />
+              <ICONS.User className="w-10 h-10 text-zinc-400" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight">Примерь будущее прямо сейчас</h1>
-            <p className="text-zinc-500">Загрузи одно селфи и получи полноценную 3D-примерочную для сотен брендов.</p>
-            <button 
-              onClick={() => setShowOptions(true)} 
+            <p className="text-zinc-500">
+              Загрузи одно селфи и получи полноценную 3D-примерочную для сотен брендов.
+            </p>
+            <button
+              onClick={() => setShowOptions(true)}
               className="bg-zinc-900 text-white px-8 py-3 rounded-full font-bold uppercase tracking-widest text-sm hover:scale-105 transition-transform"
             >
               Загрузить селфи
@@ -114,33 +121,56 @@ const Hero = () => {
             <div className="w-full max-w-sm bg-white rounded-[32px] p-6 space-y-4 animate-in slide-in-from-bottom duration-300">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-bold uppercase tracking-widest">Источник селфи</h3>
-                <button onClick={() => setShowOptions(false)} className="text-zinc-400"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                <button onClick={() => setShowOptions(false)} className="text-zinc-400">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    ></path>
+                  </svg>
+                </button>
               </div>
-              <button 
+              <button
                 onClick={startCamera}
                 className="w-full flex items-center gap-4 p-4 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-colors"
               >
                 <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                    ></path>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                    ></path>
+                  </svg>
                 </div>
                 <span className="text-sm font-bold uppercase tracking-widest">Сделать фото</span>
               </button>
-              <button 
+              <button
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full flex items-center gap-4 p-4 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-colors"
               >
                 <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                    ></path>
+                  </svg>
                 </div>
                 <span className="text-sm font-bold uppercase tracking-widest">Загрузить файл</span>
               </button>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                className="hidden" 
-                accept="image/*"
-              />
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
             </div>
           </div>
         )}
@@ -148,26 +178,23 @@ const Hero = () => {
         {/* Camera Modal */}
         {showCamera && (
           <div className="fixed inset-0 z-[70] bg-black flex flex-col items-center justify-center">
-            <video 
-              ref={videoRef} 
-              autoPlay 
-              playsInline 
-              className="w-full h-full object-cover"
-            />
+            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
             <div className="absolute inset-x-0 bottom-12 flex items-center justify-center gap-8">
-              <button 
+              <button
                 onClick={stopCamera}
                 className="w-14 h-14 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-white"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
               </button>
-              <button 
+              <button
                 onClick={capturePhoto}
                 className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
               >
                 <div className="w-16 h-16 border-4 border-zinc-900 rounded-full"></div>
               </button>
-              <div className="w-14 h-14"></div> {/* spacer */}
+              <div className="w-14 h-14"></div>
             </div>
           </div>
         )}
@@ -217,15 +244,15 @@ const Dashboard = () => {
     <div className="space-y-10 pb-12">
       <Hero />
       <Stats />
-      
+
       {/* ADDED: Create Look Shortcut on Main Page */}
       <section className="px-4">
         <Link to="/create-look" className="block relative bg-zinc-900 rounded-[32px] p-8 overflow-hidden group shadow-2xl">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-white/20 transition-all duration-700"></div>
           <div className="relative z-10 space-y-4">
             <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-xl px-4 py-2 rounded-full border border-white/20">
-               <span className="w-2 h-2 bg-white/60 rounded-full animate-pulse"></span>
-               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">AI Try-On</span>
+              <span className="w-2 h-2 bg-white/60 rounded-full animate-pulse"></span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">AI Try-On</span>
             </div>
             <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-none">Сгенерировать образ</h2>
             <p className="text-zinc-400 text-xs uppercase font-bold tracking-widest">Виртуальная примерка из вашего шкафа</p>
@@ -242,10 +269,14 @@ const Dashboard = () => {
       <section>
         <SectionHeader title="Последние образы" linkTo="/looks" linkText="Все" />
         <div className="flex gap-4 overflow-x-auto px-4 no-scrollbar">
-          {trendingLooks.map(look => (
+          {trendingLooks.map((look) => (
             <Link key={look.id} to={`/look/${look.id}`} className="flex-shrink-0 w-40 space-y-2">
               <div className="aspect-[3/4] rounded-2xl bg-zinc-100 overflow-hidden">
-                <img src={look.resultImageUrl} alt="" className="w-full h-full object-cover hover:scale-110 transition-all duration-500" />
+                <img
+                  src={withApiOrigin(look.resultImageUrl)}
+                  alt=""
+                  className="w-full h-full object-cover hover:scale-110 transition-all duration-500"
+                />
               </div>
               <p className="text-xs font-medium truncate">{look.title}</p>
             </Link>
@@ -256,33 +287,52 @@ const Dashboard = () => {
       <section>
         <SectionHeader title="Мой шкаф" linkTo="/wardrobe" linkText="В шкаф" />
         <div className="grid grid-cols-2 gap-4 px-4">
-           {recentWardrobe.length > 0 ? recentWardrobe.map(item => (
-             <div key={item.id} className="aspect-square bg-zinc-100 rounded-2xl overflow-hidden p-4 border border-zinc-200">
-                <img src={item.images[0]} alt="" className="w-full h-full object-contain mix-blend-multiply" />
-             </div>
-           )) : (
-             <div className="col-span-2 bg-zinc-50 border border-zinc-100 border-dashed rounded-2xl py-8 px-4 text-center">
-                <p className="text-sm text-zinc-400 mb-4 italic">В шкафу пока пусто</p>
-                <div className="flex gap-2 justify-center">
-                  <Link to="/catalog" className="text-[10px] font-bold uppercase tracking-widest bg-zinc-900 text-white px-4 py-2 rounded-full">Из каталога</Link>
-                  <button className="text-[10px] font-bold uppercase tracking-widest border border-zinc-900 px-4 py-2 rounded-full">Загрузить свое</button>
-                </div>
-             </div>
-           )}
+          {recentWardrobe.length > 0 ? (
+            recentWardrobe.map((item) => (
+              <div key={item.id} className="aspect-square bg-zinc-100 rounded-2xl overflow-hidden p-4 border border-zinc-200">
+                <img
+                  src={withApiOrigin(item.images?.[0])}
+                  alt=""
+                  className="w-full h-full object-contain mix-blend-multiply"
+                />
+              </div>
+            ))
+          ) : (
+            <div className="col-span-2 bg-zinc-50 border border-zinc-100 border-dashed rounded-2xl py-8 px-4 text-center">
+              <p className="text-sm text-zinc-400 mb-4 italic">В шкафу пока пусто</p>
+              <div className="flex gap-2 justify-center">
+                <Link
+                  to="/catalog"
+                  className="text-[10px] font-bold uppercase tracking-widest bg-zinc-900 text-white px-4 py-2 rounded-full"
+                >
+                  Из каталога
+                </Link>
+                <button className="text-[10px] font-bold uppercase tracking-widest border border-zinc-900 px-4 py-2 rounded-full">
+                  Загрузить свое
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
       <section>
         <SectionHeader title="Новое в каталоге" linkTo="/catalog" linkText="Смотреть" />
         <div className="grid grid-cols-2 gap-4 px-4">
-          {recentProducts.map(p => (
+          {recentProducts.map((p) => (
             <div key={p.id} className="space-y-2">
               <div className="aspect-[4/5] bg-zinc-50 rounded-2xl overflow-hidden p-6 border border-zinc-100">
-                <img src={p.images[0]} alt="" className="w-full h-full object-contain mix-blend-multiply" />
+                <img
+                  src={withApiOrigin(p.images?.[0])}
+                  alt=""
+                  className="w-full h-full object-contain mix-blend-multiply"
+                />
               </div>
               <div className="px-1">
                 <p className="text-xs font-bold truncate uppercase">{p.title}</p>
-                <p className="text-xs text-zinc-400">{p.price} {CURRENCY}</p>
+                <p className="text-xs text-zinc-400">
+                  {p.price} {CURRENCY}
+                </p>
               </div>
             </div>
           ))}
@@ -297,15 +347,23 @@ const Dashboard = () => {
             <div key={p.id} className="space-y-2">
               <div className="relative aspect-[4/5] bg-zinc-50 rounded-2xl overflow-hidden p-6 border border-zinc-100">
                 <div className="absolute top-3 left-3 bg-zinc-900 text-white px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter">
-                  SALE -{20 + (idx * 5)}%
+                  SALE -{20 + idx * 5}%
                 </div>
-                <img src={p.images[0]} alt="" className="w-full h-full object-contain mix-blend-multiply" />
+                <img
+                  src={withApiOrigin(p.images?.[0])}
+                  alt=""
+                  className="w-full h-full object-contain mix-blend-multiply"
+                />
               </div>
               <div className="px-1">
                 <p className="text-xs font-bold truncate uppercase">{p.title}</p>
                 <div className="flex items-center gap-2">
-                   <p className="text-xs font-black text-zinc-900">{Math.round(p.price * 0.7)} {CURRENCY}</p>
-                   <p className="text-[10px] text-zinc-400 line-through">{p.price} {CURRENCY}</p>
+                  <p className="text-xs font-black text-zinc-900">
+                    {Math.round(p.price * 0.7)} {CURRENCY}
+                  </p>
+                  <p className="text-[10px] text-zinc-400 line-through">
+                    {p.price} {CURRENCY}
+                  </p>
                 </div>
               </div>
             </div>
@@ -326,7 +384,10 @@ const Feed = () => {
     (async () => {
       setLoading(true);
       try {
-        const url = tab === 'following' ? '/api/feed/following' : `/api/looks/public?sort=${tab === 'new' ? 'new' : 'trending'}`;
+        const url =
+          tab === 'following'
+            ? '/api/feed/following'
+            : `/api/looks/public?sort=${tab === 'new' ? 'new' : 'trending'}`;
         const resp = await fetch(url);
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
@@ -346,45 +407,72 @@ const Feed = () => {
   return (
     <div className="p-4 space-y-8">
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2">
-        <button onClick={() => setTab('trending')} className={`flex-shrink-0 px-6 py-2 rounded-full border text-xs font-bold uppercase tracking-widest transition-all ${tab==='trending' ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 hover:bg-zinc-900 hover:text-white'}`}>Тренды</button>
-        <button onClick={() => setTab('new')} className={`flex-shrink-0 px-6 py-2 rounded-full border text-xs font-bold uppercase tracking-widest transition-all ${tab==='new' ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 hover:bg-zinc-900 hover:text-white'}`}>Новое</button>
-        <button onClick={() => setTab('following')} className={`flex-shrink-0 px-6 py-2 rounded-full border text-xs font-bold uppercase tracking-widest transition-all ${tab==='following' ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 hover:bg-zinc-900 hover:text-white'}`}>Подписки</button>
+        <button
+          onClick={() => setTab('trending')}
+          className={`flex-shrink-0 px-6 py-2 rounded-full border text-xs font-bold uppercase tracking-widest transition-all ${
+            tab === 'trending' ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 hover:bg-zinc-900 hover:text-white'
+          }`}
+        >
+          Тренды
+        </button>
+        <button
+          onClick={() => setTab('new')}
+          className={`flex-shrink-0 px-6 py-2 rounded-full border text-xs font-bold uppercase tracking-widest transition-all ${
+            tab === 'new' ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 hover:bg-zinc-900 hover:text-white'
+          }`}
+        >
+          Новое
+        </button>
+        <button
+          onClick={() => setTab('following')}
+          className={`flex-shrink-0 px-6 py-2 rounded-full border text-xs font-bold uppercase tracking-widest transition-all ${
+            tab === 'following' ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 hover:bg-zinc-900 hover:text-white'
+          }`}
+        >
+          Подписки
+        </button>
       </div>
 
-      {loading && (
-        <div className="py-10 text-center text-xs text-zinc-400 uppercase tracking-widest">Загрузка...</div>
-      )}
+      {loading && <div className="py-10 text-center text-xs text-zinc-400 uppercase tracking-widest">Загрузка...</div>}
+
       <div className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2">
-        {['Мужское', 'Женское', 'Тренды', 'Распродажа', 'Бренды'].map(cat => (
-          <button key={cat} className="flex-shrink-0 px-6 py-2 rounded-full border border-zinc-200 text-xs font-bold uppercase tracking-widest hover:bg-zinc-900 hover:text-white transition-all">
+        {['Мужское', 'Женское', 'Тренды', 'Распродажа', 'Бренды'].map((cat) => (
+          <button
+            key={cat}
+            className="flex-shrink-0 px-6 py-2 rounded-full border border-zinc-200 text-xs font-bold uppercase tracking-widest hover:bg-zinc-900 hover:text-white transition-all"
+          >
             {cat}
           </button>
         ))}
       </div>
-      
+
       {feedLooks.map((look: any) => (
         <article key={look.id} className="space-y-4 border-b border-zinc-100 pb-8 last:border-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-zinc-100 overflow-hidden">
-                 <img src={look.authorAvatar} alt="" className="w-full h-full object-cover" />
+                <img src={withApiOrigin(look.authorAvatar)} alt="" className="w-full h-full object-cover" />
               </div>
               <div>
                 <p className="text-sm font-bold">{look.authorName}</p>
                 <p className="text-[10px] text-zinc-400 uppercase tracking-wide">2 часа назад</p>
               </div>
             </div>
-            <button className="p-2 text-zinc-400"><ICONS.Share className="w-5 h-5" /></button>
+            <button className="p-2 text-zinc-400">
+              <ICONS.Share className="w-5 h-5" />
+            </button>
           </div>
-          
+
           <Link to={`/look/${look.id}`} className="block relative aspect-[4/5] rounded-[32px] overflow-hidden bg-zinc-100">
-             <img src={look.resultImageUrl} alt="" className="w-full h-full object-cover" />
-             <div className="absolute bottom-4 left-4 right-4 flex gap-2">
-                <button className="flex-1 bg-white/90 backdrop-blur py-3 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">Примерить</button>
-                <button className="bg-zinc-900 text-white w-12 h-12 flex items-center justify-center rounded-full shadow-lg">
-                   <ICONS.ArrowRight className="w-5 h-5" />
-                </button>
-             </div>
+            <img src={withApiOrigin(look.resultImageUrl)} alt="" className="w-full h-full object-cover" />
+            <div className="absolute bottom-4 left-4 right-4 flex gap-2">
+              <button className="flex-1 bg-white/90 backdrop-blur py-3 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
+                Примерить
+              </button>
+              <button className="bg-zinc-900 text-white w-12 h-12 flex items-center justify-center rounded-full shadow-lg">
+                <ICONS.ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
           </Link>
 
           <div className="flex items-center gap-6 px-1">
@@ -412,18 +500,18 @@ const Feed = () => {
 
 const Home = () => {
   const { homeLayout, actions } = useAppState();
-  
+
   return (
     <div>
       <div className="px-4 pt-4 flex justify-end">
-        <button 
+        <button
           onClick={actions.toggleHomeLayout}
           className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-zinc-900 transition-colors"
         >
           {homeLayout === HomeLayout.DASHBOARD ? 'Переключить на ленту' : 'Переключить на дашборд'}
         </button>
       </div>
-      
+
       {homeLayout === HomeLayout.DASHBOARD ? <Dashboard /> : <Feed />}
     </div>
   );

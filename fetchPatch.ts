@@ -1,12 +1,19 @@
 // fetchPatch.ts
+// Monkeypatch window.fetch so that relative /api/* and /media/* calls
+// go to VITE_API_ORIGIN (e.g. https://api.toptry.ru) and always include cookies.
+
 export function patchFetchForApi() {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
 
-  const w = window as any;
+  const apiOrigin = (import.meta as any)?.env?.VITE_API_ORIGIN as string | undefined;
 
-  // ✅ защита от повторного патча
-  if (w.__toptryFetchPatched) return;
-  w.__toptryFetchPatched = true;
+  // If apiOrigin is not set, we still add credentials for relative calls.
+  const normalizeOrigin = (origin?: string) => {
+    if (!origin) return '';
+    return origin.endsWith('/') ? origin.slice(0, -1) : origin;
+  };
+
+  const origin = normalizeOrigin(apiOrigin);
 
   const originalFetch = window.fetch.bind(window);
 
@@ -16,14 +23,22 @@ export function patchFetchForApi() {
         ? input
         : input instanceof URL
           ? input.toString()
-          : input.url;
+          : (input as Request).url;
 
-    if (url.startsWith('/api/') || url.startsWith('/media/')) {
+    const isRelativeApi = url.startsWith('/api/') || url === '/api' || url.startsWith('/api?');
+    const isRelativeMedia = url.startsWith('/media/') || url === '/media' || url.startsWith('/media?');
+
+    if (isRelativeApi || isRelativeMedia) {
+      // Rewrite only relative paths. If url is already absolute, keep as is.
+      const rewritten =
+        origin && url.startsWith('/')
+          ? `${origin}${url}`
+          : url;
+
       const nextInit: RequestInit = { ...(init || {}), credentials: 'include' };
-      return originalFetch(input as any, nextInit);
+      return originalFetch(rewritten, nextInit);
     }
 
     return originalFetch(input as any, init);
   };
 }
-
