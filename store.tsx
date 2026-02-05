@@ -28,6 +28,16 @@ interface AppState {
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
+const apiOrigin = "https://api.toptry.ru";
+
+function withApiOrigin(url?: string | null) {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("/media/")) return apiOrigin + url;
+  return url;
+}
+
+
 // Using picsum.photos for better CORS support when fetching images for AI processing
 const getProductImage = (i: number, category: Category) => {
   return `https://picsum.photos/seed/product-${i}-${category}/400/600`;
@@ -66,6 +76,20 @@ const MOCK_LOOKS: Look[] = Array.from({ length: 12 }).map((_, i) => ({
 
 const STORAGE_KEY = 'toptry_state_v1';
 const ENABLE_DB_SYNC = (import.meta?.env?.VITE_ENABLE_DB_SYNC || '').toString() === '1';
+const API_ORIGIN =
+  (import.meta as any)?.env?.VITE_API_ORIGIN?.toString() ||
+  "https://api.toptry.ru";
+
+/**
+ * Приводит относительные /media/* к абсолютным https://api.toptry.ru/media/*
+ * Ничего не ломает: абсолютные URL оставляет как есть.
+ */
+function withApiOrigin(url?: string | null): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("/media/")) return API_ORIGIN + url;
+  return url;
+}
 
 function safeParse<T>(raw: string | null): T | null {
   if (!raw) return null;
@@ -374,7 +398,7 @@ register: async (email: string, username: string, password: string) => {
       (i as any).imageUrl ||
       (i.images && i.images[0]);
 
-       return typeof maybe === 'string' ? maybe : null;
+       return typeof maybe === 'string' ? withApiOrigin(maybe) : null;
        })
        .filter(Boolean) as string[];
        if (!itemImageUrls.length) {
@@ -389,7 +413,7 @@ register: async (email: string, username: string, password: string) => {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            selfieDataUrl: user.selfieUrl,
+            selfieDataUrl: withApiOrigin(user.selfieUrl),
             itemImageUrls,
             itemIds,
             aspectRatio: '3:4',
