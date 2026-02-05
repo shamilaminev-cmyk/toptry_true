@@ -5,9 +5,12 @@
 export function patchFetchForApi() {
   if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
 
-  const apiOrigin = (import.meta as any)?.env?.VITE_API_ORIGIN as string | undefined;
+  // IMPORTANT: use direct import.meta.env access so Vite replaces it reliably.
+  const apiOrigin = import.meta.env.VITE_API_ORIGIN as string | undefined;
 
-  // If apiOrigin is not set, we still add credentials for relative calls.
+  // TEMP (optional): uncomment for one deploy to verify in prod console
+  // console.log('[fetchPatch] VITE_API_ORIGIN =', apiOrigin);
+
   const normalizeOrigin = (origin?: string) => {
     if (!origin) return '';
     return origin.endsWith('/') ? origin.slice(0, -1) : origin;
@@ -25,15 +28,19 @@ export function patchFetchForApi() {
           ? input.toString()
           : (input as Request).url;
 
-    const isRelativeApi = url.startsWith('/api/') || url === '/api' || url.startsWith('/api?');
-    const isRelativeMedia = url.startsWith('/media/') || url === '/media' || url.startsWith('/media?');
+    // Support both "/api/..." and "api/..." (some code uses no leading slash)
+    const isApi =
+      url.startsWith('/api/') || url === '/api' || url.startsWith('/api?') ||
+      url.startsWith('api/') || url === 'api' || url.startsWith('api?');
 
-    if (isRelativeApi || isRelativeMedia) {
-      // Rewrite only relative paths. If url is already absolute, keep as is.
-      const rewritten =
-        origin && url.startsWith('/')
-          ? `${origin}${url}`
-          : url;
+    const isMedia =
+      url.startsWith('/media/') || url === '/media' || url.startsWith('/media?') ||
+      url.startsWith('media/') || url === 'media' || url.startsWith('media?');
+
+    if (isApi || isMedia) {
+      // Rewrite relative paths to absolute using origin (if set).
+      const path = url.startsWith('/') ? url : `/${url}`;
+      const rewritten = origin ? `${origin}${path}` : url;
 
       const nextInit: RequestInit = { ...(init || {}), credentials: 'include' };
       return originalFetch(rewritten, nextInit);
