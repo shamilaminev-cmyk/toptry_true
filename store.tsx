@@ -28,14 +28,6 @@ interface AppState {
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
-const apiOrigin = "https://api.toptry.ru";
-
-function withApiOrigin(url?: string | null) {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  if (url.startsWith("/media/")) return apiOrigin + url;
-  return url;
-}
 
 
 // Using picsum.photos for better CORS support when fetching images for AI processing
