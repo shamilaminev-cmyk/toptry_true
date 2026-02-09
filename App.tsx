@@ -1,5 +1,6 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { patchFetchForApi } from './fetchPatch';
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AppProvider, useAppState } from './store';
 import { ICONS } from './constants';
@@ -107,6 +108,7 @@ const AppRoutes = () => {
 };
 
 const App = () => {
+  useEffect(() => { patchFetchForApi(); }, []);
   return (
     <AppProvider>
       <Router>
