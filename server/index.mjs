@@ -18,7 +18,7 @@ import {
 } from "./auth.mjs";
 import sharp from "sharp";
 
-dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env.local" });
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
 
 const PORT = Number(process.env.API_PORT || 5174);
 
@@ -410,7 +410,7 @@ Avoid brand logos and text.`;
  */
 app.post("/api/wardrobe/extract", async (req, res) => {
   try {
-        const AI_PROXY_URL = normalizeBaseUrl(process.env.AI_PROXY_URL);
+    const AI_PROXY_URL = normalizeBaseUrl(process.env.AI_PROXY_URL);
 
     if (AI_PROXY_URL) {
       try {
@@ -478,10 +478,8 @@ If multiple items are visible, choose the most prominent garment.`;
         break;
       }
     }
-if (!cutoutDataUrl) {
-  return res.status(502).json({
-    error: "Gemini did not return cutout image",
-  });
+    if (!cutoutDataUrl) {
+      return res.status(502).json({ error: "Gemini did not return cutout image" });
 }
 
     const attrPrompt = `Analyze the clothing item in the image.
