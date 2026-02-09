@@ -1,6 +1,7 @@
 
-import React from 'react';
-import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { patchFetchForApi } from './fetchPatch';
+import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AppProvider, useAppState } from './store';
 import { ICONS } from './constants';
 import Home from './pages/Home';
@@ -89,33 +90,16 @@ const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   );
 };
 
-import { Navigate, useLocation } from 'react-router-dom';
-
-const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { user, meLoaded } = useAppState();
-  const location = useLocation();
-
-  if (!meLoaded) return null; // ждём /api/auth/me
-
-  if (!user) {
-    return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
-  }
-
-  return children;
-};
-
-
-
 const AppRoutes = () => {
   return (
     <Layout>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/catalog" element={<Catalog />} />
-        <Route path="/wardrobe" element={<RequireAuth><Wardrobe /></RequireAuth>} />
-        <Route path="/create-look" element={<RequireAuth><CreateLook /></RequireAuth>} />
+        <Route path="/wardrobe" element={<Wardrobe />} />
+        <Route path="/create-look" element={<CreateLook />} />
         <Route path="/looks" element={<Looks />} />
-        <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/look/:id" element={<LookDetails />} />
       </Routes>
@@ -124,6 +108,7 @@ const AppRoutes = () => {
 };
 
 const App = () => {
+  useEffect(() => { patchFetchForApi(); }, []);
   return (
     <AppProvider>
       <Router>
