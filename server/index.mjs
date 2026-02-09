@@ -29,6 +29,26 @@ if (!GEMINI_API_KEY) {
     "[toptry] GEMINI_API_KEY is not set. AI endpoints will return 500."
   );
 }
+function normalizeBaseUrl(v) {
+  if (!v) return "";
+  const s = String(v).trim();
+  if (!s) return "";
+  return s.endsWith("/") ? s.slice(0, -1) : s;
+}
+
+async function proxyJsonPost(upstreamUrl, bodyObj) {
+  const resp = await fetch(upstreamUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify(bodyObj ?? {}),
+  });
+
+  const text = await resp.text(); // ВАЖНО: не трогаем ответ
+  return { resp, text };
+}
 
 const app = express();
 
@@ -390,6 +410,26 @@ Avoid brand logos and text.`;
  */
 app.post("/api/wardrobe/extract", async (req, res) => {
   try {
+        const AI_PROXY_URL = normalizeBaseUrl(process.env.AI_PROXY_URL);
+
+    if (AI_PROXY_URL) {
+      try {
+        const upstream = `${AI_PROXY_URL}/api/wardrobe/extract`;
+
+        const { resp, text } = await proxyJsonPost(upstream, req.body);
+
+        const ct = resp.headers.get("content-type");
+        if (ct) res.setHeader("content-type", ct);
+
+        res.status(resp.status).send(text);
+        return; // ОЧЕНЬ ВАЖНО
+      } catch (e) {
+        return res.status(502).json({
+          error: "AI proxy request failed",
+          details: e?.message || String(e),
+        });
+      }
+    }
     if (!GEMINI_API_KEY) {
       return res
         .status(500)
