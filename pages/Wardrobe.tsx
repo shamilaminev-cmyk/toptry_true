@@ -43,6 +43,16 @@ const Wardrobe = () => {
     if (!url) return '';
     if (url.startsWith('/api/')) return apiOrigin + url;
     if (url.startsWith('/media/')) return apiOrigin + url;
+
+    // абсолютные URL (например, https://staging.toptry.ru/media/...) — переписываем на apiOrigin
+    if (/^https?:\/\//i.test(url)) {
+      try {
+        const u = new URL(url);
+        if (u.pathname.startsWith("/api/") || u.pathname.startsWith("/media/")) {
+          return apiOrigin + u.pathname;
+        }
+      } catch {}
+    }
     return url;
   }
 
