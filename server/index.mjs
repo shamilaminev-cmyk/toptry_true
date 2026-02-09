@@ -469,7 +469,13 @@ If multiple items are visible, choose the most prominent garment.`;
         },
       },
     });
-
+const cutoutPartsDbg = cutoutResp?.candidates?.[0]?.content?.parts || [];
+const dbgSummary = cutoutPartsDbg.map((p) => ({
+  hasInlineData: !!p?.inlineData?.data,
+  mimeType: p?.inlineData?.mimeType || null,
+  textPreview: p?.text ? String(p.text).slice(0, 160) : null,
+}));
+console.log('[toptry] extract cutout parts summary:', JSON.stringify(dbgSummary));
     let cutoutDataUrl = "";
     const cutoutParts = cutoutResp?.candidates?.[0]?.content?.parts || [];
     for (const part of cutoutParts) {
@@ -479,9 +485,18 @@ If multiple items are visible, choose the most prominent garment.`;
         break;
       }
     }
-    if (!cutoutDataUrl)
-      return res.status(502).json({ error: "Gemini did not return cutout image" });
-
+if (!cutoutDataUrl) {
+  const cutoutPartsDbg = cutoutResp?.candidates?.[0]?.content?.parts || [];
+  const dbgSummary = cutoutPartsDbg.map((p) => ({
+    hasInlineData: !!p?.inlineData?.data,
+    mimeType: p?.inlineData?.mimeType || null,
+    textPreview: p?.text ? String(p.text).slice(0, 160) : null,
+  }));
+  return res.status(502).json({
+    error: 'Gemini did not return cutout image',
+    debug: dbgSummary,
+  });
+}
     const attrPrompt = `Analyze the clothing item in the image.
 Return ONLY strict JSON with keys:
 {
