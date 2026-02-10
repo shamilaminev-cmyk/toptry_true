@@ -75,12 +75,17 @@ const corsOptions = {
     // запросы без Origin (healthcheck, curl, server-to-server)
     if (!origin) return cb(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    
+
+    // normalize Origin (strip spaces and trailing slash)
+    const ot = String(origin).trim();
+    const o = ot.endsWith("/") ? ot.slice(0, -1) : ot;
+    if (allowedOrigins.includes(o)) {
       return cb(null, true);
     }
 
     // В проде лучше логировать и возвращать false, но так быстрее диагностировать
-    return cb(new Error(`CORS blocked: ${origin}`));
+    return cb(new Error(`CORS blocked: ${o}`));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
