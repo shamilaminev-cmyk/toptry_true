@@ -108,7 +108,6 @@ const AppRoutes = () => {
 };
 
 const App = () => {
-  useEffect(() => { patchFetchForApi(); }, []);
   return (
     <AppProvider>
       <Router>
