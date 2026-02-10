@@ -1,12 +1,10 @@
 import React from 'react';
+import { patchFetchForApi } from "./fetchPatch";
+patchFetchForApi();
 import "./index.css";
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { patchFetchForApi } from './fetchPatch';
-patchFetchForApi();
 
-import { patchFetchForApi } from './fetchPatch';
-patchFetchForApi();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
 const rootElement = document.getElementById('root');
