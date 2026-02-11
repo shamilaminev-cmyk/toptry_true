@@ -78,9 +78,20 @@ const API_ORIGIN =
  */
 function withApiOrigin(url?: string | null): string {
   if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  if (url.startsWith("/media/")) return API_ORIGIN + url;
-  return url;
+  const s = String(url).trim();
+  if (/^(data:|blob:)/i.test(s)) return s;
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      if (u.pathname.startsWith("/media/")) return u.pathname;
+      return s;
+    } catch {
+      return s;
+    }
+  }
+  // IMPORTANT: /media stays same-origin for <img>
+  if (s.startsWith("/media/")) return s;
+  return s;
 }
 
 function safeParse<T>(raw: string | null): T | null {
