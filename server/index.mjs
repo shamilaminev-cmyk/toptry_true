@@ -362,6 +362,11 @@ app.get("/media/:key(*)", async (req, res) => {
 /**
  * POST /api/tryon
  */
+/* POST /api/looks/create
+ * Legacy alias (frontend expects this path)
+ */
+app.post("/api/looks/create", (req, res) => res.redirect(307, "/api/tryon"));
+
 app.post("/api/tryon", async (req, res) => {
   try {
     if (!GEMINI_API_KEY) {
