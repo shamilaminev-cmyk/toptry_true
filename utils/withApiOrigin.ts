@@ -6,7 +6,7 @@ export function withApiOrigin(url?: string | null): string {
   // keep data/blob as-is
   if (s.startsWith("data:") || s.startsWith("blob:")) return s;
 
-  const apiOriginRaw = (import.meta as any)?.env?.VITE_API_ORIGIN?.toString() || "";
+  const apiOriginRaw = import.meta.env.VITE_API_ORIGIN || "";
   const apiOrigin = apiOriginRaw.replace(/\/+$/g, ""); // trim trailing "/"
 
   // no VITE_API_ORIGIN => keep same-origin behavior
