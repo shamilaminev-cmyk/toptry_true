@@ -52,6 +52,37 @@ async function proxyJsonPost(upstreamUrl, bodyObj) {
 
 const app = express();
 
+function absUrlFromReq(req, url) {
+  if (!url) return url;
+
+  const s = String(url);
+
+  // Уже абсолютный или data/blob
+  if (/^https?:\/\//i.test(s) || /^data:/i.test(s) || /^blob:/i.test(s)) {
+    return s;
+  }
+
+  const proto =
+    (req.headers["x-forwarded-proto"] || req.protocol || "https")
+      .toString()
+      .split(",")[0]
+      .trim();
+
+  const host =
+    (req.headers["x-forwarded-host"] || req.headers.host || "")
+      .toString()
+      .split(",")[0]
+      .trim();
+
+  if (!host) return s;
+
+  const origin = `${proto}://${host}`;
+
+  if (s.startsWith("/")) return origin + s;
+  return origin + "/" + s;
+}
+
+
 // behind nginx
 app.set("trust proxy", 1);
 
@@ -177,8 +208,7 @@ async function imageToBase64(input) {
     // поэтому делаем абсолютный URL через base.
     const base =
       process.env.INTERNAL_BASE_URL ||
-      process.env.PUBLIC_BASE_URL ||
-      `http://127.0.0.1:${process.env.PORT || 5174}`;
+      `http://127.0.0.1:`;
 
     const url =
       clean.startsWith("http://") || clean.startsWith("https://")
