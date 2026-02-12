@@ -14,6 +14,32 @@ import LookDetails from './pages/LookDetails';
 import CreateLook from './pages/CreateLook';
 import Logo from './components/Logo';
 
+class TopTryErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: any }> {
+  state = { error: null as any };
+
+  static getDerivedStateFromError(error: any) {
+    return { error };
+  }
+
+  componentDidCatch(error: any, info: any) {
+    console.error("[toptry][ErrorBoundary]", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      const msg = this.state.error?.message || String(this.state.error) || "Unknown error";
+      return (
+        <div style={{ padding: 16, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
+          <h2>TopTry crashed</h2>
+          <div>{msg}</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+
 const NavItem: React.FC<{ to: string; icon: React.FC<any>; label: string; highlight?: boolean }> = ({ to, icon: Icon, label, highlight }) => {
   const location = useLocation();
   const isActive = location.pathname === to;
@@ -108,13 +134,14 @@ const AppRoutes = () => {
 };
 
 const App = () => {
-  useEffect(() => { patchFetchForApi(); }, []);
   return (
-    <AppProvider>
+    <TopTryErrorBoundary>
+      <AppProvider>
       <Router>
         <AppRoutes />
       </Router>
-    </AppProvider>
+      </AppProvider>
+    </TopTryErrorBoundary>
   );
 };
 

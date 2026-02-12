@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { withApiOrigin } from "../utils/withApiOrigin";
 import { useAppState } from '../store';
 import { ICONS } from '../constants';
 import { Category, Gender, WardrobeItem } from '../types';
@@ -35,27 +36,6 @@ const Wardrobe = () => {
       reader.readAsDataURL(file);
     });
 
-  // ✅ В PROD фронт на Timeweb, а backend+media на DO (api.toptry.ru)
-  // Поэтому /media/* нужно префиксовать apiOrigin, иначе браузер идёт на toptry.ru/media/* (404)
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN || 'https://api.toptry.ru';
-
-  function withApiOrigin(url?: string) {
-    if (!url) return '';
-    if (url.startsWith('/api/')) return apiOrigin + url;
-    if (url.startsWith('/media/')) return apiOrigin + url;
-
-    // абсолютные URL (например, https://staging.toptry.ru/media/...) — переписываем на apiOrigin
-    if (/^https?:\/\//i.test(url)) {
-      try {
-        const u = new URL(url);
-        if (u.pathname.startsWith("/api/") || u.pathname.startsWith("/media/")) {
-          return apiOrigin + u.pathname;
-        }
-      } catch {}
-    }
-    return url;
-  }
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -63,6 +43,11 @@ const Wardrobe = () => {
     setIsRecognizing(true);
     try {
       const original = await readAsDataUrl(file);
+
+      // Frontend validation: must be a valid image data URL (photoDataUrl expects data:image/...)
+      if (!file.type || !file.type.startsWith("image/")) throw new Error("Пожалуйста, выберите файл изображения (JPG/PNG/WEBP)");
+      if (!original || typeof original !== "string" || !original.startsWith("data:image/")) throw new Error("Не удалось прочитать изображение (некорректный формат)");
+      if (original.length < 32) throw new Error("Изображение слишком маленькое или повреждено");
       const resp = await fetch('/api/wardrobe/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -165,6 +150,21 @@ const Wardrobe = () => {
             className="hidden"
             accept="image/*"
           />
+
+        <div className="rounded-3xl border border-zinc-200 bg-white p-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Быстрый старт</div>
+            <div className="text-sm font-semibold">Добавь свою вещь по фото → она появится в шкафу → дальше можно примерять</div>
+          </div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="shrink-0 px-4 py-3 rounded-2xl bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all"
+          >
+            Загрузить фото
+          </button>
+        </div>
+
+
         </div>
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">

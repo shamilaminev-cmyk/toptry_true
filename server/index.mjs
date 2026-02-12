@@ -52,6 +52,37 @@ async function proxyJsonPost(upstreamUrl, bodyObj) {
 
 const app = express();
 
+function absUrlFromReq(req, url) {
+  if (!url) return url;
+
+  const s = String(url);
+
+  // Уже абсолютный или data/blob
+  if (/^https?:\/\//i.test(s) || /^data:/i.test(s) || /^blob:/i.test(s)) {
+    return s;
+  }
+
+  const proto =
+    (req.headers["x-forwarded-proto"] || req.protocol || "https")
+      .toString()
+      .split(",")[0]
+      .trim();
+
+  const host =
+    (req.headers["x-forwarded-host"] || req.headers.host || "")
+      .toString()
+      .split(",")[0]
+      .trim();
+
+  if (!host) return s;
+
+  const origin = `${proto}://${host}`;
+
+  if (s.startsWith("/")) return origin + s;
+  return origin + "/" + s;
+}
+
+
 // behind nginx
 app.set("trust proxy", 1);
 
@@ -177,8 +208,7 @@ async function imageToBase64(input) {
     // поэтому делаем абсолютный URL через base.
     const base =
       process.env.INTERNAL_BASE_URL ||
-      process.env.PUBLIC_BASE_URL ||
-      `http://127.0.0.1:${process.env.PORT || 5174}`;
+      `http://127.0.0.1:`;
 
     const url =
       clean.startsWith("http://") || clean.startsWith("https://")
@@ -326,6 +356,107 @@ app.get("/media/:key(*)", async (req, res) => {
     stream.pipe(res);
   } catch (e) {
     res.status(500).send(e?.message || "media error");
+  }
+});
+
+/**
+ * POST /api/looks/create
+ * Frontend endpoint: returns { look } (resultImageUrl is data:...)
+ */
+app.post("/api/looks/create", async (req, res) => {
+  try {
+    if (!GEMINI_API_KEY) {
+      return res
+        .status(500)
+        .json({ error: "GEMINI_API_KEY is not configured on the server" });
+    }
+
+    const b = req.body || {};
+    const selfieDataUrl = b.selfieDataUrl;
+    const itemImageUrls = b.itemImageUrls;
+    const aspectRatio = b.aspectRatio;
+
+    if (!selfieDataUrl || !Array.isArray(itemImageUrls) || itemImageUrls.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "selfieDataUrl and itemImageUrls[] are required" });
+    }
+    if (itemImageUrls.length > 5) {
+      return res.status(400).json({ error: "Maximum 5 items per try-on in MVP" });
+    }
+
+    // Make URLs absolute for Node fetch (media URLs are often "/media/..." )
+    const selfieAbs = absUrlFromReq(req, selfieDataUrl);
+    const itemsAbs = itemImageUrls.map((u) => absUrlFromReq(req, u));
+
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+    const selfie = await imageToBase64(selfieAbs);
+    const itemParts = await Promise.all(
+      itemsAbs.map(async (url) => {
+        const img = await imageToBase64(url);
+        return { inlineData: { data: img.base64, mimeType: img.mimeType } };
+      })
+    );
+
+    const prompt =
+      "Act as a professional fashion photographer and AI stylist.\n" +
+      "I am providing a selfie of a person and images of " +
+      String(itemsAbs.length) +
+      " clothing items.\n" +
+      "Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.\n" +
+      "The person should have the same face as in the selfie.\n" +
+      "Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.\n" +
+      "Result should be front view, clean neutral background.\n" +
+      "Avoid brand logos and text.";
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-image-preview",
+      contents: {
+        parts: [
+          { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
+          ...itemParts,
+          { text: prompt },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: aspectRatio || "3:4",
+          imageSize: "1K",
+        },
+      },
+    });
+
+    let imageDataUrl = "";
+    const parts = (response && response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) || [];
+    for (const part of parts) {
+      if (part && part.inlineData && part.inlineData.data) {
+        const mt = (part.inlineData.mimeType || "image/png");
+        imageDataUrl = "data:" + mt + ";base64," + part.inlineData.data;
+        break;
+      }
+    }
+
+    if (!imageDataUrl) {
+      return res.status(502).json({ error: "Gemini did not return an image" });
+    }
+
+    const now = new Date();
+    const look = {
+      id: "l-" + Date.now(),
+      title: "Сгенерированный образ",
+      items: Array.isArray(b.itemIds) ? b.itemIds : [],
+      resultImageUrl: imageDataUrl,
+      createdAt: now.toISOString(),
+      isPublic: false,
+      likes: 0,
+      comments: 0,
+    };
+
+    return res.json({ look });
+  } catch (e) {
+    console.error("[toptry] /api/looks/create error", e);
+    return res.status(500).json({ error: (e && e.message) ? e.message : String(e) });
   }
 });
 

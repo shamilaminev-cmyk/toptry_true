@@ -1,6 +1,10 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { User, Product, Look, WardrobeItem, Gender, Category, SubscriptionTier, HomeLayout } from './types';
+import { withApiOrigin } from "./utils/withApiOrigin";
+
+const ENABLE_DB_SYNC = ((import.meta as any)?.env?.VITE_ENABLE_DB_SYNC || "").toString() === "1";
+
 
 interface AppState {
   user: User | null;
@@ -66,23 +70,6 @@ const MOCK_LOOKS: Look[] = Array.from({ length: 12 }).map((_, i) => ({
   authorAvatar: `https://i.pravatar.cc/150?u=${i % 3}`,
 }));
 
-const STORAGE_KEY = 'toptry_state_v1';
-const ENABLE_DB_SYNC = (import.meta?.env?.VITE_ENABLE_DB_SYNC || '').toString() === '1';
-const API_ORIGIN =
-  (import.meta as any)?.env?.VITE_API_ORIGIN?.toString() ||
-  "https://api.toptry.ru";
-
-/**
- * Приводит относительные /media/* к абсолютным https://api.toptry.ru/media/*
- * Ничего не ломает: абсолютные URL оставляет как есть.
- */
-function withApiOrigin(url?: string | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  if (url.startsWith("/media/")) return API_ORIGIN + url;
-  return url;
-}
-
 function safeParse<T>(raw: string | null): T | null {
   if (!raw) return null;
   try {
@@ -96,6 +83,8 @@ function clampArray<T>(arr: T[], max: number): T[] {
   if (arr.length <= max) return arr;
   return arr.slice(0, max);
 }
+const STORAGE_KEY = "toptry_state_v1";
+
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
