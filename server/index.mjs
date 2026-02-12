@@ -363,9 +363,41 @@ app.get("/media/:key(*)", async (req, res) => {
  * POST /api/tryon
  */
 /* POST /api/looks/create
- * Legacy alias (frontend expects this path)
+ * Wrapper for frontend: returns { look } based on /api/tryon imageDataUrl
  */
-app.post("/api/looks/create", (req, res) => res.redirect(307, "/api/tryon"));
+app.post("/api/looks/create", async (req, res) => {
+  try {
+    const tryonUrl = "http://127.0.0.1:" + (process.env.PORT || 5174) + "/api/tryon";
+    const r = await fetch(tryonUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: req.headers.cookie || "" },
+      body: JSON.stringify(req.body || {}),
+    });
+
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return res.status(r.status).json(data);
+
+    const imageDataUrl = data && data.imageDataUrl;
+    if (!imageDataUrl) return res.status(502).json({ error: "Tryon did not return imageDataUrl" });
+
+    const now = new Date();
+    const look = {
+      id: "l-" + Date.now(),
+      title: "Сгенерированный образ",
+      items: Array.isArray(req.body && req.body.itemIds) ? req.body.itemIds : [],
+      resultImageUrl: imageDataUrl,
+      createdAt: now.toISOString(),
+      isPublic: false,
+      likes: 0,
+      comments: 0,
+    };
+
+    return res.json({ look });
+  } catch (e) {
+    console.error("[toptry] /api/looks/create error", e);
+    return res.status(500).json({ error: (e && e.message) ? e.message : String(e) });
+  }
+});
 
 app.post("/api/tryon", async (req, res) => {
   try {
