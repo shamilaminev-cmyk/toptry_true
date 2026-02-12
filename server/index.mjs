@@ -360,31 +360,92 @@ app.get("/media/:key(*)", async (req, res) => {
 });
 
 /**
- * POST /api/tryon
- */
-/* POST /api/looks/create
- * Wrapper for frontend: returns { look } based on /api/tryon imageDataUrl
+ * POST /api/looks/create
+ * Frontend endpoint: returns { look } (resultImageUrl is data:...)
  */
 app.post("/api/looks/create", async (req, res) => {
   try {
-    const tryonUrl = "http://127.0.0.1:" + (process.env.PORT || 5174) + "/api/tryon";
-    const r = await fetch(tryonUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", cookie: req.headers.cookie || "" },
-      body: JSON.stringify(req.body || {}),
+    if (!GEMINI_API_KEY) {
+      return res
+        .status(500)
+        .json({ error: "GEMINI_API_KEY is not configured on the server" });
+    }
+
+    const b = req.body || {};
+    const selfieDataUrl = b.selfieDataUrl;
+    const itemImageUrls = b.itemImageUrls;
+    const aspectRatio = b.aspectRatio;
+
+    if (!selfieDataUrl || !Array.isArray(itemImageUrls) || itemImageUrls.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "selfieDataUrl and itemImageUrls[] are required" });
+    }
+    if (itemImageUrls.length > 5) {
+      return res.status(400).json({ error: "Maximum 5 items per try-on in MVP" });
+    }
+
+    // Make URLs absolute for Node fetch (media URLs are often "/media/..." )
+    const selfieAbs = absUrlFromReq(req, selfieDataUrl);
+    const itemsAbs = itemImageUrls.map((u) => absUrlFromReq(req, u));
+
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+    const selfie = await imageToBase64(selfieAbs);
+    const itemParts = await Promise.all(
+      itemsAbs.map(async (url) => {
+        const img = await imageToBase64(url);
+        return { inlineData: { data: img.base64, mimeType: img.mimeType } };
+      })
+    );
+
+    const prompt =
+      "Act as a professional fashion photographer and AI stylist.\n" +
+      "I am providing a selfie of a person and images of " +
+      String(itemsAbs.length) +
+      " clothing items.\n" +
+      "Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.\n" +
+      "The person should have the same face as in the selfie.\n" +
+      "Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.\n" +
+      "Result should be front view, clean neutral background.\n" +
+      "Avoid brand logos and text.";
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-image-preview",
+      contents: {
+        parts: [
+          { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
+          ...itemParts,
+          { text: prompt },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: aspectRatio || "3:4",
+          imageSize: "1K",
+        },
+      },
     });
 
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) return res.status(r.status).json(data);
+    let imageDataUrl = "";
+    const parts = (response && response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) || [];
+    for (const part of parts) {
+      if (part && part.inlineData && part.inlineData.data) {
+        const mt = (part.inlineData.mimeType || "image/png");
+        imageDataUrl = "data:" + mt + ";base64," + part.inlineData.data;
+        break;
+      }
+    }
 
-    const imageDataUrl = data && data.imageDataUrl;
-    if (!imageDataUrl) return res.status(502).json({ error: "Tryon did not return imageDataUrl" });
+    if (!imageDataUrl) {
+      return res.status(502).json({ error: "Gemini did not return an image" });
+    }
 
     const now = new Date();
     const look = {
       id: "l-" + Date.now(),
       title: "Сгенерированный образ",
-      items: Array.isArray(req.body && req.body.itemIds) ? req.body.itemIds : [],
+      items: Array.isArray(b.itemIds) ? b.itemIds : [],
       resultImageUrl: imageDataUrl,
       createdAt: now.toISOString(),
       isPublic: false,
@@ -399,6 +460,9 @@ app.post("/api/looks/create", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/tryon
+ */
 app.post("/api/tryon", async (req, res) => {
   try {
     if (!GEMINI_API_KEY) {
