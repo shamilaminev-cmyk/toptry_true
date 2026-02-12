@@ -30,7 +30,7 @@ jobs:
             TAG="prod"
 
             API_CONTAINER="toptry-ai-prod"
-            API_ENV_FILE="/opt/toptry-ai/.env"
+            API_ENV_FILE="/root/toptry-ai-prod.env"
             API_PORT_BIND="127.0.0.1:8080:5174"
             API_ALIAS="ai"
 
@@ -122,12 +122,12 @@ jobs:
           ssh-keyscan -p "${PORT}" -H "${HOST}" >> ~/.ssh/known_hosts
 
           ssh -i ~/.ssh/id_ed25519 -p "${PORT}" "${USER}@${HOST}" bash -lc "set -e
-            echo '${{ secrets.GHCR_TOKEN }}' | docker login ghcr.io -u '${{ secrets.GHCR_USER }}' --password-stdin
+            echo '${{ secrets.GHCR_TOKEN }}' | sudo -n docker login ghcr.io -u '${{ secrets.GHCR_USER }}' --password-stdin
 
             # --- API ---
-            docker pull ${IMAGE_API}:${TAG}
-            docker rm -f ${API_CONTAINER} >/dev/null 2>&1 || true
-            docker run -d \
+            sudo -n docker pull ${IMAGE_API}:${TAG}
+            sudo -n docker rm -f ${API_CONTAINER} >/dev/null 2>&1 || true
+            sudo -n docker run -d \
               --name ${API_CONTAINER} \
               --restart unless-stopped \
               --network toptry-ai_default \
@@ -137,9 +137,9 @@ jobs:
               ${IMAGE_API}:${TAG}
 
             # --- WEB ---
-            docker pull ${IMAGE_WEB}:${TAG}
-            docker rm -f ${WEB_CONTAINER} >/dev/null 2>&1 || true
-            docker run -d \
+            sudo -n docker pull ${IMAGE_WEB}:${TAG}
+            sudo -n docker rm -f ${WEB_CONTAINER} >/dev/null 2>&1 || true
+            sudo -n docker run -d \
               --name ${WEB_CONTAINER} \
               --restart unless-stopped \
               --network toptry-ai_default \
