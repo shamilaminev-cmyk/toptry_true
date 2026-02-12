@@ -3,6 +3,8 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { User, Product, Look, WardrobeItem, Gender, Category, SubscriptionTier, HomeLayout } from './types';
 import { withApiOrigin } from "./utils/withApiOrigin";
 
+const ENABLE_DB_SYNC = ((import.meta as any)?.env?.VITE_ENABLE_DB_SYNC || "").toString() === "1";
+
 
 interface AppState {
   user: User | null;
