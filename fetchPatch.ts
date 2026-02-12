@@ -45,6 +45,19 @@ export function patchFetchForApi() {
       url.startsWith('/media/') || url === '/media' || url.startsWith('/media?') ||
       url.startsWith('media/') || url === 'media' || url.startsWith('media?');
 
+    const isAbsApi = !!origin && (
+      url.startsWith(origin + "/api/") || url === origin + "/api" || url.startsWith(origin + "/api?")
+    );
+    const isAbsMedia = !!origin && (
+      url.startsWith(origin + "/media/") || url === origin + "/media" || url.startsWith(origin + "/media?")
+    );
+
+    if (isAbsApi || isAbsMedia) {
+      const nextInit: RequestInit = { ...(init || {}), credentials: "include" };
+      return originalFetch(input as any, nextInit);
+    }
+
+
     if (isApi || isMedia) {
       // Rewrite relative paths to absolute using origin (if set).
       const path = url.startsWith('/') ? url : `/${url}`;

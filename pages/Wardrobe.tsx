@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { withApiOrigin } from "../utils/withApiOrigin";
 import { useAppState } from '../store';
 import { ICONS } from '../constants';
 import { Category, Gender, WardrobeItem } from '../types';
@@ -34,31 +35,6 @@ const Wardrobe = () => {
       reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
       reader.readAsDataURL(file);
     });
-
-  // ✅ В PROD фронт на Timeweb, а backend+media на DO (api.toptry.ru)
-  // Поэтому /media/* нужно префиксовать apiOrigin, иначе браузер идёт на toptry.ru/media/* (404)
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN || 'https://api.toptry.ru';
-
-  function withApiOrigin(url?: string) {
-    if (!url) return '';
-    if (url.startsWith('/api/')) return apiOrigin + url;
-    // IMPORTANT: /media must stay same-origin for <img> so cookies work
-    if (url.startsWith("/media/")) return url;
-
-    // абсолютные URL (например, https://staging.toptry.ru/media/...) — переписываем на apiOrigin
-    if (/^https?:\/\//i.test(url)) {
-      try {
-        const u = new URL(url);
-        if (u.pathname.startsWith("/api/")) {
-          return apiOrigin + u.pathname;
-        }
-        if (u.pathname.startsWith("/media/")) {
-          return u.pathname;
-        }
-      } catch {}
-    }
-    return url;
-  }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

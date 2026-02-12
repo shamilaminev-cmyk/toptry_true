@@ -1,6 +1,8 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { User, Product, Look, WardrobeItem, Gender, Category, SubscriptionTier, HomeLayout } from './types';
+import { withApiOrigin } from "./utils/withApiOrigin";
+
 
 interface AppState {
   user: User | null;
@@ -65,34 +67,6 @@ const MOCK_LOOKS: Look[] = Array.from({ length: 12 }).map((_, i) => ({
   authorName: ['alex_fit', 'marina_style', 'ksenia_vogue'][i % 3],
   authorAvatar: `https://i.pravatar.cc/150?u=${i % 3}`,
 }));
-
-const STORAGE_KEY = 'toptry_state_v1';
-const ENABLE_DB_SYNC = (import.meta?.env?.VITE_ENABLE_DB_SYNC || '').toString() === '1';
-const API_ORIGIN =
-  (import.meta as any)?.env?.VITE_API_ORIGIN?.toString() ||
-  "https://api.toptry.ru";
-
-/**
- * Приводит относительные /media/* к абсолютным https://api.toptry.ru/media/*
- * Ничего не ломает: абсолютные URL оставляет как есть.
- */
-function withApiOrigin(url?: string | null): string {
-  if (!url) return "";
-  const s = String(url).trim();
-  if (/^(data:|blob:)/i.test(s)) return s;
-  if (/^https?:\/\//i.test(s)) {
-    try {
-      const u = new URL(s);
-      if (u.pathname.startsWith("/media/")) return u.pathname;
-      return s;
-    } catch {
-      return s;
-    }
-  }
-  // IMPORTANT: /media stays same-origin for <img>
-  if (s.startsWith("/media/")) return s;
-  return s;
-}
 
 function safeParse<T>(raw: string | null): T | null {
   if (!raw) return null;
