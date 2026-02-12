@@ -81,6 +81,8 @@ function clampArray<T>(arr: T[], max: number): T[] {
   if (arr.length <= max) return arr;
   return arr.slice(0, max);
 }
+const STORAGE_KEY = "toptry_state_v1";
+
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
