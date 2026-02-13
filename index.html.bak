@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Viewport -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- App title -->
+    <title>TopTry — AI виртуальная примерочная</title>
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+
+    <!-- Apple -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#000000" />
+
+    <!-- SEO базовое -->
+    <meta
+      name="description"
+      content="TopTry — AI виртуальная примерочная. Создавай образы, примеряй одежду онлайн, экспериментируй со стилем."
+    />
+  </head>
+  <body class="bg-white text-zinc-900 antialiased">
+    <div id="root"></div>
+
+    <!-- Vite entry -->
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
