@@ -73,7 +73,7 @@ const Hero = () => {
           <div className="space-y-4">
             <div className="group relative w-32 h-32 mx-auto">
               <div className="w-full h-full rounded-full border-4 border-white shadow-xl overflow-hidden bg-zinc-200">
-                <img src={user.selfieUrl} alt="Your Selfie" className="w-full h-full object-cover" />
+                <img src={withApiOrigin(user.selfieUrl)} alt="Your Selfie" className="w-full h-full object-cover" />
               </div>
               <button
                 onClick={() => setShowOptions(true)}
