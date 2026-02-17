@@ -73,7 +73,7 @@ const Hero = () => {
           <div className="space-y-4">
             <div className="group relative w-32 h-32 mx-auto">
               <div className="w-full h-full rounded-full border-4 border-white shadow-xl overflow-hidden bg-zinc-200">
-                <img src={user.selfieUrl} alt="Your Selfie" className="w-full h-full object-cover" />
+                <img src={withApiOrigin(user.selfieUrl)} alt="Your Selfie" className="w-full h-full object-cover" />
               </div>
               <button
                 onClick={() => setShowOptions(true)}
@@ -235,8 +235,21 @@ const SectionHeader = ({ title, linkTo, linkText }: { title: string; linkTo: str
 
 const Dashboard = () => {
   const { products, wardrobe, looks } = useAppState();
-  const recentProducts = products.slice(0, 4);
-  const saleProducts = products.slice(10, 14);
+  const USE_MOCK_HOME_CATALOG = true;
+
+  const mockHomeProducts: any[] = [
+    { id: "home-mock-001", title: "Блейзер прямого кроя", price: 12990, images: ["/mock/items/blazer.jpg"], storeName: "ZARA" },
+    { id: "home-mock-002", title: "Пальто шерстяное", price: 24990, images: ["/mock/items/coat.jpg"], storeName: "MASSIMO DUTTI" },
+    { id: "home-mock-003", title: "Куртка бомбер", price: 15990, images: ["/mock/items/bomber.jpg"], storeName: "H&M" },
+    { id: "home-mock-004", title: "Джинсы straight", price: 7990, images: ["/mock/items/jeans.jpg"], storeName: "UNIQLO" },
+    { id: "home-mock-005", title: "Брюки классические", price: 9990, images: ["/mock/items/trousers.jpg"], storeName: "COS" },
+    { id: "home-mock-006", title: "Платье миди", price: 11990, images: ["/mock/items/dress.jpg"], storeName: "MANGO" },
+  ];
+
+  const homeCatalog = USE_MOCK_HOME_CATALOG ? mockHomeProducts : products;
+
+  const recentProducts = homeCatalog.slice(0, 4);
+  const saleProducts = homeCatalog.slice(2, 6);
   const recentWardrobe = wardrobe.slice(0, 4);
   const trendingLooks = looks.slice(0, 4);
 

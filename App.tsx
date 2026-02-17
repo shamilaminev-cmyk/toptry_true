@@ -1,5 +1,6 @@
 
 import React, { useEffect } from 'react';
+import { withApiOrigin } from "./utils/withApiOrigin";
 import { patchFetchForApi } from './fetchPatch';
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AppProvider, useAppState } from './store';
@@ -81,7 +82,7 @@ const Header = () => {
             className="flex items-center gap-2 px-3 py-2 rounded-full border border-zinc-200 hover:border-zinc-900 transition-colors"
           >
             <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 overflow-hidden">
-              <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+              <img src={withApiOrigin(user.avatarUrl)} alt="" className="w-full h-full object-cover" />
             </div>
             <span className="text-xs font-semibold uppercase tracking-wide text-zinc-900">Профиль</span>
           </Link>

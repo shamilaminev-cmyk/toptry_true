@@ -214,7 +214,7 @@ const Wardrobe = () => {
                     <div className="space-y-4">
                       <div className="flex gap-3">
                         <div className="w-28 h-28 rounded-2xl bg-zinc-50 border border-zinc-100 p-2 flex items-center justify-center">
-                          <img src={extracted.cutout} className="w-full h-full object-contain mix-blend-multiply" />
+                          <img src={withApiOrigin(extracted.cutout)} className="w-full h-full object-contain mix-blend-multiply" />
                         </div>
                         <div className="flex-1 space-y-2">
                           <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Название</label>

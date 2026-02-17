@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { withApiOrigin } from "../utils/withApiOrigin";
 import { useAppState } from '../store';
 import { ICONS } from '../constants';
 import { Category, WardrobeItem } from '../types';
@@ -90,7 +91,7 @@ const CreateLook = () => {
       <div className="p-6 bg-zinc-50 border-b border-zinc-100">
         <div className="flex items-center gap-6">
           <div className="w-16 h-16 rounded-full border-2 border-white shadow-md overflow-hidden bg-zinc-200">
-            <img src={user.selfieUrl} alt="Avatar" className="w-full h-full object-cover" />
+            <img src={withApiOrigin(user.selfieUrl)} alt="Avatar" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="text-2xl font-black uppercase tracking-tighter">Создать образ</h1>
@@ -124,7 +125,7 @@ const CreateLook = () => {
             onClick={() => toggleItem(item)}
             className={`relative group aspect-square rounded-[24px] bg-zinc-50 border-2 transition-all p-2 overflow-hidden ${selectedIds.has(item.id) ? 'border-zinc-900 ring-2 ring-zinc-900 ring-inset' : 'border-zinc-100 hover:border-zinc-300'}`}
           >
-            <img src={item.images[0]} alt="" className="w-full h-full object-contain mix-blend-multiply transition-all duration-500" />
+            <img src={withApiOrigin(item.images?.[0])} alt="" className="w-full h-full object-contain mix-blend-multiply transition-all duration-500" />
             
             <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all ${selectedIds.has(item.id) ? 'bg-zinc-900 border-zinc-900 scale-110' : 'bg-white border-zinc-200'}`}>
               {selectedIds.has(item.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>}
@@ -149,7 +150,7 @@ const CreateLook = () => {
             <div className="flex -space-x-3 overflow-hidden ml-2">
               {wardrobe.filter(i => selectedIds.has(i.id)).map(item => (
                 <div key={item.id} className="inline-block h-10 w-10 rounded-full ring-2 ring-white bg-zinc-100 overflow-hidden border border-zinc-200">
-                  <img src={item.images[0]} className="w-full h-full object-contain mix-blend-multiply" />
+                  <img src={withApiOrigin(item.images?.[0])} className="w-full h-full object-contain mix-blend-multiply" />
                 </div>
               ))}
             </div>
