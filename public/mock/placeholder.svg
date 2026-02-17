@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <rect width="600" height="800" fill="#f4f4f5"/>
+  <path d="M190 310c0-48 39-87 87-87h46c48 0 87 39 87 87v180c0 62-50 112-112 112s-112-50-112-112V310z" fill="#e4e4e7"/>
+  <text x="50%" y="78%" dominant-baseline="middle" text-anchor="middle"
+        font-family="ui-sans-serif,system-ui" font-size="22" fill="#a1a1aa">
+    TopTry • demo catalog
+  </text>
+</svg>
