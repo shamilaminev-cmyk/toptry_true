@@ -83,6 +83,37 @@ function clampArray<T>(arr: T[], max: number): T[] {
   if (arr.length <= max) return arr;
   return arr.slice(0, max);
 }
+async function urlToDataUrlIfMock(url: string): Promise<string> {
+  if (!url) return url;
+  if (url.startsWith('data:')) return url;
+
+  // Convert local mock images into data URLs so backend doesn't fetch protected staging assets (BasicAuth -> 401)
+  // We treat any URL containing "/mock/" as a mock asset.
+  if (!url.includes('/mock/')) return url;
+
+  // If url is absolute, convert to relative path to use current browser auth/session.
+  let fetchUrl = url;
+  try {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const u = new URL(url);
+      fetchUrl = u.pathname + (u.search || '');
+    }
+  } catch {
+    // ignore
+  }
+
+  const res = await fetch(fetchUrl);
+  if (!res.ok) throw new Error(`Failed to fetch mock image: ${res.status} ${fetchUrl}`);
+  const blob = await res.blob();
+
+  return await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error('FileReader failed'));
+    r.readAsDataURL(blob);
+  });
+}
+
 const STORAGE_KEY = "toptry_state_v1";
 
 
@@ -370,21 +401,25 @@ register: async (email: string, username: string, password: string) => {
       setAiError(null);
       setAiBusy(true);
       try {
-        const itemImageUrls = selectedItems
-      .map((i) => {
-      // 1) user-upload (обычно есть cutoutUrl/originalUrl)
-      const maybe =
-      (i as any).cutoutUrl ||
-      (i as any).originalUrl ||
-      (i as any).imageUrl ||
-      (i.images && i.images[0]);
+        const rawItemImageUrls = selectedItems
+          .map((i) => {
+            // 1) user-upload (обычно есть cutoutUrl/originalUrl)
+            const maybe =
+              (i as any).cutoutUrl ||
+              (i as any).originalUrl ||
+              (i as any).imageUrl ||
+              (i.images && i.images[0]);
 
-       return typeof maybe === 'string' ? withApiOrigin(maybe) : null;
-       })
-       .filter(Boolean) as string[];
-       if (!itemImageUrls.length) {
-       throw new Error('Не найдены изображения выбранных вещей (ожидаются cutoutUrl/originalUrl или images[0])');
-       }
+            return typeof maybe === 'string' ? withApiOrigin(maybe) : null;
+          })
+          .filter(Boolean) as string[];
+
+        if (!rawItemImageUrls.length) {
+          throw new Error('Не найдены изображения выбранных вещей (ожидаются cutoutUrl/originalUrl или images[0])');
+        }
+
+        // IMPORTANT: convert /mock/* images into data URLs so backend does not fetch protected staging assets (BasicAuth -> 401)
+        const itemImageUrls = await Promise.all(rawItemImageUrls.map(urlToDataUrlIfMock));
 
 
         const itemIds = selectedItems.map((i) => i.id);
