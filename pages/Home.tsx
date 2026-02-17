@@ -393,6 +393,55 @@ const Feed = () => {
   const [feedLooks, setFeedLooks] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
 
+  // Demo public feed (used when public endpoints are empty/unavailable)
+  const USE_MOCK_PUBLIC_FEED = true;
+  const mockPublicLooks: any[] = [
+    {
+      id: "mock-feed-001",
+      authorName: "style.daily",
+      authorAvatar: "/mock/placeholder.svg",
+      resultImageUrl: "/mock/looks/feed-1.jpg",
+      likes: 124,
+      comments: 12,
+      aiDescription: "Базовый образ на каждый день. 3 вещи • 34 970 ₽",
+      createdAt: new Date(),
+    },
+    {
+      id: "mock-feed-002",
+      authorName: "minimal.mood",
+      authorAvatar: "/mock/placeholder.svg",
+      resultImageUrl: "/mock/looks/feed-2.jpg",
+      likes: 88,
+      comments: 7,
+      aiDescription: "Капсула в стиле минимализм. 4 вещи • 52 990 ₽",
+      createdAt: new Date(),
+    },
+    {
+      id: "mock-feed-003",
+      authorName: "moscow.fit",
+      authorAvatar: "/mock/placeholder.svg",
+      resultImageUrl: "/mock/looks/feed-3.jpg",
+      likes: 203,
+      comments: 19,
+      aiDescription: "Уличный casual. 2 вещи • 27 990 ₽",
+      createdAt: new Date(),
+    },
+    {
+      id: "mock-feed-004",
+      authorName: "capsule.club",
+      authorAvatar: "/mock/placeholder.svg",
+      resultImageUrl: "/mock/looks/feed-4.jpg",
+      likes: 61,
+      comments: 3,
+      aiDescription: "Собранный smart casual. 5 вещей • 79 990 ₽",
+      createdAt: new Date(),
+    },
+  ];
+
+  const isPublicTab = tab === 'trending' || tab === 'new';
+  const showMock = USE_MOCK_PUBLIC_FEED && isPublicTab && !loading && feedLooks.length === 0;
+  const visibleLooks = (showMock ? mockPublicLooks : feedLooks) as any[];
+
   React.useEffect(() => {
     (async () => {
       setLoading(true);
@@ -448,6 +497,26 @@ const Feed = () => {
 
       {loading && <div className="py-10 text-center text-xs text-zinc-400 uppercase tracking-widest">Загрузка...</div>}
 
+      {/* Empty state for following */}
+      {!loading && tab === 'following' && feedLooks.length === 0 && (
+        <div className="py-10 text-center">
+          <p className="text-xs text-zinc-400 uppercase tracking-widest">Пока нет постов в подписках</p>
+          <p className="mt-2 text-[11px] text-zinc-500">Переключись на «Тренды» или «Новое», чтобы посмотреть ленту.</p>
+        </div>
+      )}
+
+      {/* Demo hint */}
+      {showMock && (
+        <div className="px-1">
+          <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1">
+            <span className="w-2 h-2 rounded-full bg-zinc-900"></span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+              Демо-лента (публичные образы появятся после запуска)
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2">
         {['Мужское', 'Женское', 'Тренды', 'Распродажа', 'Бренды'].map((cat) => (
           <button
@@ -459,7 +528,7 @@ const Feed = () => {
         ))}
       </div>
 
-      {feedLooks.map((look: any) => (
+      {visibleLooks.map((look: any) => (
         <article key={look.id} className="space-y-4 border-b border-zinc-100 pb-8 last:border-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
