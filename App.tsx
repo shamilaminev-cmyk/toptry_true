@@ -47,18 +47,20 @@ const NavItem: React.FC<{ to: string; icon: React.FC<any>; label: string; highli
   return (
     <Link
       to={to}
-      className={`flex flex-col items-center gap-1 transition-all ${
+      className={`flex flex-col items-center gap-0.5 transition-all ${
         isActive ? 'text-zinc-900 scale-110' : 'text-zinc-400'
-      } ${highlight ? 'relative -top-4' : ''}`}
+      } ${highlight ? 'relative' : ''}`}
     >
       {highlight ? (
-        <div className="w-14 h-14 bg-zinc-900 rounded-full flex items-center justify-center text-white shadow-xl shadow-zinc-900/20 border-4 border-white">
-          <Icon className="w-7 h-7" />
+        <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center text-white shadow-xl shadow-zinc-900/20 border-4 border-white">
+          <Icon className="w-8 h-8 -translate-y-[1px]" />
         </div>
       ) : (
-        <Icon className="w-6 h-6" />
-      )}
-      <span className={`text-[9px] font-bold uppercase tracking-wider ${highlight ? 'mt-0' : ''}`}>{label}</span>
+        <div className="w-12 h-12 flex items-center justify-center">
+          <Icon className="w-8 h-8 -translate-y-[1px]" />
+        </div>
+        )}
+      <span className={`text-[10px] leading-none h-[12px] flex items-center font-bold uppercase tracking-wider`}>{label}</span>
     </Link>
   );
 };
@@ -101,17 +103,18 @@ const Header = () => {
 
 const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   return (
-    <div className="min-h-screen pb-24 md:pb-0 md:pt-0">
+    <div className="min-h-screen pb-24 md:pb-28 md:pt-0">
       <Header />
       <main className="max-w-screen-xl mx-auto">{children}</main>
 
       {/* Mobile Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 px-4 py-2 flex items-center justify-between md:hidden z-50 h-20">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:bottom-4">
+        <div className="mx-auto w-full bg-white border-t border-zinc-100 px-4 py-2 flex items-center justify-between h-20 md:max-w-md md:rounded-3xl md:border md:border-zinc-200 md:shadow-xl">
         <NavItem to="/" icon={ICONS.Home} label="Главная" />
         <NavItem to="/catalog" icon={ICONS.Catalog} label="Каталог" />
         <NavItem to="/create-look" icon={ICONS.Plus} label="Создать" highlight />
         <NavItem to="/wardrobe" icon={ICONS.Wardrobe} label="Шкаф" />
-        <NavItem to="/looks" icon={ICONS.Looks} label="Лента" />
+        <NavItem to="/looks" icon={ICONS.Looks} label="Лента" />        </div>
       </nav>
     </div>
   );
