@@ -35,7 +35,9 @@ const Profile = () => {
         <div className="flex flex-col items-center gap-4 text-center">
            <div className="relative">
               <div className="w-32 h-32 rounded-full bg-zinc-100 border-4 border-white shadow-xl overflow-hidden">
-                <img src={withApiOrigin(user.avatarUrl)} alt="" className="w-full h-full object-cover" />
+                {(user.avatarUrl || user.selfieUrl) ? (
+                  <img src={withApiOrigin(user.avatarUrl || user.selfieUrl)} alt="" className="w-full h-full object-cover" />
+                ) : null}
               </div>
               <button className="absolute bottom-1 right-1 bg-zinc-900 text-white p-2 rounded-full shadow-lg">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
