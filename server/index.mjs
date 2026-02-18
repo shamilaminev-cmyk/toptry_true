@@ -401,6 +401,61 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     const m = String(cutoutDataUrl).match(/^data:([^;]+);base64,(.*)$/);
     const buf = Buffer.from(m?.[2] || "", "base64");
 
+    const cleanedBuf = await (async () => {
+      const { data, info } = await sharp(buf, { failOnError: false })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      const w = info.width;
+      const h = info.height;
+      const visited = new Uint8Array(w * h);
+      const q = new Uint32Array(w * h);
+      let qs = 0, qe = 0;
+
+      const isBg = (r, g, b) => {
+        const max = r > g ? (r > b ? r : b) : (g > b ? g : b);
+        const min = r < g ? (r < b ? r : b) : (g < b ? g : b);
+        // low saturation + fairly bright => likely checker background
+        return (max - min) < 28 && max > 155;
+      };
+
+      const push = (x, y) => {
+        const i = y * w + x;
+        if (visited[i]) return;
+        const o = i * 4;
+        if (!isBg(data[o], data[o + 1], data[o + 2])) return;
+        visited[i] = 1;
+        q[qe++] = i;
+      };
+
+      // seed from borders
+      for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
+      for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
+
+      while (qs < qe) {
+        const i = q[qs++];
+        const x = i % w;
+        const y = (i / w) | 0;
+        if (x > 0) push(x - 1, y);
+        if (x + 1 < w) push(x + 1, y);
+        if (y > 0) push(x, y - 1);
+        if (y + 1 < h) push(x, y + 1);
+      }
+
+      // paint visited bg to white
+      for (let i = 0; i < w * h; i++) {
+        if (!visited[i]) continue;
+        const o = i * 4;
+        data[o] = 255; data[o + 1] = 255; data[o + 2] = 255; data[o + 3] = 255;
+      }
+
+      return await sharp(data, { raw: { width: w, height: h, channels: 4 } })
+        .removeAlpha()
+        .png()
+        .toBuffer();
+    })();
+
     const cut = await sharp(cleanedBuf, { failOnError: false }).resize(768, 1024, { fit: "cover", position: "top" }).png().toBuffer();
 
     const normalizedPng = await sharp({
