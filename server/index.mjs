@@ -366,8 +366,7 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     const modelName = process.env.AVATAR_CUTOUT_MODEL || "gemini-2.5-flash-image";
 
     const prompt =
-      "Remove the background and return ONLY the PERSON cutout from the photo. " +
-      "Keep the same face and body shape. No text. No watermark. Output PNG with transparent background (alpha).";
+      "Remove the background completely and return ONLY the PERSON with TRUE transparent background. Do NOT add any checkerboard, grid, pattern, or colored background. The background must be fully transparent (alpha channel). Return a PNG with real transparency, not a drawn pattern.";
 
     const cutoutResp = await ai.models.generateContent({
       model: modelName,
