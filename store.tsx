@@ -249,7 +249,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       // If storage is full, fallback to storing minimal state without images.
       try {
-        const compactLooks = looksForStorage.map((l) => ({ ...l, resultImageUrl: '' }));
+        const compactLooks = looksForStorage.map((l) => ({ ...l, resultImageUrl: (typeof l.resultImageUrl === "string" && l.resultImageUrl.startsWith("data:")) ? "" : (l.resultImageUrl || "") }));
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...payload, looks: compactLooks }));
       } catch {
         // ignore

@@ -35,7 +35,7 @@ const CreateLook = () => {
       return;
     }
     if (selectedIds.size < 2) {
-      alert("Выберите хотя бы 2 вещи для полноценного образа");
+      alert("Выберите хотя бы 1 вещь для полноценного образа");
       return;
     }
 
@@ -95,7 +95,7 @@ const CreateLook = () => {
           </div>
           <div>
             <h1 className="text-2xl font-black uppercase tracking-tighter">Создать образ</h1>
-            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.1em]">Выберите 2-5 вещей из вашего шкафа</p>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.1em]">Выберите 1-5 вещей из вашего шкафа</p>
           </div>
         </div>
       </div>

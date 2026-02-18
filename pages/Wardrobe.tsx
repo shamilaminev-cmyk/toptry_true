@@ -194,7 +194,7 @@ const Wardrobe = () => {
         </div>
 
         {/* Upload Recognition UI */}
-        {(isRecognizing || extracted) && (
+        {(isRecognizing || extracted || extractError) && (
           <div className="fixed inset-0 z-[100] bg-zinc-950/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-sm rounded-[40px] p-8 space-y-8 animate-in zoom-in">
               {isRecognizing ? (
