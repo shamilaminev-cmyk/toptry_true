@@ -404,14 +404,14 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
 
     const normalizedPng = await sharp(buf, { failOnError: false })
       .flatten({ background: "#ffffff" })
-      .resize(768, 1024, { fit: "cover", position: "attention" })
+      .resize(768, 1024, { fit: "cover", position: "top" })
       .png()
       .toBuffer();
 
     const selfieDataUrlOut = "data:image/png;base64," + normalizedPng.toString("base64");
 
     const avatarPng = await sharp(normalizedPng, { failOnError: false })
-      .resize(256, 256, { fit: "cover", position: "attention" })
+      .resize(256, 256, { fit: "cover", position: "top" })
       .png()
       .toBuffer();
 

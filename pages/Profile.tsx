@@ -36,7 +36,7 @@ const Profile = () => {
            <div className="relative">
               <div className="w-32 h-32 rounded-full bg-zinc-100 border-4 border-white shadow-xl overflow-hidden">
                 {(user.avatarUrl || user.selfieUrl) ? (
-                  <img src={withApiOrigin(user.avatarUrl || user.selfieUrl)} alt="" className="w-full h-full object-cover" />
+                  <img src={withApiOrigin(user.avatarUrl || user.selfieUrl)} alt="" className="w-full h-full object-cover object-top" />
                 ) : null}
               </div>
               <button className="absolute bottom-1 right-1 bg-zinc-900 text-white p-2 rounded-full shadow-lg">

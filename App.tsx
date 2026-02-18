@@ -84,7 +84,7 @@ const Header = () => {
             className="flex items-center gap-2 px-3 py-2 rounded-full border border-zinc-200 hover:border-zinc-900 transition-colors"
           >
             <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 overflow-hidden">
-              <img src={withApiOrigin(user.avatarUrl)} alt="" className="w-full h-full object-cover" />
+              {(user.avatarUrl || user.selfieUrl) ? (<img src={withApiOrigin(user.avatarUrl || user.selfieUrl)} alt="" className="w-full h-full object-cover object-top" />) : null}
             </div>
             <span className="text-xs font-semibold uppercase tracking-wide text-zinc-900">Профиль</span>
           </Link>

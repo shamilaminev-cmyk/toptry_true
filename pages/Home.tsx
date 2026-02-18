@@ -75,13 +75,13 @@ const Hero = () => {
       }
 
       const j = await res.json();
-      const nextSelfieUrl =
-        j?.selfieUrl ??
-        j?.user?.selfieUrl ??
+      const nextAvatarUrl =
         j?.avatarUrl ??
-        j?.user?.avatarUrl;
+        j?.user?.avatarUrl ??
+        j?.selfieUrl ??
+        j?.user?.selfieUrl;
 
-      actions.setSelfie(nextSelfieUrl || photoDataUrl);
+      actions.setSelfie(nextAvatarUrl || photoDataUrl);
       setShowOptions(false);
     } catch (e: any) {
       console.error("[avatar/process] error:", e);
@@ -106,11 +106,11 @@ const Hero = () => {
   return (
     <section className="px-4 py-8 bg-zinc-50 rounded-b-[40px] mb-8 relative">
       <div className="max-w-md mx-auto text-center space-y-6">
-        {user?.selfieUrl ? (
+        {(user?.avatarUrl || user?.selfieUrl) ? (
           <div className="space-y-4">
             <div className="group relative w-32 h-32 mx-auto">
               <div className="w-full h-full rounded-full border-4 border-white shadow-xl overflow-hidden bg-zinc-200">
-                <img src={withApiOrigin(user.selfieUrl)} alt="Your Selfie" className="w-full h-full object-cover" />
+                <img src={withApiOrigin(user.avatarUrl || user.selfieUrl)} alt="Your Selfie" className="w-full h-full object-cover object-top" />
               </div>
               <button
                 onClick={() => setShowOptions(true)} disabled={isProcessing}
