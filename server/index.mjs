@@ -401,10 +401,18 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     const m = String(cutoutDataUrl).match(/^data:([^;]+);base64,(.*)$/);
     const buf = Buffer.from(m?.[2] || "", "base64");
 
-    const normalizedPng = await sharp(buf, { failOnError: false })
-      .flatten({ background: "#ffffff" })
-      .resize(768, 1024, { fit: "cover", position: "top" })
-      .png()
+    const cut = await sharp(buf, { failOnError: false }).resize(768, 1024, { fit: "cover", position: "top" }).png().toBuffer();
+
+    const normalizedPng = await sharp({
+      create: {
+        width: 768,
+        height: 1024,
+        channels: 3,
+        background: "#ffffff"
+      }
+    })
+      .composite([{ input: cut, blend: "over" }])
+      .jpeg({ quality: 90 })
       .toBuffer();
 
     const selfieDataUrlOut = "data:image/png;base64," + normalizedPng.toString("base64");
