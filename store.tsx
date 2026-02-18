@@ -355,9 +355,23 @@ register: async (email: string, username: string, password: string) => {
 
   console.log('[auth] register done');
 },
+
     logout: async () => {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
       setUser(null);
+    },
+
+    refreshMe: async () => {
+      try {
+        const resp = await fetch('/api/auth/me', { credentials: 'include' });
+        if (!resp.ok) return;
+        const data = await resp.json().catch(() => null);
+        if (!data?.user) return;
+        const u = data.user;
+        setUser((prev) => (prev ? { ...prev, avatarUrl: u.avatarUrl || prev.avatarUrl } : prev));
+      } catch {
+        // ignore
+      }
     },
     toggleHomeLayout: () => setHomeLayout(prev => 
       prev === HomeLayout.DASHBOARD ? HomeLayout.FEED : HomeLayout.DASHBOARD

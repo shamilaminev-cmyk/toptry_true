@@ -75,13 +75,13 @@ const Hero = () => {
       }
 
       const j = await res.json();
-      const nextAvatarUrl =
-        j?.avatarUrl ??
-        j?.user?.avatarUrl ??
+      const nextSelfieUrl =
         j?.selfieUrl ??
         j?.user?.selfieUrl;
 
-      actions.setSelfie(nextAvatarUrl || photoDataUrl);
+      actions.setSelfie(nextSelfieUrl || photoDataUrl);
+
+      await actions.refreshMe?.();
       setShowOptions(false);
     } catch (e: any) {
       console.error("[avatar/process] error:", e);
