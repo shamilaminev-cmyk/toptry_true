@@ -10,6 +10,7 @@ const Hero = () => {
   const [showOptions, setShowOptions] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,20 +49,56 @@ const Hero = () => {
       if (ctx) {
         ctx.drawImage(videoRef.current, 0, 0);
         const dataUrl = canvas.toDataURL('image/jpeg');
-        actions.setSelfie(dataUrl);
+        processAvatar(dataUrl);
         stopCamera();
       }
     }
   };
+  const processAvatar = async (photoDataUrl: string) => {
+    try {
+      setError(null);
+      setIsProcessing(true);
+
+      const res = await fetch("/api/avatar/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoDataUrl }),
+      });
+
+      if (!res.ok) {
+        let msg = "Не удалось обработать аватар";
+        try {
+          const j = await res.json();
+          msg = j?.error || j?.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const j = await res.json();
+      const nextSelfieUrl =
+        j?.selfieUrl ??
+        j?.user?.selfieUrl ??
+        j?.avatarUrl ??
+        j?.user?.avatarUrl;
+
+      actions.setSelfie(nextSelfieUrl || photoDataUrl);
+      setShowOptions(false);
+    } catch (e: any) {
+      console.error("[avatar/process] error:", e);
+      setError(e?.message || "Не удалось обработать аватар");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        actions.setSelfie(reader.result as string);
-        setShowOptions(false);
-      };
+        processAvatar(reader.result as string);
+};
       reader.readAsDataURL(file);
     }
   };
@@ -76,8 +113,8 @@ const Hero = () => {
                 <img src={withApiOrigin(user.selfieUrl)} alt="Your Selfie" className="w-full h-full object-cover" />
               </div>
               <button
-                onClick={() => setShowOptions(true)}
-                className="absolute bottom-0 right-0 bg-zinc-900 text-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform"
+                onClick={() => setShowOptions(true)} disabled={isProcessing}
+                className="absolute bottom-0 right-0 bg-zinc-900 text-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
@@ -114,6 +151,8 @@ const Hero = () => {
         )}
 
         {error && <p className="text-red-500 text-xs font-bold uppercase tracking-widest">{error}</p>}
+
+        {isProcessing && <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Обрабатываем аватар…</p>}
 
         {/* Selection Modal */}
         {showOptions && (

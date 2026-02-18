@@ -336,6 +336,113 @@ app.get("/api/auth/me", async (req, res) => {
 });
 
 /**
+ * POST /api/avatar/process
+ * Mandatory selfie postprocess (AUTH ONLY):
+ * - remove background (Gemini 2.5)
+ * - normalize frame to 3:4 on white background
+ * - store selfie + avatar in MinIO
+ * - update user.avatarUrl in DB
+ */
+app.post("/api/avatar/process", requireAuth, async (req, res) => {
+  try {
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server" });
+    }
+
+    const { photoDataUrl } = req.body || {};
+    if (!photoDataUrl || typeof photoDataUrl !== "string" || !photoDataUrl.startsWith("data:")) {
+      return res.status(400).json({ error: "photoDataUrl (data:) is required" });
+    }
+
+    const userId = req.auth.userId;
+    const p = getPrisma();
+
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+    // Normalize incoming data URL
+    const photo = await imageToBase64(photoDataUrl);
+
+    // Use SD model to save cost
+    const modelName = process.env.AVATAR_CUTOUT_MODEL || "gemini-2.5-flash";
+
+    const prompt =
+      "Remove the background and return ONLY the PERSON cutout from the photo. " +
+      "Keep the same face and body shape. No text. No watermark. Output PNG with transparent background (alpha).";
+
+    const cutoutResp = await ai.models.generateContent({
+      model: modelName,
+      contents: {
+        parts: [
+          { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
+          { text: prompt },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: "3:4",
+          imageSize: "1K",
+        },
+      },
+    });
+
+    let cutoutDataUrl = "";
+    const parts = cutoutResp?.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const mt = part.inlineData.mimeType || "image/png";
+        cutoutDataUrl = `data:${mt};base64,${part.inlineData.data}`;
+        break;
+      }
+    }
+
+    if (!cutoutDataUrl) {
+      return res.status(502).json({ error: "Gemini did not return cutout image" });
+    }
+
+    // Flatten on white + normalize to 3:4 (768x1024)
+    const m = String(cutoutDataUrl).match(/^data:([^;]+);base64,(.*)$/);
+    const buf = Buffer.from(m?.[2] || "", "base64");
+
+    const normalizedPng = await sharp(buf, { failOnError: false })
+      .flatten({ background: "#ffffff" })
+      .resize(768, 1024, { fit: "cover", position: "attention" })
+      .png()
+      .toBuffer();
+
+    const selfieDataUrlOut = "data:image/png;base64," + normalizedPng.toString("base64");
+
+    const avatarPng = await sharp(normalizedPng, { failOnError: false })
+      .resize(256, 256, { fit: "cover", position: "attention" })
+      .png()
+      .toBuffer();
+
+    const avatarDataUrlOut = "data:image/png;base64," + avatarPng.toString("base64");
+
+    const storedSelfie = await putDataUrl(selfieDataUrlOut, `users/${userId}/selfies`);
+    const storedAvatar = await putDataUrl(avatarDataUrlOut, `users/${userId}/avatars`);
+
+    const selfieKey = storedSelfie?.key || storedSelfie;
+    const avatarKey = storedAvatar?.key || storedAvatar;
+
+    const selfieUrl = selfieKey ? `/media/${selfieKey}` : "";
+    const avatarUrl = avatarKey ? `/media/${avatarKey}` : "";
+
+    if (!selfieUrl || !avatarUrl) {
+      return res.status(500).json({ error: "Failed to store avatar/selfie" });
+    }
+
+    if (p) {
+      await p.user.update({ where: { id: userId }, data: { avatarUrl } });
+    }
+
+    return res.json({ selfieUrl, avatarUrl });
+  } catch (err) {
+    console.error("[toptry] /api/avatar/process error", err);
+    return res.status(500).json({ error: err?.message || "avatar process failed" });
+  }
+});
+
+/**
  * Serve stored images from MinIO via the backend to avoid CORS issues.
  * GET /media/<key>
  */
