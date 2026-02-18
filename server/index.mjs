@@ -363,7 +363,7 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     const photo = await imageToBase64(photoDataUrl);
 
     // Use SD model to save cost
-    const modelName = process.env.AVATAR_CUTOUT_MODEL || "gemini-2.5-flash";
+    const modelName = process.env.AVATAR_CUTOUT_MODEL || "gemini-2.5-flash-image";
 
     const prompt =
       "Remove the background and return ONLY the PERSON cutout from the photo. " +
@@ -376,6 +376,10 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
           { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
           { text: prompt },
         ],
+      },
+      config: {
+        responseModalities: ["Image"],
+        imageConfig: { aspectRatio: "3:4" },
       },
     });
 
