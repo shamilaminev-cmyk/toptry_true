@@ -377,12 +377,6 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
           { text: prompt },
         ],
       },
-      config: {
-        imageConfig: {
-          aspectRatio: "3:4",
-          imageSize: "1K",
-        },
-      },
     });
 
     let cutoutDataUrl = "";
