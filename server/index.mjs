@@ -363,7 +363,7 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     const photo = await imageToBase64(photoDataUrl);
 
     // Use SD model to save cost
-    const modelName = process.env.AVATAR_CUTOUT_MODEL || "gemini-1.5-pro";
+    const modelName = process.env.AVATAR_CUTOUT_MODEL || "gemini-2.5-flash";
 
     const prompt =
       "Remove the background and return ONLY the PERSON cutout from the photo. " +
@@ -390,6 +390,7 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     }
 
     if (!cutoutDataUrl) {
+      console.error("[toptry] avatar/process: no inlineData, part keys:", parts.map(p => Object.keys(p || {})));
       return res.status(502).json({ error: "Gemini did not return cutout image" });
     }
 
