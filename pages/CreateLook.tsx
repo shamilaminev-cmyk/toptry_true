@@ -34,7 +34,7 @@ const CreateLook = () => {
       alert("Сначала загрузите селфи на главной странице или в профиле!");
       return;
     }
-    if (selectedIds.size < 2) {
+    if (selectedIds.size < 1) {
       alert("Выберите хотя бы 1 вещь для полноценного образа");
       return;
     }
@@ -156,7 +156,7 @@ const CreateLook = () => {
             </div>
             <button 
               onClick={handleGenerate}
-              disabled={selectedIds.size < 2}
+              disabled={selectedIds.size < 1}
               className="bg-zinc-900 text-white px-8 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all disabled:opacity-40"
             >
               Стилизовать ({selectedIds.size})
