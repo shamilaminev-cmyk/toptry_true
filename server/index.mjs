@@ -401,7 +401,7 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     const m = String(cutoutDataUrl).match(/^data:([^;]+);base64,(.*)$/);
     const buf = Buffer.from(m?.[2] || "", "base64");
 
-    const cut = await sharp(buf, { failOnError: false }).resize(768, 1024, { fit: "cover", position: "top" }).png().toBuffer();
+    const cut = await sharp(cleanedBuf, { failOnError: false }).resize(768, 1024, { fit: "cover", position: "top" }).png().toBuffer();
 
     const normalizedPng = await sharp({
       create: {
