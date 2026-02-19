@@ -346,6 +346,7 @@ app.get("/api/auth/me", async (req, res) => {
 app.post("/api/avatar/process", requireAuth, async (req, res) => {
   try {
     console.warn("[toptry] avatar/process: hit", { userId: req.auth?.userId, hasPhoto: !!(req.body && req.body.photoDataUrl), len: (req.body && req.body.photoDataUrl && req.body.photoDataUrl.length) || 0 });
+    console.warn("[toptry] avatar/process: AVATAR_DEBUG_MASK=", process.env.AVATAR_DEBUG_MASK);
     if (!GEMINI_API_KEY) {
       return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server" });
     }
@@ -406,6 +407,45 @@ const prompt = [
 
     const m = String(cutoutDataUrl).match(/^data:([^;]+);base64,(.*)$/);
 const maskBuf = Buffer.from(m?.[2] || "", "base64");
+
+    // --- mask sanity check + optional debug save ---
+    try {
+      // Compute rough stats to verify this is a binary-ish mask (has real black + white)
+      const small = await sharp(maskBuf, { failOnError: false })
+        .resize(160, 160, { fit: "fill" })
+        .grayscale()
+        .raw()
+        .toBuffer();
+
+      let black = 0, white = 0;
+      const n = small.length;
+      for (let i = 0; i < n; i++) {
+        const v = small[i];
+        if (v < 16) black++;
+        else if (v > 239) white++;
+      }
+      const blackPct = black / n;
+      const whitePct = white / n;
+      console.warn("[toptry] avatar/process: mask stats", { blackPct, whitePct });
+
+      if (process.env.AVATAR_DEBUG_MASK === "1") {
+        const dbgPng = await sharp(maskBuf, { failOnError: false }).png().toBuffer();
+        const dbgDataUrl = "data:image/png;base64," + dbgPng.toString("base64");
+        const storedMask = await putDataUrl(dbgDataUrl, `users/${userId}/masks`);
+        const key = storedMask?.key || storedMask;
+        console.warn("[toptry] avatar/process: saved mask for debug:", key);
+      }
+
+      // If it's basically not a mask (e.g. a photo), one of these will be near zero
+      if (blackPct < 0.02 || whitePct < 0.02) {
+        console.error("[toptry] avatar/process: Gemini returned non-mask image (blackPct,whitePct)=", blackPct, whitePct);
+        return res.status(502).json({ error: "Gemini did not return a usable binary mask" });
+      }
+    } catch (e) {
+      console.warn("[toptry] avatar/process: mask validation failed:", e?.message || e);
+      // continue (do not hard-fail on debug/validation errors)
+    }
+
 const srcBuf = Buffer.from(photoDataUrl.split(",")[1], "base64");
 
 const meta = await sharp(srcBuf, { failOnError: false }).metadata();
