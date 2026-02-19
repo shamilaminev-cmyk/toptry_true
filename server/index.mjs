@@ -385,7 +385,6 @@ const prompt = [
       },
       config: {
         responseModalities: ["Image"],
-        imageConfig: { aspectRatio: "3:4" },
       },
     });
 
