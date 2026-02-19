@@ -441,7 +441,7 @@ const maskBuf = Buffer.from(m?.[2] || "", "base64");
       }
 
       // If it's basically not a mask (e.g. a photo), one of these will be near zero
-      if (blackPct < 0.02 || whitePct < 0.02) {
+      if (whitePct < 0.02) {
         console.error("[toptry] avatar/process: Gemini returned non-mask image (blackPct,whitePct)=", blackPct, whitePct);
         return res.status(502).json({ error: "Gemini did not return a usable binary mask" });
       }
