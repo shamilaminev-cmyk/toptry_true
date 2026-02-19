@@ -368,13 +368,17 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     const modelName = process.env.AVATAR_CUTOUT_MODEL || "gemini-2.5-flash-image";
 
     
+
 const prompt = [
-  "Return a single BINARY MASK image of the PERSON.",
-  "White = person (255). Black = background (0).",
-  "Full body. Do not crop.",
-  "No checkerboard, no colors, no transparency.",
-  "Return only the mask image."
+  "Return a full-body binary segmentation mask of the entire human figure in the image.",
+  "The mask MUST include head, neck, torso, arms, hands, legs, feet and shoes.",
+  "Do NOT crop any body part.",
+  "The mask must match the original image resolution.",
+  "White (255) = person. Black (0) = background.",
+  "No grayscale. No transparency. No checkerboard. No colors.",
+  "Return ONLY a single PNG mask image."
 ].join(" ");
+
 
 
     const cutoutResp = await ai.models.generateContent({
