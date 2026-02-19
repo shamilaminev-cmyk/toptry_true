@@ -345,6 +345,7 @@ app.get("/api/auth/me", async (req, res) => {
  */
 app.post("/api/avatar/process", requireAuth, async (req, res) => {
   try {
+    console.warn("[toptry] avatar/process: hit", { userId: req.auth?.userId, hasPhoto: !!(req.body && req.body.photoDataUrl), len: (req.body && req.body.photoDataUrl && req.body.photoDataUrl.length) || 0 });
     if (!GEMINI_API_KEY) {
       return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server" });
     }
