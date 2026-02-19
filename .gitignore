@@ -66,3 +66,8 @@ build/
 *.log
 
 
+
+# local patch helpers / backups
+patch_avatar_step*.pl
+server/index.mjs.bak
+server/index.mjs.BEFORE_*
