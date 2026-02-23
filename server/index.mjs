@@ -421,16 +421,27 @@ const maskBuf = Buffer.from(m?.[2] || "", "base64");
         .raw()
         .toBuffer();
 
-      let black = 0, white = 0;
+      
+      let fg = 0;
+
       const n = small.length;
+
       for (let i = 0; i < n; i++) {
+
         const v = small[i];
-        if (v < 16) black++;
-        else if (v > 239) white++;
+
+        if (v > 128) fg++;
+
       }
-      const blackPct = black / n;
-      const whitePct = white / n;
-      console.warn("[toptry] avatar/process: mask stats", { blackPct, whitePct });
+
+      const fgPct = fg / n;
+
+      const bgPct = 1 - fgPct;
+
+      const invert = fgPct < 0.02 && bgPct > 0.02;
+
+      console.warn("[toptry] avatar/process: mask stats", { fgPct, bgPct, invert });
+
 
       if (process.env.AVATAR_DEBUG_MASK === "1") {
         const dbgPng = await sharp(maskBuf, { failOnError: false }).png().toBuffer();
@@ -441,10 +452,15 @@ const maskBuf = Buffer.from(m?.[2] || "", "base64");
       }
 
       // If it's basically not a mask (e.g. a photo), one of these will be near zero
-      if (whitePct < 0.02) {
-        console.error("[toptry] avatar/process: Gemini returned non-mask image (blackPct,whitePct)=", blackPct, whitePct);
-        return res.status(502).json({ error: "Gemini did not return a usable binary mask" });
+      
+      if (fgPct < 0.005 || fgPct > 0.995) {
+
+        console.error("[toptry] avatar/process: Gemini returned unusable mask (fgPct,bgPct)=", fgPct, bgPct);
+
+        return res.status(502).json({ error: "Gemini did not return a usable mask" });
+
       }
+
     } catch (e) {
       console.warn("[toptry] avatar/process: mask validation failed:", e?.message || e);
       // continue (do not hard-fail on debug/validation errors)
@@ -456,12 +472,23 @@ const meta = await sharp(srcBuf, { failOnError: false }).metadata();
 const w = meta.width;
 const h = meta.height;
 
-const alpha = await sharp(maskBuf, { failOnError: false })
+
+const maskBase = sharp(maskBuf, { failOnError: false })
+
   .resize(w, h, { fit: "fill" })
-  .grayscale()
+
+  .grayscale();
+
+
+
+const alpha = await (invert ? maskBase.negate() : maskBase)
+
   .blur(0.8)
+
   .threshold(128)
+
   .toBuffer();
+
 
 const cutoutRgba = await sharp(srcBuf, { failOnError: false })
   .removeAlpha()
