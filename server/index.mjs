@@ -495,6 +495,7 @@ const alpha = await (invert ? maskBase.negate() : maskBase)
 const cutoutRgba = await sharp(srcBuf, { failOnError: false })
   .removeAlpha()
   .joinChannel(alpha)
+  .png()
   .toBuffer();
 
 const normalizedPng = await sharp(cutoutRgba, { failOnError: false })
