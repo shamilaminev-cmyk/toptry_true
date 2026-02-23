@@ -413,6 +413,8 @@ const prompt = [
 const maskBuf = Buffer.from(m?.[2] || "", "base64");
 
     // --- mask sanity check + optional debug save ---
+
+    let invert = false;
     try {
       // Compute rough stats to verify this is a binary-ish mask (has real black + white)
       const small = await sharp(maskBuf, { failOnError: false })
@@ -438,7 +440,7 @@ const maskBuf = Buffer.from(m?.[2] || "", "base64");
 
       const bgPct = 1 - fgPct;
 
-      const invert = fgPct < 0.02 && bgPct > 0.02;
+      invert = fgPct < 0.02 && bgPct > 0.02;
 
       console.warn("[toptry] avatar/process: mask stats", { fgPct, bgPct, invert });
 
