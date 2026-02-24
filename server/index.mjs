@@ -519,8 +519,7 @@ const cutoutRgba = await sharp(srcBuf, { failOnError: false })
 
 
 const normalizedPng = await sharp(cutoutRgba, { failOnError: false })
-  .resize(768, 1024, { fit: "contain", background: "#ffffff" })
-  .flatten({ background: "#ffffff" })
+  .resize(768, 1024, { fit: "contain", background: { r:0, g:0, b:0, alpha:0 } })
   .png()
   .toBuffer();
 
