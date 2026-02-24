@@ -487,9 +487,20 @@ const alpha = await (invert ? maskBase.negate() : maskBase)
 
   .blur(0.8)
 
-  .threshold(128)
+  .threshold(200)
 
   .toBuffer();
+
+    if (process.env.AVATAR_DEBUG_MASK === "1") {
+      const alphaPng = await sharp(alpha, { raw: { width: w, height: h, channels: 1 } })
+        .png()
+        .toBuffer();
+      const alphaDataUrl = "data:image/png;base64," + alphaPng.toString("base64");
+      const storedAlpha = await putDataUrl(alphaDataUrl, `users/${userId}/_alpha`);
+      const akey = storedAlpha?.key || storedAlpha;
+      console.warn("[toptry] avatar/process: saved alpha for debug:", akey);
+    }
+
 
 
 const cutoutRgba = await sharp(srcBuf, { failOnError: false })
@@ -497,6 +508,15 @@ const cutoutRgba = await sharp(srcBuf, { failOnError: false })
   .joinChannel(alpha)
   .png()
   .toBuffer();
+
+    if (process.env.AVATAR_DEBUG_MASK === "1") {
+      const cutoutPng = await sharp(cutoutRgba, { failOnError: false }).png().toBuffer();
+      const cutoutDataUrl = "data:image/png;base64," + cutoutPng.toString("base64");
+      const storedCutout = await putDataUrl(cutoutDataUrl, `users/${userId}/_cutout`);
+      const ckey = storedCutout?.key || storedCutout;
+      console.warn("[toptry] avatar/process: saved cutout for debug:", ckey);
+    }
+
 
 const normalizedPng = await sharp(cutoutRgba, { failOnError: false })
   .resize(768, 1024, { fit: "contain", background: "#ffffff" })
