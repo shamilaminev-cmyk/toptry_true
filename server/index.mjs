@@ -492,7 +492,7 @@ const alpha = await (invert ? maskBase.negate() : maskBase)
   .toBuffer();
 
     if (process.env.AVATAR_DEBUG_MASK === "1") {
-      const alphaPng = await sharp(alpha, { raw: { width: w, height: h, channels: 1 } })
+      const alphaPng = await sharp(alpha, { failOnError: false })
         .png()
         .toBuffer();
       const alphaDataUrl = "data:image/png;base64," + alphaPng.toString("base64");
