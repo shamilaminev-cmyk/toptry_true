@@ -372,7 +372,6 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
       hasPhoto: !!(req.body && req.body.photoDataUrl),
       len: (req.body && req.body.photoDataUrl && req.body.photoDataUrl.length) || 0,
     });
-    console.warn("[toptry] avatar/process: AVATAR_DEBUG_MASK=", process.env.AVATAR_DEBUG_MASK);
     console.warn("[toptry] avatar/process: AVATAR_BG_REMOVER_URL=", process.env.AVATAR_BG_REMOVER_URL || "");
 
     if (!AVATAR_BG_REMOVER_URL) {
@@ -396,44 +395,6 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
       .ensureAlpha()
       .png()
       .toBuffer();
-
-    // alpha stats + optional debug saves
-    try {
-      const alphaSmall = await sharp(cutoutRgba, { failOnError: false })
-        .ensureAlpha()
-        .extractChannel(3)
-        .resize(160, 160, { fit: "fill" })
-        .raw()
-        .toBuffer();
-
-      let fg = 0;
-      const n = alphaSmall.length;
-      for (let i = 0; i < n; i++) {
-        if (alphaSmall[i] > 127) fg++;
-      }
-      const fgPct = fg / n;
-      const bgPct = 1 - fgPct;
-      console.warn("[toptry] avatar/process: alpha stats", { fgPct, bgPct });
-
-      if (process.env.AVATAR_DEBUG_MASK === "1") {
-        const cutoutDataUrlDbg = "data:image/png;base64," + cutoutRgba.toString("base64");
-        const storedCutout = await putDataUrl(cutoutDataUrlDbg, `users/${userId}/_cutout`);
-        const ckey = storedCutout?.key || storedCutout;
-        console.warn("[toptry] avatar/process: saved cutout for debug:", ckey);
-
-        const alphaPng = await sharp(cutoutRgba, { failOnError: false })
-          .ensureAlpha()
-          .extractChannel(3)
-          .png()
-          .toBuffer();
-        const alphaDataUrl = "data:image/png;base64," + alphaPng.toString("base64");
-        const storedAlpha = await putDataUrl(alphaDataUrl, `users/${userId}/_alpha`);
-        const akey = storedAlpha?.key || storedAlpha;
-        console.warn("[toptry] avatar/process: saved alpha for debug:", akey);
-      }
-    } catch (e) {
-      console.warn("[toptry] avatar/process: debug save failed:", e?.message || e);
-    }
 
     // keep white background for normalized selfie used downstream
     const normalizedPng = await sharp(cutoutRgba, { failOnError: false })
