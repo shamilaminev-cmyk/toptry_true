@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../store';
@@ -17,20 +17,6 @@ const Profile = () => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !busy) setAvatarOpen(false);
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [avatarOpen, busy]);
-
-
-  useEffect(() => {
-    if (!avatarOpen) return;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) {
-        setAvatarOpen(false);
-      }
-    };
-
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [avatarOpen, busy]);
@@ -212,7 +198,7 @@ const Profile = () => {
                   <img
                     src={bigSrc}
                     alt=""
-                    className="w-full h-auto block"
+                    className="w-full max-h-[62vh] object-contain mx-auto block"
                   />
                 ) : (
                   <div className="p-10 text-center text-zinc-400">Нет изображения</div>
@@ -224,12 +210,12 @@ const Profile = () => {
               ) : null}
 
               <div className="flex items-center gap-3">
-                <label className={`bg-zinc-900 text-white px-6 py-3 rounded-full font-bold uppercase tracking-widest text-xs ${busy ? "opacity-60 pointer-events-none" : "cursor-pointer"}`}>
+                <label className={`relative inline-flex items-center justify-center bg-zinc-900 text-white px-6 py-3 rounded-full font-bold uppercase tracking-widest text-xs ${busy ? "opacity-60 pointer-events-none" : "cursor-pointer"}`}>
                   {busy ? "Обработка..." : "Заменить"}
                   <input
                     type="file"
                     accept="image/*"
-                    className="hidden"
+                    className="absolute inset-0 opacity-0 cursor-pointer"
                     onChange={onFileChange}
                     disabled={busy}
                   />
