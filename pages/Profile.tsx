@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../store';
@@ -13,6 +13,20 @@ const Profile = () => {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!avatarOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) {
+        setAvatarOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [avatarOpen, busy]);
+
 
   if (!user) {
     return (
@@ -33,7 +47,7 @@ const Profile = () => {
     [SubscriptionTier.GOLD]: 'bg-zinc-900 text-white',
   };
 
-  const bigSrc = withApiOrigin(user.selfieUrl || user.avatarUrl || "");
+  const bigSrc = withApiOrigin(user.avatarUrl || user.selfieUrl || "");
 
   const processAvatar = async (photoDataUrl: string) => {
     setBusy(true);
@@ -41,23 +55,29 @@ const Profile = () => {
     try {
       const res = await fetch("/api/avatar/process", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoDataUrl }),
       });
 
+      let payload: any = null;
+      try {
+        payload = await res.json();
+      } catch {}
+
       if (!res.ok) {
-        let msg = "Не удалось обработать аватар";
-        try {
-          const j = await res.json();
-          msg = j?.error || j?.message || msg;
-        } catch {}
+        const msg = payload?.error || payload?.message || "Не удалось обработать аватар";
         throw new Error(msg);
       }
 
-      // обновим user с сервера (avatarUrl/selfieUrl)
+      if (typeof (actions as any).setSelfie === 'function') {
+        (actions as any).setSelfie(payload?.selfieUrl || photoDataUrl);
+      }
+
       if (typeof (actions as any).refreshMe === 'function') {
         await (actions as any).refreshMe();
       }
+
       setAvatarOpen(false);
     } catch (e: any) {
       console.error("[profile avatar/process] error:", e);
@@ -72,6 +92,7 @@ const Profile = () => {
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.currentTarget.value = "";
     const reader = new FileReader();
     reader.onloadend = () => {
       const dataUrl = reader.result as string;
@@ -174,10 +195,15 @@ const Profile = () => {
             <div className="p-4 border-b border-zinc-100 flex items-center justify-between">
               <div className="text-xs font-bold uppercase tracking-widest text-zinc-400">Аватар</div>
               <button
-                className="text-xs font-bold uppercase tracking-widest text-zinc-900"
+                type="button"
+                className="w-9 h-9 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-900 disabled:opacity-50"
                 onClick={() => !busy && setAvatarOpen(false)}
+                disabled={busy}
+                aria-label="Закрыть"
               >
-                Закрыть
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
               </button>
             </div>
 
