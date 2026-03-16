@@ -12,7 +12,15 @@ const Profile = () => {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!avatarOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) setAvatarOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [avatarOpen, busy]);
+
 
   useEffect(() => {
     if (!avatarOpen) return;
@@ -87,8 +95,6 @@ const Profile = () => {
     }
   };
 
-  const onPickFile = () => fileRef.current?.click();
-
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -103,13 +109,6 @@ const Profile = () => {
 
   return (
     <div className="pb-12">
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={onFileChange}
-      />
 
       <div className="p-6 space-y-8">
         <div className="flex flex-col items-center gap-4 text-center">
@@ -225,14 +224,16 @@ const Profile = () => {
               ) : null}
 
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={onPickFile}
-                  disabled={busy}
-                  className="bg-zinc-900 text-white px-6 py-3 rounded-full font-bold uppercase tracking-widest text-xs disabled:opacity-60"
-                >
+                <label className={`bg-zinc-900 text-white px-6 py-3 rounded-full font-bold uppercase tracking-widest text-xs ${busy ? "opacity-60 pointer-events-none" : "cursor-pointer"}`}>
                   {busy ? "Обработка..." : "Заменить"}
-                </button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={onFileChange}
+                    disabled={busy}
+                  />
+                </label>
 
                 <div className="text-xs text-zinc-400">
                   Загрузите новое фото — фон будет нормализован автоматически.

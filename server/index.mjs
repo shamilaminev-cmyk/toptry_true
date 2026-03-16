@@ -407,7 +407,7 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
       "data:image/png;base64," + normalizedPng.toString("base64");
 
     const avatarPng = await sharp(normalizedPng, { failOnError: false })
-      .resize(512, 512, { fit: "contain", background: "#ffffff" })
+      .resize(768, 768, { fit: "contain", background: "#ffffff" })
       .png()
       .toBuffer();
 
