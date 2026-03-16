@@ -29,6 +29,28 @@ if (!GEMINI_API_KEY) {
     "[toptry] GEMINI_API_KEY is not set. AI endpoints will return 500."
   );
 }
+
+const AVATAR_BG_REMOVER_URL = process.env.AVATAR_BG_REMOVER_URL || "";
+
+async function bgRemoveToPng(srcBuf) {
+  if (!AVATAR_BG_REMOVER_URL) {
+    throw new Error("AVATAR_BG_REMOVER_URL is not configured");
+  }
+  const resp = await fetch(`${AVATAR_BG_REMOVER_URL}/remove`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "accept": "image/png",
+    },
+    body: srcBuf,
+  });
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    throw new Error(`bg-remover ${resp.status}: ${t.slice(0, 200)}`);
+  }
+  const ab = await resp.arrayBuffer();
+  return Buffer.from(ab);
+}
 function normalizeBaseUrl(v) {
   if (!v) return "";
   const s = String(v).trim();
@@ -338,17 +360,23 @@ app.get("/api/auth/me", async (req, res) => {
 /**
  * POST /api/avatar/process
  * Mandatory selfie postprocess (AUTH ONLY):
- * - remove background (Gemini 2.5)
+ * - remove background (bg-remover / rembg)
  * - normalize frame to 3:4 on white background
  * - store selfie + avatar in MinIO
  * - update user.avatarUrl in DB
  */
 app.post("/api/avatar/process", requireAuth, async (req, res) => {
   try {
-    console.warn("[toptry] avatar/process: hit", { userId: req.auth?.userId, hasPhoto: !!(req.body && req.body.photoDataUrl), len: (req.body && req.body.photoDataUrl && req.body.photoDataUrl.length) || 0 });
+    console.warn("[toptry] avatar/process: hit", {
+      userId: req.auth?.userId,
+      hasPhoto: !!(req.body && req.body.photoDataUrl),
+      len: (req.body && req.body.photoDataUrl && req.body.photoDataUrl.length) || 0,
+    });
     console.warn("[toptry] avatar/process: AVATAR_DEBUG_MASK=", process.env.AVATAR_DEBUG_MASK);
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server" });
+    console.warn("[toptry] avatar/process: AVATAR_BG_REMOVER_URL=", process.env.AVATAR_BG_REMOVER_URL || "");
+
+    if (!AVATAR_BG_REMOVER_URL) {
+      return res.status(500).json({ error: "AVATAR_BG_REMOVER_URL is not configured on the server" });
     }
 
     const { photoDataUrl } = req.body || {};
@@ -359,178 +387,71 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     const userId = req.auth.userId;
     const p = getPrisma();
 
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const srcBuf = Buffer.from(photoDataUrl.split(",")[1], "base64");
 
-    // Normalize incoming data URL
-    const photo = await imageToBase64(photoDataUrl);
+    // deterministic background removal via internal service
+    const cutoutPng = await bgRemoveToPng(srcBuf);
 
-    // Use SD model to save cost
-    const modelName = process.env.AVATAR_CUTOUT_MODEL || "gemini-2.5-flash-image";
+    const cutoutRgba = await sharp(cutoutPng, { failOnError: false })
+      .ensureAlpha()
+      .png()
+      .toBuffer();
 
-    
-
-const prompt = [
-  "Return a full-body binary segmentation mask of the entire human figure in the image.",
-  "The mask MUST include head, neck, torso, arms, hands, legs, feet and shoes.",
-  "Do NOT crop any body part.",
-  "The mask must match the original image resolution.",
-  "White (255) = person. Black (0) = background.",
-  "No grayscale. No transparency. No checkerboard. No colors.",
-  "Return ONLY a single PNG mask image."
-].join(" ");
-
-
-
-    const cutoutResp = await ai.models.generateContent({
-      model: modelName,
-      contents: {
-        parts: [
-          { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
-          { text: prompt },
-        ],
-      },
-      config: {
-        responseModalities: ["Image"],
-      },
-    });
-
-    let cutoutDataUrl = "";
-    const parts = cutoutResp?.candidates?.[0]?.content?.parts || [];
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        const mt = part.inlineData.mimeType || "image/png";
-        cutoutDataUrl = `data:${mt};base64,${part.inlineData.data}`;
-        break;
-      }
-    }
-
-    if (!cutoutDataUrl) {
-      console.error("[toptry] avatar/process: no inlineData (mask), part keys:", parts.map(p => Object.keys(p || {})));
-      return res.status(502).json({ error: "Gemini did not return mask image" });
-    }
-
-    const m = String(cutoutDataUrl).match(/^data:([^;]+);base64,(.*)$/);
-const maskBuf = Buffer.from(m?.[2] || "", "base64");
-
-    // --- mask sanity check + optional debug save ---
-
-    let invert = false;
+    // alpha stats + optional debug saves
     try {
-      // Compute rough stats to verify this is a binary-ish mask (has real black + white)
-      const small = await sharp(maskBuf, { failOnError: false })
+      const alphaSmall = await sharp(cutoutRgba, { failOnError: false })
+        .ensureAlpha()
+        .extractChannel(3)
         .resize(160, 160, { fit: "fill" })
-        .grayscale()
         .raw()
         .toBuffer();
 
-      
       let fg = 0;
-
-      const n = small.length;
-
+      const n = alphaSmall.length;
       for (let i = 0; i < n; i++) {
-
-        const v = small[i];
-
-        if (v > 128) fg++;
-
+        if (alphaSmall[i] > 127) fg++;
       }
-
       const fgPct = fg / n;
-
       const bgPct = 1 - fgPct;
-
-      invert = fgPct < 0.02 && bgPct > 0.02;
-
-      console.warn("[toptry] avatar/process: mask stats", { fgPct, bgPct, invert });
-
+      console.warn("[toptry] avatar/process: alpha stats", { fgPct, bgPct });
 
       if (process.env.AVATAR_DEBUG_MASK === "1") {
-        const dbgPng = await sharp(maskBuf, { failOnError: false }).png().toBuffer();
-        const dbgDataUrl = "data:image/png;base64," + dbgPng.toString("base64");
-        const storedMask = await putDataUrl(dbgDataUrl, `users/${userId}/masks`);
-        const key = storedMask?.key || storedMask;
-        console.warn("[toptry] avatar/process: saved mask for debug:", key);
+        const cutoutDataUrlDbg = "data:image/png;base64," + cutoutRgba.toString("base64");
+        const storedCutout = await putDataUrl(cutoutDataUrlDbg, `users/${userId}/_cutout`);
+        const ckey = storedCutout?.key || storedCutout;
+        console.warn("[toptry] avatar/process: saved cutout for debug:", ckey);
+
+        const alphaPng = await sharp(cutoutRgba, { failOnError: false })
+          .ensureAlpha()
+          .extractChannel(3)
+          .png()
+          .toBuffer();
+        const alphaDataUrl = "data:image/png;base64," + alphaPng.toString("base64");
+        const storedAlpha = await putDataUrl(alphaDataUrl, `users/${userId}/_alpha`);
+        const akey = storedAlpha?.key || storedAlpha;
+        console.warn("[toptry] avatar/process: saved alpha for debug:", akey);
       }
-
-      // If it's basically not a mask (e.g. a photo), one of these will be near zero
-      
-      if (fgPct < 0.005 || fgPct > 0.995) {
-
-        console.error("[toptry] avatar/process: Gemini returned unusable mask (fgPct,bgPct)=", fgPct, bgPct);
-
-        return res.status(502).json({ error: "Gemini did not return a usable mask" });
-
-      }
-
     } catch (e) {
-      console.warn("[toptry] avatar/process: mask validation failed:", e?.message || e);
-      // continue (do not hard-fail on debug/validation errors)
+      console.warn("[toptry] avatar/process: debug save failed:", e?.message || e);
     }
 
-const srcBuf = Buffer.from(photoDataUrl.split(",")[1], "base64");
+    // keep white background for normalized selfie used downstream
+    const normalizedPng = await sharp(cutoutRgba, { failOnError: false })
+      .resize(768, 1024, { fit: "contain", background: "#ffffff" })
+      .flatten({ background: "#ffffff" })
+      .png()
+      .toBuffer();
 
-const meta = await sharp(srcBuf, { failOnError: false }).metadata();
-const w = meta.width;
-const h = meta.height;
+    const selfieDataUrlOut =
+      "data:image/png;base64," + normalizedPng.toString("base64");
 
-
-const maskBase = sharp(maskBuf, { failOnError: false })
-
-  .resize(w, h, { fit: "fill" })
-
-  .grayscale();
-
-
-
-const alpha = await (invert ? maskBase.negate() : maskBase)
-
-  .blur(0.8)
-
-  .threshold(200)
-
-  .toBuffer();
-
-    if (process.env.AVATAR_DEBUG_MASK === "1") {
-      const alphaPng = await sharp(alpha, { failOnError: false })
-        .png()
-        .toBuffer();
-      const alphaDataUrl = "data:image/png;base64," + alphaPng.toString("base64");
-      const storedAlpha = await putDataUrl(alphaDataUrl, `users/${userId}/_alpha`);
-      const akey = storedAlpha?.key || storedAlpha;
-      console.warn("[toptry] avatar/process: saved alpha for debug:", akey);
-    }
-
-
-
-const cutoutRgba = await sharp(srcBuf, { failOnError: false })
-  .removeAlpha()
-  .joinChannel(alpha)
-  .png()
-  .toBuffer();
-
-    if (process.env.AVATAR_DEBUG_MASK === "1") {
-      const cutoutPng = await sharp(cutoutRgba, { failOnError: false }).png().toBuffer();
-      const cutoutDataUrl = "data:image/png;base64," + cutoutPng.toString("base64");
-      const storedCutout = await putDataUrl(cutoutDataUrl, `users/${userId}/_cutout`);
-      const ckey = storedCutout?.key || storedCutout;
-      console.warn("[toptry] avatar/process: saved cutout for debug:", ckey);
-    }
-
-
-const normalizedPng = await sharp(cutoutRgba, { failOnError: false })
-  .resize(768, 1024, { fit: "contain", background: { r:0, g:0, b:0, alpha:0 } })
-  .png()
-  .toBuffer();
-
-const selfieDataUrlOut =
-  "data:image/png;base64," + normalizedPng.toString("base64");
     const avatarPng = await sharp(normalizedPng, { failOnError: false })
       .resize(256, 256, { fit: "cover", position: "top" })
       .png()
       .toBuffer();
 
-    const avatarDataUrlOut = "data:image/png;base64," + avatarPng.toString("base64");
+    const avatarDataUrlOut =
+      "data:image/png;base64," + avatarPng.toString("base64");
 
     const storedSelfie = await putDataUrl(selfieDataUrlOut, `users/${userId}/selfies`);
     const storedAvatar = await putDataUrl(avatarDataUrlOut, `users/${userId}/avatars`);
@@ -556,10 +477,6 @@ const selfieDataUrlOut =
   }
 });
 
-/**
- * Serve stored images from MinIO via the backend to avoid CORS issues.
- * GET /media/<key>
- */
 app.get("/media/:key(*)", async (req, res) => {
   try {
     const key = req.params.key;
