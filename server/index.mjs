@@ -753,6 +753,47 @@ app.post("/api/wardrobe/extract", async (req, res) => {
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     const photo = await imageToBase64(photoDataUrl);
 
+    
+    // --- detect multiple wardrobe items first ---
+    const detectPrompt = `Analyze the photo and list visible clothing items.
+Return strict JSON:
+{
+ "items":[
+   {"title":string,"category":string}
+ ]
+}
+Return max 4 items. Use Russian titles.`;
+
+    const detectResp = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: {
+        parts: [
+          { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
+          { text: detectPrompt },
+        ],
+      },
+    });
+
+    let detectedItems = [];
+    try {
+      const txt = (detectResp?.candidates?.[0]?.content?.parts || [])
+        .map(p => p.text)
+        .filter(Boolean)
+        .join("")
+        .trim();
+
+      const j1 = txt.indexOf("{");
+      const j2 = txt.lastIndexOf("}");
+
+      if (j1 !== -1 && j2 !== -1) {
+        detectedItems = JSON.parse(txt.slice(j1, j2 + 1)).items || [];
+      }
+
+    } catch {
+      detectedItems = [];
+    }
+
+
     const cutoutPrompt = `You are an expert e-commerce catalog editor.
 Remove the background and isolate ONLY the main clothing item in the photo.
 Output a single product cutout centered in frame.
