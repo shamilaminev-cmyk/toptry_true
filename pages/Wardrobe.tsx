@@ -70,12 +70,18 @@ const Wardrobe = () => {
       }
 
       if (items.length > 1) {
-        setCandidates(items.map((i: any) => ({ ...i, original })));
-        return;
-      }
-
-      if (Array.isArray(items) && items.length > 1) {
-        setCandidates(items.map((i: any) => ({ ...i, original })));
+        setCandidates(items.map((i: any) => ({
+          original,
+          cutoutDataUrl: i?.cutoutDataUrl || '',
+          attributes: i?.attributes || {
+            title: i?.title || '',
+            category: i?.category || '',
+            gender: i?.gender || '',
+            tags: Array.isArray(i?.tags) ? i.tags : [],
+            color: i?.color || '',
+            material: i?.material || '',
+          },
+        })));
         return;
       }
 
