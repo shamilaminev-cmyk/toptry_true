@@ -794,154 +794,135 @@ Return max 4 items. Use Russian titles.`;
     }
 
 
-    const cutoutPrompt = `You are an expert e-commerce catalog editor.
-Remove the background and isolate ONLY the main clothing item in the photo.
-Output a single product cutout centered in frame.
-Requirements:
-- transparent background (alpha) if possible
-- front-facing view if possible
-- no text, no logos, no watermark
-- keep true colors
-- clean edges, high-quality cutout
-- output PNG
-If multiple items are visible, choose the most prominent garment.`;
+    // Build candidate list. Each candidate gets its OWN Gemini cutout.
+    let candidates = Array.isArray(detectedItems) ? detectedItems : [];
+    candidates = candidates
+      .map((d) => ({
+        title: d?.title || "Моя вещь",
+        category: d?.category || hintCategory || "Верх",
+        gender: d?.gender || hintGender || "UNISEX",
+        tags: Array.isArray(d?.tags) ? d.tags : [],
+        color: d?.color || "неизвестно",
+        material: d?.material || "неизвестно",
+      }))
+      .slice(0, 4);
 
-    const cutoutResp = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
-      contents: {
-        parts: [
-          { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
-          { text: cutoutPrompt },
-        ],
-      },
-      config: {
-        imageConfig: {
-          aspectRatio: "1:1",
-          imageSize: "1K",
-        },
-      },
-    });
-    let cutoutDataUrl = "";
-    const cutoutParts = cutoutResp?.candidates?.[0]?.content?.parts || [];
-    for (const part of cutoutParts) {
-      if (part.inlineData?.data) {
-        const mt = part.inlineData.mimeType || "image/png";
-        cutoutDataUrl = `data:${mt};base64,${part.inlineData.data}`;
-        break;
-      }
-    }
-    if (!cutoutDataUrl) {
-      return res.status(502).json({ error: "Gemini did not return cutout image" });
-    }
-
-    // post-process Gemini cutout:
-    // 1) remove fake transparency / checkerboard via bg-remover
-    // 2) normalize onto white background
-    try {
-      if (AVATAR_BG_REMOVER_URL) {
-        const geminiCutoutBuf = Buffer.from(String(cutoutDataUrl).split(",")[1] || "", "base64");
-        const cleanedCutoutPng = await bgRemoveToPng(geminiCutoutBuf);
-
-        const cleanedOnWhite = await sharp(cleanedCutoutPng, { failOnError: false })
-          .ensureAlpha()
-          .flatten({ background: "#ffffff" })
-          .png()
-          .toBuffer();
-
-        cutoutDataUrl = "data:image/png;base64," + cleanedOnWhite.toString("base64");
-      } else {
-        // fallback: at least force white background if bg-remover is disabled
-        const geminiCutoutBuf = Buffer.from(String(cutoutDataUrl).split(",")[1] || "", "base64");
-        const cleanedOnWhite = await sharp(geminiCutoutBuf, { failOnError: false })
-          .ensureAlpha()
-          .flatten({ background: "#ffffff" })
-          .png()
-          .toBuffer();
-
-        cutoutDataUrl = "data:image/png;base64," + cleanedOnWhite.toString("base64");
-      }
-    } catch (e) {
-      console.warn("[toptry] wardrobe/extract post-process failed:", e?.message || e);
-      // keep original Gemini cutout if cleanup fails
-    }
-
-    const attrPrompt = `Analyze the clothing item in the image.
-Return ONLY strict JSON with keys:
-{
-  "title": string,
-  "category": one of ["Верх","Низ","Платья","Обувь","Аксессуары","Верхняя одежда"],
-  "gender": one of ["MALE","FEMALE","UNISEX"],
-  "tags": string[],
-  "color": string,
-  "material": string
-}
-Use Russian for title/category/tags/color/material.
-If unsure, make best guess.
-Hints:
-- hintCategory: ${hintCategory || "none"}
-- hintGender: ${hintGender || "none"}`;
-
-    const attrResp = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: {
-        parts: [
-          { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
-          { text: attrPrompt },
-        ],
-      },
-    });
-
-    const attrText = (attrResp?.candidates?.[0]?.content?.parts || [])
-      .map((p) => p.text)
-      .filter(Boolean)
-      .join("")
-      .trim();
-
-    let attributes = null;
-    try {
-      attributes = JSON.parse(attrText);
-    } catch {
-      const first = attrText.indexOf("{");
-      const last = attrText.lastIndexOf("}");
-      if (first !== -1 && last !== -1) {
-        attributes = JSON.parse(attrText.slice(first, last + 1));
-      }
-    }
-
-    if (!attributes) {
-      attributes = {
+    if (!candidates.length) {
+      candidates = [{
         title: "Моя вещь",
         category: hintCategory || "Верх",
         gender: hintGender || "UNISEX",
         tags: [],
         color: "неизвестно",
         material: "неизвестно",
-      };
+      }];
     }
 
-    
-    // build items array from detected items
-    let items = [];
+    const items = [];
 
-    if (Array.isArray(detectedItems) && detectedItems.length > 0) {
-      items = detectedItems.map((d) => ({
+    for (const cand of candidates) {
+      const cutoutPrompt = `You are an expert e-commerce catalog editor.
+Remove the background and isolate ONLY ONE clothing item from the photo.
+
+The target item is:
+- title: ${cand.title}
+- category: ${cand.category}
+- gender: ${cand.gender}
+- color: ${cand.color}
+- material: ${cand.material}
+
+Output a single product cutout centered in frame.
+Requirements:
+- isolate ONLY the target item
+- transparent background (alpha) if possible
+- front-facing view if possible
+- no text, no logos, no watermark
+- keep true colors
+- clean edges, high-quality cutout
+- output PNG
+If multiple items are visible, DO NOT choose another item.`;
+
+      const cutoutResp = await ai.models.generateContent({
+        model: "gemini-3-pro-image-preview",
+        contents: {
+          parts: [
+            { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
+            { text: cutoutPrompt },
+          ],
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: "1:1",
+            imageSize: "1K",
+          },
+        },
+      });
+
+      let cutoutDataUrl = "";
+      const cutoutParts = cutoutResp?.candidates?.[0]?.content?.parts || [];
+      for (const part of cutoutParts) {
+        if (part.inlineData?.data) {
+          const mt = part.inlineData.mimeType || "image/png";
+          cutoutDataUrl = `data:${mt};base64,${part.inlineData.data}`;
+          break;
+        }
+      }
+      if (!cutoutDataUrl) {
+        continue;
+      }
+
+      // post-process Gemini cutout:
+      // 1) remove fake transparency / checkerboard via bg-remover
+      // 2) normalize onto white background
+      try {
+        if (AVATAR_BG_REMOVER_URL) {
+          const geminiCutoutBuf = Buffer.from(String(cutoutDataUrl).split(",")[1] || "", "base64");
+          const cleanedCutoutPng = await bgRemoveToPng(geminiCutoutBuf);
+
+          const cleanedOnWhite = await sharp(cleanedCutoutPng, { failOnError: false })
+            .ensureAlpha()
+            .flatten({ background: "#ffffff" })
+            .png()
+            .toBuffer();
+
+          cutoutDataUrl = "data:image/png;base64," + cleanedOnWhite.toString("base64");
+        } else {
+          const geminiCutoutBuf = Buffer.from(String(cutoutDataUrl).split(",")[1] || "", "base64");
+          const cleanedOnWhite = await sharp(geminiCutoutBuf, { failOnError: false })
+            .ensureAlpha()
+            .flatten({ background: "#ffffff" })
+            .png()
+            .toBuffer();
+
+          cutoutDataUrl = "data:image/png;base64," + cleanedOnWhite.toString("base64");
+        }
+      } catch (e) {
+        console.warn("[toptry] wardrobe/extract post-process failed:", e?.message || e);
+      }
+
+      items.push({
         cutoutDataUrl,
         attributes: {
-          ...attributes,
-          title: d.title || attributes.title,
-          category: d.category || attributes.category
-        }
-      }));
-    } else {
-      items = [
-        {
-          cutoutDataUrl,
-          attributes
-        }
-      ];
+          title: cand.title,
+          category: cand.category,
+          gender: cand.gender,
+          tags: cand.tags,
+          color: cand.color,
+          material: cand.material,
+        },
+      });
     }
 
-    res.json({ items });
+    if (!items.length) {
+      return res.status(502).json({ error: "Gemini did not return cutout image" });
+    }
+
+    // backward-compatible response
+    res.json({
+      items,
+      cutoutDataUrl: items[0].cutoutDataUrl,
+      attributes: items[0].attributes,
+    });
 
   } catch (err) {
     console.error("[toptry] /api/wardrobe/extract error", err);
