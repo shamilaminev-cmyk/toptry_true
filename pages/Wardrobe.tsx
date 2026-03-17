@@ -287,10 +287,27 @@ const Wardrobe = () => {
                   }}
                   className="rounded-2xl border border-zinc-200 p-2 bg-zinc-50 hover:border-zinc-900 transition"
                 >
-                  <img
-                    src={withApiOrigin(c.cutoutDataUrl)}
-                    className="w-full h-32 object-contain mix-blend-multiply"
-                  />
+                  {c.cutoutDataUrl ? (
+                    <img
+                      src={withApiOrigin(c.cutoutDataUrl)}
+                      className="w-full h-32 object-contain mix-blend-multiply"
+                    />
+                  ) : (
+                    <div className="w-full h-32 rounded-xl border border-zinc-200 bg-white flex flex-col items-center justify-center px-3 text-center">
+                      <ICONS.Wardrobe className="w-6 h-6 text-zinc-300 mb-2" />
+                      <div className="text-[10px] font-black uppercase tracking-widest text-zinc-700 line-clamp-2">
+                        {c?.attributes?.title || `Вещь ${i + 1}`}
+                      </div>
+                      <div className="mt-1 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
+                        {c?.attributes?.category || 'Категория'}
+                      </div>
+                      {(c?.attributes?.color || c?.attributes?.material) && (
+                        <div className="mt-1 text-[8px] uppercase tracking-widest text-zinc-400 line-clamp-2">
+                          {[c?.attributes?.color, c?.attributes?.material].filter(Boolean).join(' • ')}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
