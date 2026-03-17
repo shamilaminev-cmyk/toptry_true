@@ -726,12 +726,9 @@ app.post("/api/wardrobe/extract", async (req, res) => {
     if (AI_PROXY_URL) {
       try {
         const upstream = `${AI_PROXY_URL}/api/wardrobe/extract`;
-
         const { resp, text } = await proxyJsonPost(upstream, req.body);
-
         const ct = resp.headers.get("content-type");
         if (ct) res.setHeader("content-type", ct);
-
         res.status(resp.status).send(text);
         return;
       } catch (e) {
@@ -743,12 +740,10 @@ app.post("/api/wardrobe/extract", async (req, res) => {
     }
 
     if (!GEMINI_API_KEY) {
-      return res
-        .status(500)
-        .json({ error: "GEMINI_API_KEY is not configured on the server" });
+      return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server" });
     }
 
-    const { photoDataUrl, hintCategory, hintGender } = req.body || {};
+    const { photoDataUrl, hintCategory, hintGender, targetItem } = req.body || {};
     if (!photoDataUrl) {
       return res.status(400).json({ error: "photoDataUrl is required" });
     }
@@ -762,13 +757,11 @@ app.post("/api/wardrobe/extract", async (req, res) => {
         if (AVATAR_BG_REMOVER_URL) {
           const geminiCutoutBuf = Buffer.from(String(out).split(",")[1] || "", "base64");
           const cleanedCutoutPng = await bgRemoveToPng(geminiCutoutBuf);
-
           const cleanedOnWhite = await sharp(cleanedCutoutPng, { failOnError: false })
             .ensureAlpha()
             .flatten({ background: "#ffffff" })
             .png()
             .toBuffer();
-
           out = "data:image/png;base64," + cleanedOnWhite.toString("base64");
         } else {
           const geminiCutoutBuf = Buffer.from(String(out).split(",")[1] || "", "base64");
@@ -777,7 +770,6 @@ app.post("/api/wardrobe/extract", async (req, res) => {
             .flatten({ background: "#ffffff" })
             .png()
             .toBuffer();
-
           out = "data:image/png;base64," + cleanedOnWhite.toString("base64");
         }
       } catch (e) {
@@ -801,70 +793,15 @@ app.post("/api/wardrobe/extract", async (req, res) => {
       return fallback;
     }
 
-    // --- 1) detect possible wardrobe items (max 2) ---
-    const detectPrompt = `Analyze the photo and identify up to 2 DISTINCT wardrobe items a user may want to add to wardrobe.
-Return ONLY strict JSON:
-{
-  "items": [
-    {
-      "title": string,
-      "category": one of ["Верх","Низ","Платья","Обувь","Аксессуары","Верхняя одежда"],
-      "gender": one of ["MALE","FEMALE","UNISEX"],
-      "tags": string[],
-      "color": string,
-      "material": string
-    }
-  ]
-}
-Rules:
-- Use Russian for title/category/tags/color/material.
-- Include only real wearable items visible in the photo.
-- Items must be DISTINCT from each other.
-- Do not include duplicates or near-duplicates.
-- If only one meaningful item is visible, return exactly one item.
-Hints:
-- hintCategory: ${hintCategory || "none"}
-- hintGender: ${hintGender || "none"}`;
-
-    const detectResp = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: {
-        parts: [
-          { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
-          { text: detectPrompt },
-        ],
-      },
-    });
-
-    const detectText = (detectResp?.candidates?.[0]?.content?.parts || [])
-      .map((p) => p.text)
-      .filter(Boolean)
-      .join("")
-      .trim();
-
-    let detectedItems = parseJsonFromText(detectText, { items: [] })?.items || [];
-    if (!Array.isArray(detectedItems)) detectedItems = [];
-
-    // dedupe by normalized title+category
-    const seen = new Set();
-    detectedItems = detectedItems.filter((d) => {
-      const key = `${String(d?.title || "").trim().toLowerCase()}|${String(d?.category || "").trim().toLowerCase()}`;
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).slice(0, 2);
-
-    const items = [];
-
-    // --- 2) try distinct cutouts for detected items ---
-    for (const d of detectedItems) {
+    // STEP 2: user selected a specific item -> make ONE cutout only
+    if (targetItem && typeof targetItem === "object") {
       const cand = {
-        title: d?.title || "Моя вещь",
-        category: d?.category || hintCategory || "Верх",
-        gender: d?.gender || hintGender || "UNISEX",
-        tags: Array.isArray(d?.tags) ? d.tags : [],
-        color: d?.color || "неизвестно",
-        material: d?.material || "неизвестно",
+        title: targetItem?.title || "Моя вещь",
+        category: targetItem?.category || hintCategory || "Верх",
+        gender: targetItem?.gender || hintGender || "UNISEX",
+        tags: Array.isArray(targetItem?.tags) ? targetItem.tags : [],
+        color: targetItem?.color || "неизвестно",
+        material: targetItem?.material || "неизвестно",
       };
 
       const cutoutPrompt = `You are an expert e-commerce catalog editor.
@@ -914,11 +851,13 @@ If multiple items are visible, DO NOT choose another item.`;
         }
       }
 
-      if (!cutoutDataUrl) continue;
+      if (!cutoutDataUrl) {
+        return res.status(502).json({ error: "Gemini did not return cutout image" });
+      }
 
       cutoutDataUrl = await cleanupCutoutDataUrl(cutoutDataUrl);
 
-      items.push({
+      return res.json({
         cutoutDataUrl,
         attributes: {
           title: cand.title,
@@ -931,108 +870,70 @@ If multiple items are visible, DO NOT choose another item.`;
       });
     }
 
-    // --- 3) fallback to legacy single-item flow if multi-item failed ---
-    if (!items.length) {
-      const cutoutPrompt = `You are an expert e-commerce catalog editor.
-Remove the background and isolate ONLY the main clothing item in the photo.
-Output a single product cutout centered in frame.
-Requirements:
-- transparent background (alpha) if possible
-- front-facing view if possible
-- no text, no logos, no watermark
-- keep true colors
-- clean edges, high-quality cutout
-- output PNG
-If multiple items are visible, choose the most prominent garment.`;
-
-      const cutoutResp = await ai.models.generateContent({
-        model: "gemini-3-pro-image-preview",
-        contents: {
-          parts: [
-            { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
-            { text: cutoutPrompt },
-          ],
-        },
-        config: {
-          imageConfig: {
-            aspectRatio: "1:1",
-            imageSize: "1K",
-          },
-        },
-      });
-
-      let cutoutDataUrl = "";
-      const cutoutParts = cutoutResp?.candidates?.[0]?.content?.parts || [];
-      for (const part of cutoutParts) {
-        if (part.inlineData?.data) {
-          const mt = part.inlineData.mimeType || "image/png";
-          cutoutDataUrl = `data:${mt};base64,${part.inlineData.data}`;
-          break;
-        }
-      }
-
-      if (!cutoutDataUrl) {
-        return res.status(502).json({ error: "Gemini did not return cutout image" });
-      }
-
-      cutoutDataUrl = await cleanupCutoutDataUrl(cutoutDataUrl);
-
-      const attrPrompt = `Analyze the clothing item in the image.
-Return ONLY strict JSON with keys:
+    // STEP 1: detect candidates only
+    const detectPrompt = `Analyze the photo and identify up to 2 DISTINCT wardrobe items a user may want to add to wardrobe.
+Return ONLY strict JSON:
 {
-  "title": string,
-  "category": one of ["Верх","Низ","Платья","Обувь","Аксессуары","Верхняя одежда"],
-  "gender": one of ["MALE","FEMALE","UNISEX"],
-  "tags": string[],
-  "color": string,
-  "material": string
+  "items": [
+    {
+      "title": string,
+      "category": one of ["Верх","Низ","Платья","Обувь","Аксессуары","Верхняя одежда"],
+      "gender": one of ["MALE","FEMALE","UNISEX"],
+      "tags": string[],
+      "color": string,
+      "material": string
+    }
+  ]
 }
-Use Russian for title/category/tags/color/material.
-If unsure, make best guess.
+Rules:
+- Use Russian for title/category/tags/color/material.
+- Include only real wearable items visible in the photo.
+- Items must be DISTINCT from each other.
+- Do not include duplicates or near-duplicates.
+- If only one meaningful item is visible, return exactly one item.
 Hints:
 - hintCategory: ${hintCategory || "none"}
 - hintGender: ${hintGender || "none"}`;
 
-      const attrResp = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: {
-          parts: [
-            { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
-            { text: attrPrompt },
-          ],
-        },
-      });
+    const detectResp = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: {
+        parts: [
+          { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
+          { text: detectPrompt },
+        ],
+      },
+    });
 
-      const attrText = (attrResp?.candidates?.[0]?.content?.parts || [])
-        .map((p) => p.text)
-        .filter(Boolean)
-        .join("")
-        .trim();
+    const detectText = (detectResp?.candidates?.[0]?.content?.parts || [])
+      .map((p) => p.text)
+      .filter(Boolean)
+      .join("")
+      .trim();
 
-      let attributes = parseJsonFromText(attrText, null);
+    let items = parseJsonFromText(detectText, { items: [] })?.items || [];
+    if (!Array.isArray(items)) items = [];
 
-      if (!attributes) {
-        attributes = {
-          title: "Моя вещь",
-          category: hintCategory || "Верх",
-          gender: hintGender || "UNISEX",
-          tags: [],
-          color: "неизвестно",
-          material: "неизвестно",
-        };
-      }
+    const seen = new Set();
+    items = items.filter((d) => {
+      const key = `${String(d?.title || "").trim().toLowerCase()}|${String(d?.category || "").trim().toLowerCase()}`;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 2);
 
-      items.push({
-        cutoutDataUrl,
-        attributes,
-      });
+    if (!items.length) {
+      items = [{
+        title: "Моя вещь",
+        category: hintCategory || "Верх",
+        gender: hintGender || "UNISEX",
+        tags: [],
+        color: "неизвестно",
+        material: "неизвестно",
+      }];
     }
 
-    return res.json({
-      items,
-      cutoutDataUrl: items[0].cutoutDataUrl,
-      attributes: items[0].attributes,
-    });
+    return res.json({ items });
   } catch (err) {
     console.error("[toptry] /api/wardrobe/extract error", err);
     res.status(500).json({ error: err?.message || "Unknown server error" });
