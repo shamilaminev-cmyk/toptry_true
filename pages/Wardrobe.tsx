@@ -63,10 +63,16 @@ const Wardrobe = () => {
         throw new Error(data?.error || `Ошибка сервера (${resp.status})`);
       }
       const data = await resp.json();
-      const items = data?.items || (data?.cutoutDataUrl ? [{
-        cutoutDataUrl: data.cutoutDataUrl,
-        attributes: data.attributes || {}
-      }] : []);
+      const items = data?.items || [];
+
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new Error('Сервер не вернул распознанные вещи');
+      }
+
+      if (items.length > 1) {
+        setCandidates(items.map((i: any) => ({ ...i, original })));
+        return;
+      }
 
       if (Array.isArray(items) && items.length > 1) {
         setCandidates(items.map((i: any) => ({ ...i, original })));
