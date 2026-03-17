@@ -237,11 +237,20 @@ const Wardrobe = () => {
               Выберите вещь
             </h3>
 
-            <div className="grid grid-cols-2 gap-4">
-              {candidates.map((c, i) => (
-                <button
-                  key={i}
-                  onClick={async () => {
+            <div className="flex gap-4">
+              
+              <div className="w-1/2">
+                <img
+                  src={withApiOrigin(candidates[0]?.original)}
+                  className="w-full rounded-2xl border border-zinc-200 object-contain"
+                />
+              </div>
+
+              <div className="w-1/2 flex flex-col gap-2">
+                {candidates.map((c, i) => (
+                  <button
+                    key={i}
+                    onClick={async () => {
                     try {
                       setExtractError(null);
                       setIsRecognizing(true);
@@ -285,29 +294,12 @@ const Wardrobe = () => {
                       setIsRecognizing(false);
                     }
                   }}
-                  className="rounded-2xl border border-zinc-200 p-2 bg-zinc-50 hover:border-zinc-900 transition"
+                  className="w-full text-left border border-zinc-200 rounded-xl px-4 py-3 hover:border-zinc-900 transition flex items-center justify-between"
                 >
-                  {c.cutoutDataUrl ? (
-                    <img
-                      src={withApiOrigin(c.cutoutDataUrl)}
-                      className="w-full h-32 object-contain mix-blend-multiply"
-                    />
-                  ) : (
-                    <div className="w-full h-32 rounded-xl border border-zinc-200 bg-white flex flex-col items-center justify-center px-3 text-center">
-                      <ICONS.Wardrobe className="w-6 h-6 text-zinc-300 mb-2" />
-                      <div className="text-[10px] font-black uppercase tracking-widest text-zinc-700 line-clamp-2">
-                        {c?.attributes?.title || `Вещь ${i + 1}`}
-                      </div>
-                      <div className="mt-1 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
-                        {c?.attributes?.category || 'Категория'}
-                      </div>
-                      {(c?.attributes?.color || c?.attributes?.material) && (
-                        <div className="mt-1 text-[8px] uppercase tracking-widest text-zinc-400 line-clamp-2">
-                          {[c?.attributes?.color, c?.attributes?.material].filter(Boolean).join(' • ')}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <span className="text-xs font-bold uppercase tracking-widest">
+                    {c?.attributes?.title || `Вещь ${i+1}`}
+                  </span>
+                  <ICONS.ChevronRight className="w-4 h-4 text-zinc-400" />
                 </button>
               ))}
             </div>
