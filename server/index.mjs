@@ -791,7 +791,38 @@ If multiple items are visible, choose the most prominent garment.`;
     }
     if (!cutoutDataUrl) {
       return res.status(502).json({ error: "Gemini did not return cutout image" });
-}
+    }
+
+    // post-process Gemini cutout:
+    // 1) remove fake transparency / checkerboard via bg-remover
+    // 2) normalize onto white background
+    try {
+      if (AVATAR_BG_REMOVER_URL) {
+        const geminiCutoutBuf = Buffer.from(String(cutoutDataUrl).split(",")[1] || "", "base64");
+        const cleanedCutoutPng = await bgRemoveToPng(geminiCutoutBuf);
+
+        const cleanedOnWhite = await sharp(cleanedCutoutPng, { failOnError: false })
+          .ensureAlpha()
+          .flatten({ background: "#ffffff" })
+          .png()
+          .toBuffer();
+
+        cutoutDataUrl = "data:image/png;base64," + cleanedOnWhite.toString("base64");
+      } else {
+        // fallback: at least force white background if bg-remover is disabled
+        const geminiCutoutBuf = Buffer.from(String(cutoutDataUrl).split(",")[1] || "", "base64");
+        const cleanedOnWhite = await sharp(geminiCutoutBuf, { failOnError: false })
+          .ensureAlpha()
+          .flatten({ background: "#ffffff" })
+          .png()
+          .toBuffer();
+
+        cutoutDataUrl = "data:image/png;base64," + cleanedOnWhite.toString("base64");
+      }
+    } catch (e) {
+      console.warn("[toptry] wardrobe/extract post-process failed:", e?.message || e);
+      // keep original Gemini cutout if cleanup fails
+    }
 
     const attrPrompt = `Analyze the clothing item in the image.
 Return ONLY strict JSON with keys:
