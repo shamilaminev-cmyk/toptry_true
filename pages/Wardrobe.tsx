@@ -237,12 +237,12 @@ const Wardrobe = () => {
               Выберите вещь
             </h3>
 
-            <div className="flex gap-4">
-              
+            <div className="flex gap-4 items-start">
               <div className="w-1/2">
                 <img
                   src={withApiOrigin(candidates[0]?.original)}
-                  className="w-full rounded-2xl border border-zinc-200 object-contain"
+                  alt=""
+                  className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 object-contain"
                 />
               </div>
 
@@ -251,57 +251,65 @@ const Wardrobe = () => {
                   <button
                     key={i}
                     onClick={async () => {
-                    try {
-                      setExtractError(null);
-                      setIsRecognizing(true);
+                      try {
+                        setExtractError(null);
+                        setIsRecognizing(true);
 
-                      const resp = await fetch('/api/wardrobe/extract', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          photoDataUrl: c.original,
-                          hintCategory: c?.attributes?.category,
-                          targetItem: c?.attributes || {},
-                        }),
-                      });
+                        const resp = await fetch('/api/wardrobe/extract', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            photoDataUrl: c.original,
+                            hintCategory: c?.attributes?.category,
+                            targetItem: c?.attributes || {},
+                          }),
+                        });
 
-                      if (!resp.ok) {
-                        const data = await resp.json().catch(() => ({}));
-                        throw new Error(data?.error || `Ошибка сервера (${resp.status})`);
+                        if (!resp.ok) {
+                          const data = await resp.json().catch(() => ({}));
+                          throw new Error(data?.error || `Ошибка сервера (${resp.status})`);
+                        }
+
+                        const data = await resp.json();
+                        const cutout = data?.cutoutDataUrl;
+                        const attrs = data?.attributes || c?.attributes || {};
+
+                        if (!cutout) throw new Error('Сервер не вернул вырезанную вещь');
+
+                        setExtracted({
+                          original: c.original,
+                          cutout,
+                          attrs,
+                        });
+                        setDraftTitle(attrs?.title || 'Моя вещь');
+                        setDraftCategory((Object.values(Category) as any).includes(attrs?.category) ? attrs.category : Category.TOPS);
+                        setDraftGender((Object.values(Gender) as any).includes(attrs?.gender) ? attrs.gender : Gender.UNISEX);
+                        setDraftTags(Array.isArray(attrs?.tags) ? attrs.tags.join(', ') : '');
+                        setDraftColor(attrs?.color || '');
+                        setDraftMaterial(attrs?.material || '');
+                        setCandidates(null);
+                      } catch (err: any) {
+                        setExtractError(err?.message || 'Не удалось вырезать выбранную вещь');
+                      } finally {
+                        setIsRecognizing(false);
                       }
-
-                      const data = await resp.json();
-                      const cutout = data?.cutoutDataUrl;
-                      const attrs = data?.attributes || c?.attributes || {};
-
-                      if (!cutout) throw new Error('Сервер не вернул вырезанную вещь');
-
-                      setExtracted({
-                        original: c.original,
-                        cutout,
-                        attrs,
-                      });
-                      setDraftTitle(attrs?.title || 'Моя вещь');
-                      setDraftCategory((Object.values(Category) as any).includes(attrs?.category) ? attrs.category : Category.TOPS);
-                      setDraftGender((Object.values(Gender) as any).includes(attrs?.gender) ? attrs.gender : Gender.UNISEX);
-                      setDraftTags(Array.isArray(attrs?.tags) ? attrs.tags.join(', ') : '');
-                      setDraftColor(attrs?.color || '');
-                      setDraftMaterial(attrs?.material || '');
-                      setCandidates(null);
-                    } catch (err: any) {
-                      setExtractError(err?.message || 'Не удалось вырезать выбранную вещь');
-                    } finally {
-                      setIsRecognizing(false);
-                    }
-                  }}
-                  className="w-full text-left border border-zinc-200 rounded-xl px-4 py-3 hover:border-zinc-900 transition flex items-center justify-between"
-                >
-                  <span className="text-xs font-bold uppercase tracking-widest">
-                    {c?.attributes?.title || `Вещь ${i+1}`}
-                  </span>
-                  <ICONS.ChevronRight className="w-4 h-4 text-zinc-400" />
-                </button>
-              ))}
+                    }}
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-left hover:border-zinc-900 transition"
+                  >
+                    <div className="text-xs font-bold uppercase tracking-widest text-zinc-900">
+                      {c?.attributes?.title || `Вещь ${i + 1}`}
+                    </div>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                      {c?.attributes?.category || 'Категория'}
+                    </div>
+                    {(c?.attributes?.color || c?.attributes?.material) && (
+                      <div className="mt-1 text-[10px] uppercase tracking-widest text-zinc-400">
+                        {[c?.attributes?.color, c?.attributes?.material].filter(Boolean).join(' • ')}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <button
