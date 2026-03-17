@@ -805,7 +805,7 @@ app.post("/api/wardrobe/extract", async (req, res) => {
       };
 
       const cutoutPrompt = `You are an expert e-commerce catalog editor.
-Remove the background and isolate ONLY ONE clothing item from the photo.
+Extract ONLY ONE clothing item from the photo.
 
 The target item is:
 - title: ${cand.title}
@@ -814,14 +814,16 @@ The target item is:
 - color: ${cand.color}
 - material: ${cand.material}
 
-Output a single product cutout centered in frame.
+Output a single product image centered in frame.
 Requirements:
 - isolate ONLY the target item
-- transparent background (alpha) if possible
+- use a SOLID PURE WHITE background
+- do NOT use transparency
+- do NOT use checkerboard or grid background
 - front-facing view if possible
 - no text, no logos, no watermark
 - keep true colors
-- clean edges, high-quality cutout
+- clean edges, high-quality catalog result
 - output PNG
 If multiple items are visible, DO NOT choose another item.`;
 
