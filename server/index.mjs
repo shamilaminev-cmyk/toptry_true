@@ -427,9 +427,9 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
         const bw = maxX - minX + 1;
         const bh = maxY - minY + 1;
 
-        const padX = Math.round(bw * 0.14);
-        const padTop = Math.round(bh * 0.10);
-        const padBottom = Math.round(bh * 0.06);
+        const padX = Math.round(bw * 0.08);
+        const padTop = Math.round(bh * 0.06);
+        const padBottom = Math.round(bh * 0.03);
 
         left = Math.max(0, minX - padX);
         top = Math.max(0, minY - padTop);
@@ -448,7 +448,7 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
 
     const targetW = 768;
     const targetH = 1024;
-    const personTargetH = Math.round(targetH * 0.84);
+    const personTargetH = Math.round(targetH * 0.92);
 
     const fittedPerson = await sharp(croppedPerson, { failOnError: false })
       .resize({
