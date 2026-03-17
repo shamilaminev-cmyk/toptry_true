@@ -65,7 +65,7 @@ const Wardrobe = () => {
       const data = await resp.json();
       const items = data?.items;
 
-      if (Array.isArray(items) and items.length > 1) {
+      if (Array.isArray(items) && items.length > 1) {
         setCandidates(items.map((i: any) => ({ ...i, original })));
         return;
       }
