@@ -20,6 +20,8 @@ const Wardrobe = () => {
   const [draftTags, setDraftTags] = useState<string>('');
   const [draftColor, setDraftColor] = useState<string>('');
   const [draftMaterial, setDraftMaterial] = useState<string>('');
+  const [candidates, setCandidates] = useState<any[] | null>(null);
+
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,9 +63,18 @@ const Wardrobe = () => {
         throw new Error(data?.error || `Ошибка сервера (${resp.status})`);
       }
       const data = await resp.json();
-      const cutout = data?.cutoutDataUrl;
-      const attrs = data?.attributes || {};
+      const items = data?.items;
+
+      if (Array.isArray(items) and items.length > 1) {
+        setCandidates(items.map((i: any) => ({ ...i, original })));
+        return;
+      }
+
+      const cutout = items?.[0]?.cutoutDataUrl || data?.cutoutDataUrl;
+      const attrs = items?.[0]?.attributes || data?.attributes || {};
+
       if (!cutout) throw new Error('Сервер не вернул вырезанную вещь');
+
       setExtracted({ original, cutout, attrs });
       setDraftTitle(attrs?.title || 'Моя вещь');
       setDraftCategory((Object.values(Category) as any).includes(attrs?.category) ? attrs.category : Category.TOPS);
@@ -210,7 +221,45 @@ const Wardrobe = () => {
                       {extractError}
                     </div>
                   )}
-                  {extracted && (
+                  
+        {candidates && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold uppercase tracking-widest">
+              Выберите вещь
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              {candidates.map((c, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setExtracted({
+                      original: c.original,
+                      cutout: c.cutoutDataUrl,
+                      attrs: c.attributes || {}
+                    });
+                    setCandidates(null);
+                  }}
+                  className="rounded-2xl border border-zinc-200 p-2 bg-zinc-50 hover:border-zinc-900 transition"
+                >
+                  <img
+                    src={withApiOrigin(c.cutoutDataUrl)}
+                    className="w-full h-32 object-contain mix-blend-multiply"
+                  />
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setCandidates(null)}
+              className="w-full border border-zinc-200 py-4 rounded-full text-xs font-bold uppercase tracking-widest"
+            >
+              Отмена
+            </button>
+          </div>
+        )}
+
+{extracted && (
                     <div className="space-y-4">
                       <div className="flex gap-3">
                         <div className="w-28 h-28 rounded-2xl bg-zinc-50 border border-zinc-100 p-2 flex items-center justify-center">
