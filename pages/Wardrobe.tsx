@@ -21,6 +21,7 @@ const Wardrobe = () => {
   const [draftColor, setDraftColor] = useState<string>('');
   const [draftMaterial, setDraftMaterial] = useState<string>('');
   const [candidates, setCandidates] = useState<any[] | null>(null);
+  const [pendingExtracted, setPendingExtracted] = useState<Array<{ original: string; cutout: string; attrs: any }>>([]);
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,6 +43,8 @@ const Wardrobe = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setExtractError(null);
+    setCandidates(null);
+    setPendingExtracted([]);
     setIsRecognizing(true);
     try {
       const original = await readAsDataUrl(file);
@@ -70,8 +73,10 @@ const Wardrobe = () => {
       }
 
       if (items.length > 1) {
-        setCandidates(items.map((i: any) => ({
+        setCandidates(items.map((i: any, idx: number) => ({
+          id: String(idx),
           original,
+          selected: false,
           cutoutDataUrl: i?.cutoutDataUrl || '',
           attributes: i?.attributes || {
             title: i?.title || '',
@@ -102,6 +107,73 @@ const Wardrobe = () => {
     } finally {
       setIsRecognizing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const processSelectedCandidates = async () => {
+    const selected = (candidates || []).filter((c: any) => c?.selected);
+    if (!selected.length) {
+      setExtractError('Выберите хотя бы одну вещь');
+      return;
+    }
+    if (selected.length > 3) {
+      setExtractError('Можно выбрать не более 3 вещей за раз');
+      return;
+    }
+
+    setExtractError(null);
+    setIsRecognizing(true);
+
+    try {
+      const queue: Array<{ original: string; cutout: string; attrs: any }> = [];
+
+      for (const c of selected) {
+        const resp = await fetch('/api/wardrobe/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            photoDataUrl: c.original,
+            hintCategory: c?.attributes?.category,
+            targetItem: c?.attributes || {},
+          }),
+        });
+
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          throw new Error(data?.error || `Ошибка сервера (${resp.status})`);
+        }
+
+        const data = await resp.json();
+        const cutout = data?.cutoutDataUrl;
+        const attrs = data?.attributes || c?.attributes || {};
+
+        if (!cutout) throw new Error('Сервер не вернул вырезанную вещь');
+
+        queue.push({
+          original: c.original,
+          cutout,
+          attrs,
+        });
+      }
+
+      if (!queue.length) {
+        throw new Error('Не удалось вырезать выбранные вещи');
+      }
+
+      const [first, ...rest] = queue;
+      setPendingExtracted(rest);
+      setExtracted(first);
+      setDraftTitle(first.attrs?.title || 'Моя вещь');
+      setDraftCategory((Object.values(Category) as any).includes(first.attrs?.category) ? first.attrs.category : Category.TOPS);
+      setDraftGender((Object.values(Gender) as any).includes(first.attrs?.gender) ? first.attrs.gender : Gender.UNISEX);
+      setDraftTags(Array.isArray(first.attrs?.tags) ? first.attrs.tags.join(', ') : '');
+      setDraftColor(first.attrs?.color || '');
+      setDraftMaterial(first.attrs?.material || '');
+      setCandidates(null);
+    } catch (err: any) {
+      setExtractError(err?.message || 'Не удалось вырезать выбранные вещи');
+    } finally {
+      setIsRecognizing(false);
     }
   };
 
@@ -150,7 +222,19 @@ const Wardrobe = () => {
         addedAt: item?.addedAt ? new Date(item.addedAt) : new Date(),
       } as WardrobeItem);
 
-      setExtracted(null);
+      if (pendingExtracted.length > 0) {
+        const [next, ...rest] = pendingExtracted;
+        setPendingExtracted(rest);
+        setExtracted(next);
+        setDraftTitle(next.attrs?.title || 'Моя вещь');
+        setDraftCategory((Object.values(Category) as any).includes(next.attrs?.category) ? next.attrs.category : Category.TOPS);
+        setDraftGender((Object.values(Gender) as any).includes(next.attrs?.gender) ? next.attrs.gender : Gender.UNISEX);
+        setDraftTags(Array.isArray(next.attrs?.tags) ? next.attrs.tags.join(', ') : '');
+        setDraftColor(next.attrs?.color || '');
+        setDraftMaterial(next.attrs?.material || '');
+      } else {
+        setExtracted(null);
+      }
     } catch (err: any) {
       setExtractError(err?.message || 'Не удалось добавить вещь');
     } finally {
@@ -240,7 +324,7 @@ const Wardrobe = () => {
         {candidates && (
           <div className="space-y-4">
             <h3 className="text-lg font-bold uppercase tracking-widest">
-              Выберите вещь
+              Выберите вещи
             </h3>
 
             <div className="flex gap-4 items-start">
@@ -254,76 +338,54 @@ const Wardrobe = () => {
 
               <div className="w-1/2 flex flex-col gap-2">
                 {candidates.map((c, i) => (
-                  <button
+                  <label
                     key={i}
-                    onClick={async () => {
-                      try {
-                        setExtractError(null);
-                        setIsRecognizing(true);
-
-                        const resp = await fetch('/api/wardrobe/extract', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            photoDataUrl: c.original,
-                            hintCategory: c?.attributes?.category,
-                            targetItem: c?.attributes || {},
-                          }),
-                        });
-
-                        if (!resp.ok) {
-                          const data = await resp.json().catch(() => ({}));
-                          throw new Error(data?.error || `Ошибка сервера (${resp.status})`);
-                        }
-
-                        const data = await resp.json();
-                        const cutout = data?.cutoutDataUrl;
-                        const attrs = data?.attributes || c?.attributes || {};
-
-                        if (!cutout) throw new Error('Сервер не вернул вырезанную вещь');
-
-                        setExtracted({
-                          original: c.original,
-                          cutout,
-                          attrs,
-                        });
-                        setDraftTitle(attrs?.title || 'Моя вещь');
-                        setDraftCategory((Object.values(Category) as any).includes(attrs?.category) ? attrs.category : Category.TOPS);
-                        setDraftGender((Object.values(Gender) as any).includes(attrs?.gender) ? attrs.gender : Gender.UNISEX);
-                        setDraftTags(Array.isArray(attrs?.tags) ? attrs.tags.join(', ') : '');
-                        setDraftColor(attrs?.color || '');
-                        setDraftMaterial(attrs?.material || '');
-                        setCandidates(null);
-                      } catch (err: any) {
-                        setExtractError(err?.message || 'Не удалось вырезать выбранную вещь');
-                      } finally {
-                        setIsRecognizing(false);
-                      }
-                    }}
-                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-left hover:border-zinc-900 transition"
+                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-left hover:border-zinc-900 transition flex items-start gap-3 cursor-pointer"
                   >
-                    <div className="text-xs font-bold uppercase tracking-widest text-zinc-900">
-                      {c?.attributes?.title || `Вещь ${i + 1}`}
-                    </div>
-                    <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                      {c?.attributes?.category || 'Категория'}
-                    </div>
-                    {(c?.attributes?.color || c?.attributes?.material) && (
-                      <div className="mt-1 text-[10px] uppercase tracking-widest text-zinc-400">
-                        {[c?.attributes?.color, c?.attributes?.material].filter(Boolean).join(' • ')}
+                    <input
+                      type="checkbox"
+                      checked={!!c?.selected}
+                      onChange={() => {
+                        setCandidates((prev: any) =>
+                          (prev || []).map((x: any, idx: number) =>
+                            idx === i ? { ...x, selected: !x.selected } : x
+                          )
+                        );
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold uppercase tracking-widest text-zinc-900">
+                        {c?.attributes?.title || `Вещь ${i + 1}`}
                       </div>
-                    )}
-                  </button>
+                      <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        {c?.attributes?.category || 'Категория'}
+                      </div>
+                      {(c?.attributes?.color || c?.attributes?.material) && (
+                        <div className="mt-1 text-[10px] uppercase tracking-widest text-zinc-400">
+                          {[c?.attributes?.color, c?.attributes?.material].filter(Boolean).join(' • ')}
+                        </div>
+                      )}
+                    </div>
+                  </label>
                 ))}
               </div>
             </div>
 
-            <button
-              onClick={() => setCandidates(null)}
-              className="w-full border border-zinc-200 py-4 rounded-full text-xs font-bold uppercase tracking-widest"
-            >
-              Отмена
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCandidates(null)}
+                className="flex-1 border border-zinc-200 py-4 rounded-full text-xs font-bold uppercase tracking-widest"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={processSelectedCandidates}
+                className="flex-1 bg-zinc-900 text-white py-4 rounded-full text-xs font-bold uppercase tracking-widest"
+              >
+                Вырезать выбранные
+              </button>
+            </div>
           </div>
         )}
 
