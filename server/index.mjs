@@ -396,10 +396,86 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
       .png()
       .toBuffer();
 
-    // keep white background for normalized selfie used downstream
-    const normalizedPng = await sharp(cutoutRgba, { failOnError: false })
-      .resize(768, 1024, { fit: "contain", background: "#ffffff" })
-      .flatten({ background: "#ffffff" })
+    // auto-frame the person by alpha bbox before final normalization
+    const rgbaMeta = await sharp(cutoutRgba, { failOnError: false }).metadata();
+    const rw = rgbaMeta.width || 0;
+    const rh = rgbaMeta.height || 0;
+
+    let left = 0, top = 0, right = Math.max(0, rw - 1), bottom = Math.max(0, rh - 1);
+
+    if (rw > 0 && rh > 0) {
+      const alphaRaw = await sharp(cutoutRgba, { failOnError: false })
+        .ensureAlpha()
+        .extractChannel(3)
+        .raw()
+        .toBuffer();
+
+      let minX = rw, minY = rh, maxX = -1, maxY = -1;
+      for (let y = 0; y < rh; y++) {
+        const row = y * rw;
+        for (let x = 0; x < rw; x++) {
+          if (alphaRaw[row + x] > 12) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (maxX >= minX && maxY >= minY) {
+        const bw = maxX - minX + 1;
+        const bh = maxY - minY + 1;
+
+        const padX = Math.round(bw * 0.14);
+        const padTop = Math.round(bh * 0.10);
+        const padBottom = Math.round(bh * 0.06);
+
+        left = Math.max(0, minX - padX);
+        top = Math.max(0, minY - padTop);
+        right = Math.min(rw - 1, maxX + padX);
+        bottom = Math.min(rh - 1, maxY + padBottom);
+      }
+    }
+
+    const cropW = Math.max(1, right - left + 1);
+    const cropH = Math.max(1, bottom - top + 1);
+
+    const croppedPerson = await sharp(cutoutRgba, { failOnError: false })
+      .extract({ left, top, width: cropW, height: cropH })
+      .png()
+      .toBuffer();
+
+    const targetW = 768;
+    const targetH = 1024;
+    const personTargetH = Math.round(targetH * 0.84);
+
+    const fittedPerson = await sharp(croppedPerson, { failOnError: false })
+      .resize({
+        width: targetW,
+        height: personTargetH,
+        fit: "inside",
+        withoutEnlargement: false,
+      })
+      .png()
+      .toBuffer();
+
+    const fittedMeta = await sharp(fittedPerson, { failOnError: false }).metadata();
+    const fw = fittedMeta.width || targetW;
+    const fh = fittedMeta.height || personTargetH;
+
+    const offsetLeft = Math.max(0, Math.round((targetW - fw) / 2));
+    const offsetTop = Math.max(0, Math.round((targetH - fh) / 2) - Math.round(targetH * 0.02));
+
+    const normalizedPng = await sharp({
+      create: {
+        width: targetW,
+        height: targetH,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      }
+    })
+      .composite([{ input: fittedPerson, left: offsetLeft, top: offsetTop }])
       .png()
       .toBuffer();
 
@@ -407,7 +483,7 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
       "data:image/png;base64," + normalizedPng.toString("base64");
 
     const avatarPng = await sharp(normalizedPng, { failOnError: false })
-      .resize(768, 768, { fit: "contain", background: "#ffffff" })
+      .resize(1024, 1024, { fit: "contain", background: "#ffffff" })
       .png()
       .toBuffer();
 
