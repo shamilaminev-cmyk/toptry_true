@@ -871,7 +871,7 @@ If multiple items are visible, DO NOT choose another item.`;
     }
 
     // STEP 1: detect candidates only
-    const detectPrompt = `Analyze the photo and identify up to 2 DISTINCT wardrobe items a user may want to add to wardrobe.
+    const detectPrompt = `Analyze the photo and identify up to 4 DISTINCT wardrobe items a user may want to add to wardrobe.
 Return ONLY strict JSON:
 {
   "items": [
@@ -920,7 +920,7 @@ Hints:
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
-    }).slice(0, 2);
+    }).slice(0, 4);
 
     if (!items.length) {
       items = [{
