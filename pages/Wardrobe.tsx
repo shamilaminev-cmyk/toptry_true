@@ -63,7 +63,10 @@ const Wardrobe = () => {
         throw new Error(data?.error || `Ошибка сервера (${resp.status})`);
       }
       const data = await resp.json();
-      const items = data?.items;
+      const items = data?.items || (data?.cutoutDataUrl ? [{
+        cutoutDataUrl: data.cutoutDataUrl,
+        attributes: data.attributes || {}
+      }] : []);
 
       if (Array.isArray(items) && items.length > 1) {
         setCandidates(items.map((i: any) => ({ ...i, original })));

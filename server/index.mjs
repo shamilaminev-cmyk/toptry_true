@@ -919,7 +919,30 @@ Hints:
       };
     }
 
-    res.json({ cutoutDataUrl, attributes });
+    
+    // build items array from detected items
+    let items = [];
+
+    if (Array.isArray(detectedItems) && detectedItems.length > 0) {
+      items = detectedItems.map((d) => ({
+        cutoutDataUrl,
+        attributes: {
+          ...attributes,
+          title: d.title || attributes.title,
+          category: d.category || attributes.category
+        }
+      }));
+    } else {
+      items = [
+        {
+          cutoutDataUrl,
+          attributes
+        }
+      ];
+    }
+
+    res.json({ items });
+
   } catch (err) {
     console.error("[toptry] /api/wardrobe/extract error", err);
     res.status(500).json({ error: err?.message || "Unknown server error" });
