@@ -733,7 +733,7 @@ app.post("/api/wardrobe/extract", async (req, res) => {
         if (ct) res.setHeader("content-type", ct);
 
         res.status(resp.status).send(text);
-        return; // ОЧЕНЬ ВАЖНО
+        return;
       } catch (e) {
         return res.status(502).json({
           error: "AI proxy request failed",
@@ -741,28 +741,90 @@ app.post("/api/wardrobe/extract", async (req, res) => {
         });
       }
     }
+
     if (!GEMINI_API_KEY) {
       return res
         .status(500)
         .json({ error: "GEMINI_API_KEY is not configured on the server" });
     }
+
     const { photoDataUrl, hintCategory, hintGender } = req.body || {};
-    if (!photoDataUrl)
+    if (!photoDataUrl) {
       return res.status(400).json({ error: "photoDataUrl is required" });
+    }
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     const photo = await imageToBase64(photoDataUrl);
 
-    
-    // --- detect multiple wardrobe items first ---
-    const detectPrompt = `Analyze the photo and list visible clothing items.
-Return strict JSON:
+    async function cleanupCutoutDataUrl(inputDataUrl) {
+      let out = inputDataUrl;
+      try {
+        if (AVATAR_BG_REMOVER_URL) {
+          const geminiCutoutBuf = Buffer.from(String(out).split(",")[1] || "", "base64");
+          const cleanedCutoutPng = await bgRemoveToPng(geminiCutoutBuf);
+
+          const cleanedOnWhite = await sharp(cleanedCutoutPng, { failOnError: false })
+            .ensureAlpha()
+            .flatten({ background: "#ffffff" })
+            .png()
+            .toBuffer();
+
+          out = "data:image/png;base64," + cleanedOnWhite.toString("base64");
+        } else {
+          const geminiCutoutBuf = Buffer.from(String(out).split(",")[1] || "", "base64");
+          const cleanedOnWhite = await sharp(geminiCutoutBuf, { failOnError: false })
+            .ensureAlpha()
+            .flatten({ background: "#ffffff" })
+            .png()
+            .toBuffer();
+
+          out = "data:image/png;base64," + cleanedOnWhite.toString("base64");
+        }
+      } catch (e) {
+        console.warn("[toptry] wardrobe/extract post-process failed:", e?.message || e);
+      }
+      return out;
+    }
+
+    function parseJsonFromText(text, fallback) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        const first = text.indexOf("{");
+        const last = text.lastIndexOf("}");
+        if (first !== -1 && last !== -1) {
+          try {
+            return JSON.parse(text.slice(first, last + 1));
+          } catch {}
+        }
+      }
+      return fallback;
+    }
+
+    // --- 1) detect possible wardrobe items (max 2) ---
+    const detectPrompt = `Analyze the photo and identify up to 2 DISTINCT wardrobe items a user may want to add to wardrobe.
+Return ONLY strict JSON:
 {
- "items":[
-   {"title":string,"category":string}
- ]
+  "items": [
+    {
+      "title": string,
+      "category": one of ["Верх","Низ","Платья","Обувь","Аксессуары","Верхняя одежда"],
+      "gender": one of ["MALE","FEMALE","UNISEX"],
+      "tags": string[],
+      "color": string,
+      "material": string
+    }
+  ]
 }
-Return max 4 items. Use Russian titles.`;
+Rules:
+- Use Russian for title/category/tags/color/material.
+- Include only real wearable items visible in the photo.
+- Items must be DISTINCT from each other.
+- Do not include duplicates or near-duplicates.
+- If only one meaningful item is visible, return exactly one item.
+Hints:
+- hintCategory: ${hintCategory || "none"}
+- hintGender: ${hintGender || "none"}`;
 
     const detectResp = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -774,53 +836,37 @@ Return max 4 items. Use Russian titles.`;
       },
     });
 
-    let detectedItems = [];
-    try {
-      const txt = (detectResp?.candidates?.[0]?.content?.parts || [])
-        .map(p => p.text)
-        .filter(Boolean)
-        .join("")
-        .trim();
+    const detectText = (detectResp?.candidates?.[0]?.content?.parts || [])
+      .map((p) => p.text)
+      .filter(Boolean)
+      .join("")
+      .trim();
 
-      const j1 = txt.indexOf("{");
-      const j2 = txt.lastIndexOf("}");
+    let detectedItems = parseJsonFromText(detectText, { items: [] })?.items || [];
+    if (!Array.isArray(detectedItems)) detectedItems = [];
 
-      if (j1 !== -1 && j2 !== -1) {
-        detectedItems = JSON.parse(txt.slice(j1, j2 + 1)).items || [];
-      }
+    // dedupe by normalized title+category
+    const seen = new Set();
+    detectedItems = detectedItems.filter((d) => {
+      const key = `${String(d?.title || "").trim().toLowerCase()}|${String(d?.category || "").trim().toLowerCase()}`;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 2);
 
-    } catch {
-      detectedItems = [];
-    }
+    const items = [];
 
-
-    // Build candidate list. Each candidate gets its OWN Gemini cutout.
-    let candidates = Array.isArray(detectedItems) ? detectedItems : [];
-    candidates = candidates
-      .map((d) => ({
+    // --- 2) try distinct cutouts for detected items ---
+    for (const d of detectedItems) {
+      const cand = {
         title: d?.title || "Моя вещь",
         category: d?.category || hintCategory || "Верх",
         gender: d?.gender || hintGender || "UNISEX",
         tags: Array.isArray(d?.tags) ? d.tags : [],
         color: d?.color || "неизвестно",
         material: d?.material || "неизвестно",
-      }))
-      .slice(0, 4);
+      };
 
-    if (!candidates.length) {
-      candidates = [{
-        title: "Моя вещь",
-        category: hintCategory || "Верх",
-        gender: hintGender || "UNISEX",
-        tags: [],
-        color: "неизвестно",
-        material: "неизвестно",
-      }];
-    }
-
-    const items = [];
-
-    for (const cand of candidates) {
       const cutoutPrompt = `You are an expert e-commerce catalog editor.
 Remove the background and isolate ONLY ONE clothing item from the photo.
 
@@ -867,38 +913,10 @@ If multiple items are visible, DO NOT choose another item.`;
           break;
         }
       }
-      if (!cutoutDataUrl) {
-        continue;
-      }
 
-      // post-process Gemini cutout:
-      // 1) remove fake transparency / checkerboard via bg-remover
-      // 2) normalize onto white background
-      try {
-        if (AVATAR_BG_REMOVER_URL) {
-          const geminiCutoutBuf = Buffer.from(String(cutoutDataUrl).split(",")[1] || "", "base64");
-          const cleanedCutoutPng = await bgRemoveToPng(geminiCutoutBuf);
+      if (!cutoutDataUrl) continue;
 
-          const cleanedOnWhite = await sharp(cleanedCutoutPng, { failOnError: false })
-            .ensureAlpha()
-            .flatten({ background: "#ffffff" })
-            .png()
-            .toBuffer();
-
-          cutoutDataUrl = "data:image/png;base64," + cleanedOnWhite.toString("base64");
-        } else {
-          const geminiCutoutBuf = Buffer.from(String(cutoutDataUrl).split(",")[1] || "", "base64");
-          const cleanedOnWhite = await sharp(geminiCutoutBuf, { failOnError: false })
-            .ensureAlpha()
-            .flatten({ background: "#ffffff" })
-            .png()
-            .toBuffer();
-
-          cutoutDataUrl = "data:image/png;base64," + cleanedOnWhite.toString("base64");
-        }
-      } catch (e) {
-        console.warn("[toptry] wardrobe/extract post-process failed:", e?.message || e);
-      }
+      cutoutDataUrl = await cleanupCutoutDataUrl(cutoutDataUrl);
 
       items.push({
         cutoutDataUrl,
@@ -913,17 +931,108 @@ If multiple items are visible, DO NOT choose another item.`;
       });
     }
 
+    // --- 3) fallback to legacy single-item flow if multi-item failed ---
     if (!items.length) {
-      return res.status(502).json({ error: "Gemini did not return cutout image" });
+      const cutoutPrompt = `You are an expert e-commerce catalog editor.
+Remove the background and isolate ONLY the main clothing item in the photo.
+Output a single product cutout centered in frame.
+Requirements:
+- transparent background (alpha) if possible
+- front-facing view if possible
+- no text, no logos, no watermark
+- keep true colors
+- clean edges, high-quality cutout
+- output PNG
+If multiple items are visible, choose the most prominent garment.`;
+
+      const cutoutResp = await ai.models.generateContent({
+        model: "gemini-3-pro-image-preview",
+        contents: {
+          parts: [
+            { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
+            { text: cutoutPrompt },
+          ],
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: "1:1",
+            imageSize: "1K",
+          },
+        },
+      });
+
+      let cutoutDataUrl = "";
+      const cutoutParts = cutoutResp?.candidates?.[0]?.content?.parts || [];
+      for (const part of cutoutParts) {
+        if (part.inlineData?.data) {
+          const mt = part.inlineData.mimeType || "image/png";
+          cutoutDataUrl = `data:${mt};base64,${part.inlineData.data}`;
+          break;
+        }
+      }
+
+      if (!cutoutDataUrl) {
+        return res.status(502).json({ error: "Gemini did not return cutout image" });
+      }
+
+      cutoutDataUrl = await cleanupCutoutDataUrl(cutoutDataUrl);
+
+      const attrPrompt = `Analyze the clothing item in the image.
+Return ONLY strict JSON with keys:
+{
+  "title": string,
+  "category": one of ["Верх","Низ","Платья","Обувь","Аксессуары","Верхняя одежда"],
+  "gender": one of ["MALE","FEMALE","UNISEX"],
+  "tags": string[],
+  "color": string,
+  "material": string
+}
+Use Russian for title/category/tags/color/material.
+If unsure, make best guess.
+Hints:
+- hintCategory: ${hintCategory || "none"}
+- hintGender: ${hintGender || "none"}`;
+
+      const attrResp = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: {
+          parts: [
+            { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
+            { text: attrPrompt },
+          ],
+        },
+      });
+
+      const attrText = (attrResp?.candidates?.[0]?.content?.parts || [])
+        .map((p) => p.text)
+        .filter(Boolean)
+        .join("")
+        .trim();
+
+      let attributes = parseJsonFromText(attrText, null);
+
+      if (!attributes) {
+        attributes = {
+          title: "Моя вещь",
+          category: hintCategory || "Верх",
+          gender: hintGender || "UNISEX",
+          tags: [],
+          color: "неизвестно",
+          material: "неизвестно",
+        };
+      }
+
+      items.push({
+        cutoutDataUrl,
+        attributes,
+      });
     }
 
-    // backward-compatible response
-    res.json({
+    return res.json({
       items,
       cutoutDataUrl: items[0].cutoutDataUrl,
       attributes: items[0].attributes,
     });
-
   } catch (err) {
     console.error("[toptry] /api/wardrobe/extract error", err);
     res.status(500).json({ error: err?.message || "Unknown server error" });
