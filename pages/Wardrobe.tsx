@@ -241,13 +241,49 @@ const Wardrobe = () => {
               {candidates.map((c, i) => (
                 <button
                   key={i}
-                  onClick={() => {
-                    setExtracted({
-                      original: c.original,
-                      cutout: c.cutoutDataUrl,
-                      attrs: c.attributes || {}
-                    });
-                    setCandidates(null);
+                  onClick={async () => {
+                    try {
+                      setExtractError(null);
+                      setIsRecognizing(true);
+
+                      const resp = await fetch('/api/wardrobe/extract', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          photoDataUrl: c.original,
+                          hintCategory: c?.attributes?.category,
+                          targetItem: c?.attributes || {},
+                        }),
+                      });
+
+                      if (!resp.ok) {
+                        const data = await resp.json().catch(() => ({}));
+                        throw new Error(data?.error || `Ошибка сервера (${resp.status})`);
+                      }
+
+                      const data = await resp.json();
+                      const cutout = data?.cutoutDataUrl;
+                      const attrs = data?.attributes || c?.attributes || {};
+
+                      if (!cutout) throw new Error('Сервер не вернул вырезанную вещь');
+
+                      setExtracted({
+                        original: c.original,
+                        cutout,
+                        attrs,
+                      });
+                      setDraftTitle(attrs?.title || 'Моя вещь');
+                      setDraftCategory((Object.values(Category) as any).includes(attrs?.category) ? attrs.category : Category.TOPS);
+                      setDraftGender((Object.values(Gender) as any).includes(attrs?.gender) ? attrs.gender : Gender.UNISEX);
+                      setDraftTags(Array.isArray(attrs?.tags) ? attrs.tags.join(', ') : '');
+                      setDraftColor(attrs?.color || '');
+                      setDraftMaterial(attrs?.material || '');
+                      setCandidates(null);
+                    } catch (err: any) {
+                      setExtractError(err?.message || 'Не удалось вырезать выбранную вещь');
+                    } finally {
+                      setIsRecognizing(false);
+                    }
                   }}
                   className="rounded-2xl border border-zinc-200 p-2 bg-zinc-50 hover:border-zinc-900 transition"
                 >
