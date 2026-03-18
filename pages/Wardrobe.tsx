@@ -488,65 +488,9 @@ const Wardrobe = () => {
               </button>
             </div>
           </div>
-        )}                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                {candidates.map((c, i) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => toggleCandidateSelection(i)}
-                    className={`w-full rounded-xl px-4 py-3 text-left transition flex items-start gap-3 border ${
-                      c?.selected
-                        ? 'border-zinc-900 bg-zinc-50'
-                        : 'border-zinc-200 hover:border-zinc-900'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!!c?.selected}
-                      onChange={() => toggleCandidateSelection(i)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-1"
-                    />
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold uppercase tracking-widest text-zinc-900">
-                        {c?.attributes?.title || `Вещь ${i + 1}`}
-                      </div>
-                      <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                        {c?.attributes?.category || 'Категория'}
-                        {!c?.box ? ' • без рамки' : ''}
-                      </div>
-                      {(c?.attributes?.color || c?.attributes?.material) && (
-                        <div className="mt-1 text-[10px] uppercase tracking-widest text-zinc-400">
-                          {[c?.attributes?.color, c?.attributes?.material].filter(Boolean).join(' • ')}
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCandidates(null)}
-                className="flex-1 border border-zinc-200 py-4 rounded-full text-xs font-bold uppercase tracking-widest"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={processSelectedCandidates}
-                className="flex-1 bg-zinc-900 text-white py-4 rounded-full text-xs font-bold uppercase tracking-widest"
-              >
-                Вырезать выбранные{selectedCandidatesCount ? ` (${selectedCandidatesCount})` : ''}
-              </button>
-            </div>
-          </div>
         )}
 
-{extracted && (
+                  {extracted && (
                     <div className="space-y-4">
                       <div className="flex gap-3">
                         <div className="w-28 h-28 rounded-2xl bg-zinc-50 border border-zinc-100 p-2 flex items-center justify-center">
