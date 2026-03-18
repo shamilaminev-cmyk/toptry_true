@@ -872,6 +872,30 @@ If multiple items are visible, DO NOT choose another item.`;
       });
     }
 
+    function normalizeBox(box) {
+      if (!box || typeof box !== "object") return undefined;
+      const toUnit = (v) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return undefined;
+        const normalized = n > 1 ? n / 1000 : n;
+        return Math.max(0, Math.min(1, normalized));
+      };
+
+      const x = toUnit(box?.x);
+      const y = toUnit(box?.y);
+      const w = toUnit(box?.w);
+      const h = toUnit(box?.h);
+
+      if ([x, y, w, h].some((v) => v === undefined)) return undefined;
+      if (w <= 0.02 || h <= 0.02) return undefined;
+
+      const clampedW = Math.min(w, 1 - x);
+      const clampedH = Math.min(h, 1 - y);
+      if (clampedW <= 0.02 || clampedH <= 0.02) return undefined;
+
+      return { x, y, w: clampedW, h: clampedH };
+    }
+
     // STEP 1: detect candidates only
     const detectPrompt = `Analyze the photo and identify up to 4 DISTINCT wardrobe items a user may want to add to wardrobe.
 Return ONLY strict JSON:
@@ -883,7 +907,13 @@ Return ONLY strict JSON:
       "gender": one of ["MALE","FEMALE","UNISEX"],
       "tags": string[],
       "color": string,
-      "material": string
+      "material": string,
+      "box": {
+        "x": number,
+        "y": number,
+        "w": number,
+        "h": number
+      }
     }
   ]
 }
@@ -893,6 +923,12 @@ Rules:
 - Items must be DISTINCT from each other.
 - Do not include duplicates or near-duplicates.
 - If only one meaningful item is visible, return exactly one item.
+- box must tightly cover the visible item.
+- box coordinates must be relative to the full image.
+- Return box values as numbers in range 0..1000 where:
+  - x,y = top-left corner
+  - w,h = width and height
+- Do not omit box unless the item truly cannot be localized.
 Hints:
 - hintCategory: ${hintCategory || "none"}
 - hintGender: ${hintGender || "none"}`;
@@ -922,7 +958,15 @@ Hints:
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
-    }).slice(0, 4);
+    }).slice(0, 4).map((d) => ({
+      title: d?.title || "Моя вещь",
+      category: d?.category || hintCategory || "Верх",
+      gender: d?.gender || hintGender || "UNISEX",
+      tags: Array.isArray(d?.tags) ? d.tags : [],
+      color: d?.color || "неизвестно",
+      material: d?.material || "неизвестно",
+      box: normalizeBox(d?.box),
+    }));
 
     if (!items.length) {
       items = [{
@@ -932,6 +976,7 @@ Hints:
         tags: [],
         color: "неизвестно",
         material: "неизвестно",
+        box: undefined,
       }];
     }
 
