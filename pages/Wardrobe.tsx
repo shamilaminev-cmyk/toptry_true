@@ -90,7 +90,13 @@ const Wardrobe = () => {
     return { x: x as number, y: y as number, w: clampedW, h: clampedH };
   };
 
+  const hasBoxes = useMemo(
+    () => (candidates || []).some((c) => c?.box),
+    [candidates]
+  );
+
   const selectedCandidatesCount = useMemo(
+
     () => (candidates || []).filter((c) => c.selected).length,
     [candidates]
   );
@@ -394,50 +400,95 @@ const Wardrobe = () => {
               Выберите вещи
             </h3>
 
-            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-              Нажмите на вещь прямо на фото или выберите её в списке • максимум 3
-            </div>
-
-            <div className="flex flex-col gap-4">
-              <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
-                <img
-                  src={withApiOrigin(candidates[0]?.original)}
-                  alt=""
-                  className="w-full max-h-[50vh] object-contain"
-                />
-                <div className="absolute inset-0">
-                  {candidates.map((c, i) =>
-                    c?.box ? (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => toggleCandidateSelection(i)}
-                        className={`absolute rounded-2xl border-2 transition-all ${
-                          c.selected
-                            ? 'border-zinc-900 bg-zinc-900/10 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]'
-                            : 'border-white/90 bg-white/10 hover:bg-white/20'
-                        }`}
-                        style={{
-                          left: `${c.box.x * 100}%`,
-                          top: `${c.box.y * 100}%`,
-                          width: `${c.box.w * 100}%`,
-                          height: `${c.box.h * 100}%`,
-                        }}
-                        aria-label={c?.attributes?.title || `Вещь ${i + 1}`}
-                      >
-                        <span
-                          className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${
-                            c.selected
-                              ? 'bg-zinc-900 text-white'
-                              : 'bg-white/90 text-zinc-900'
-                          }`}
-                        >
-                          {c?.attributes?.title || `Вещь ${i + 1}`}
-                        </span>
-                      </button>
-                    ) : null
-                  )}
+            {hasBoxes ? (
+              <>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                  Нажмите на вещь прямо на фото • максимум 3
                 </div>
+
+                <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
+                  <img
+                    src={withApiOrigin(candidates[0]?.original)}
+                    alt=""
+                    className="w-full max-h-[50vh] object-contain"
+                  />
+                  <div className="absolute inset-0">
+                    {candidates.map((c, i) =>
+                      c?.box ? (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => toggleCandidateSelection(i)}
+                          className={`absolute rounded-2xl border-2 transition-all ${
+                            c.selected
+                              ? 'border-zinc-900 bg-zinc-900/10 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]'
+                              : 'border-white/90 bg-white/10 hover:bg-white/20'
+                          }`}
+                          style={{
+                            left: `${c.box.x * 100}%`,
+                            top: `${c.box.y * 100}%`,
+                            width: `${c.box.w * 100}%`,
+                            height: `${c.box.h * 100}%`,
+                          }}
+                          aria-label={c?.attributes?.title || `Вещь ${i + 1}`}
+                        >
+                          <span
+                            className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${
+                              c.selected
+                                ? 'bg-zinc-900 text-white'
+                                : 'bg-white/90 text-zinc-900'
+                            }`}
+                          >
+                            {c?.attributes?.title || `Вещь ${i + 1}`}
+                          </span>
+                        </button>
+                      ) : null
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {candidates.map((c, i) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleCandidateSelection(i)}
+                    className={`w-full rounded-xl px-4 py-3 text-left transition flex items-start gap-3 border ${
+                      c?.selected
+                        ? 'border-zinc-900 bg-zinc-50'
+                        : 'border-zinc-200 hover:border-zinc-900'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold uppercase tracking-widest text-zinc-900">
+                        {c?.attributes?.title || `Вещь ${i + 1}`}
+                      </div>
+                      <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        {c?.attributes?.category || 'Категория'}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCandidates(null)}
+                className="flex-1 border border-zinc-200 py-4 rounded-full text-xs font-bold uppercase tracking-widest"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={processSelectedCandidates}
+                className="flex-1 bg-zinc-900 text-white py-4 rounded-full text-xs font-bold uppercase tracking-widest"
+              >
+                Вырезать выбранные{selectedCandidatesCount ? ` (${selectedCandidatesCount})` : ''}
+              </button>
+            </div>
+          </div>
+        )}                </div>
               </div>
 
               <div className="flex flex-col gap-2">
