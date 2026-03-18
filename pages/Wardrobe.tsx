@@ -1,9 +1,35 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
 import { useAppState } from '../store';
 import { ICONS } from '../constants';
 import { Category, Gender, WardrobeItem } from '../types';
 import { useNavigate } from 'react-router-dom';
+
+type DetectBox = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+type CandidateAttrs = {
+  title?: string;
+  category?: string;
+  gender?: string;
+  tags?: string[];
+  color?: string;
+  material?: string;
+};
+
+type WardrobeCandidate = {
+  id: string;
+  original: string;
+  selected: boolean;
+  cutoutDataUrl?: string;
+  box?: DetectBox;
+  attributes: CandidateAttrs;
+};
+
 
 const Wardrobe = () => {
   const { wardrobe, actions, user } = useAppState();
@@ -20,7 +46,7 @@ const Wardrobe = () => {
   const [draftTags, setDraftTags] = useState<string>('');
   const [draftColor, setDraftColor] = useState<string>('');
   const [draftMaterial, setDraftMaterial] = useState<string>('');
-  const [candidates, setCandidates] = useState<any[] | null>(null);
+  const [candidates, setCandidates] = useState<WardrobeCandidate[] | null>(null);
   const [pendingExtracted, setPendingExtracted] = useState<Array<{ original: string; cutout: string; attrs: any }>>([]);
 
 
@@ -38,6 +64,46 @@ const Wardrobe = () => {
       reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
       reader.readAsDataURL(file);
     });
+
+  const normalizeCandidateBox = (box: any): DetectBox | undefined => {
+    if (!box || typeof box !== 'object') return undefined;
+
+    const toUnit = (value: any) => {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return undefined;
+      const normalized = n > 1 ? n / 1000 : n;
+      return Math.max(0, Math.min(1, normalized));
+    };
+
+    const x = toUnit(box?.x);
+    const y = toUnit(box?.y);
+    const w = toUnit(box?.w);
+    const h = toUnit(box?.h);
+
+    if ([x, y, w, h].some((v) => v === undefined)) return undefined;
+    if ((w as number) <= 0.02 || (h as number) <= 0.02) return undefined;
+
+    const clampedW = Math.min(w as number, 1 - (x as number));
+    const clampedH = Math.min(h as number, 1 - (y as number));
+    if (clampedW <= 0.02 || clampedH <= 0.02) return undefined;
+
+    return { x: x as number, y: y as number, w: clampedW, h: clampedH };
+  };
+
+  const selectedCandidatesCount = useMemo(
+    () => (candidates || []).filter((c) => c.selected).length,
+    [candidates]
+  );
+
+  const toggleCandidateSelection = (index: number) => {
+    setCandidates((prev) =>
+      (prev || []).map((item, idx) => {
+        if (idx !== index) return item;
+        if (!item.selected && selectedCandidatesCount >= 3) return item;
+        return { ...item, selected: !item.selected };
+      })
+    );
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -78,6 +144,7 @@ const Wardrobe = () => {
           original,
           selected: false,
           cutoutDataUrl: i?.cutoutDataUrl || '',
+          box: normalizeCandidateBox(i?.box),
           attributes: i?.attributes || {
             title: i?.title || '',
             category: i?.category || '',
@@ -111,7 +178,7 @@ const Wardrobe = () => {
   };
 
   const processSelectedCandidates = async () => {
-    const selected = (candidates || []).filter((c: any) => c?.selected);
+    const selected = (candidates || []).filter((c) => c?.selected);
     if (!selected.length) {
       setExtractError('Выберите хотя бы одну вещь');
       return;
@@ -327,31 +394,69 @@ const Wardrobe = () => {
               Выберите вещи
             </h3>
 
-            <div className="flex gap-4 items-start">
-              <div className="w-1/2">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+              Нажмите на вещь прямо на фото или выберите её в списке • максимум 3
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
                 <img
                   src={withApiOrigin(candidates[0]?.original)}
                   alt=""
-                  className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 object-contain"
+                  className="w-full max-h-[50vh] object-contain"
                 />
+                <div className="absolute inset-0">
+                  {candidates.map((c, i) =>
+                    c?.box ? (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => toggleCandidateSelection(i)}
+                        className={`absolute rounded-2xl border-2 transition-all ${
+                          c.selected
+                            ? 'border-zinc-900 bg-zinc-900/10 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]'
+                            : 'border-white/90 bg-white/10 hover:bg-white/20'
+                        }`}
+                        style={{
+                          left: `${c.box.x * 100}%`,
+                          top: `${c.box.y * 100}%`,
+                          width: `${c.box.w * 100}%`,
+                          height: `${c.box.h * 100}%`,
+                        }}
+                        aria-label={c?.attributes?.title || `Вещь ${i + 1}`}
+                      >
+                        <span
+                          className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${
+                            c.selected
+                              ? 'bg-zinc-900 text-white'
+                              : 'bg-white/90 text-zinc-900'
+                          }`}
+                        >
+                          {c?.attributes?.title || `Вещь ${i + 1}`}
+                        </span>
+                      </button>
+                    ) : null
+                  )}
+                </div>
               </div>
 
-              <div className="w-1/2 flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 {candidates.map((c, i) => (
-                  <label
-                    key={i}
-                    className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-left hover:border-zinc-900 transition flex items-start gap-3 cursor-pointer"
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleCandidateSelection(i)}
+                    className={`w-full rounded-xl px-4 py-3 text-left transition flex items-start gap-3 border ${
+                      c?.selected
+                        ? 'border-zinc-900 bg-zinc-50'
+                        : 'border-zinc-200 hover:border-zinc-900'
+                    }`}
                   >
                     <input
                       type="checkbox"
                       checked={!!c?.selected}
-                      onChange={() => {
-                        setCandidates((prev: any) =>
-                          (prev || []).map((x: any, idx: number) =>
-                            idx === i ? { ...x, selected: !x.selected } : x
-                          )
-                        );
-                      }}
+                      onChange={() => toggleCandidateSelection(i)}
+                      onClick={(e) => e.stopPropagation()}
                       className="mt-1"
                     />
                     <div className="min-w-0">
@@ -360,6 +465,7 @@ const Wardrobe = () => {
                       </div>
                       <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                         {c?.attributes?.category || 'Категория'}
+                        {!c?.box ? ' • без рамки' : ''}
                       </div>
                       {(c?.attributes?.color || c?.attributes?.material) && (
                         <div className="mt-1 text-[10px] uppercase tracking-widest text-zinc-400">
@@ -367,7 +473,7 @@ const Wardrobe = () => {
                         </div>
                       )}
                     </div>
-                  </label>
+                  </button>
                 ))}
               </div>
             </div>
@@ -383,7 +489,7 @@ const Wardrobe = () => {
                 onClick={processSelectedCandidates}
                 className="flex-1 bg-zinc-900 text-white py-4 rounded-full text-xs font-bold uppercase tracking-widest"
               >
-                Вырезать выбранные
+                Вырезать выбранные{selectedCandidatesCount ? ` (${selectedCandidatesCount})` : ''}
               </button>
             </div>
           </div>
