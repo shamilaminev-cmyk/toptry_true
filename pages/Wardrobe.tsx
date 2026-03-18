@@ -111,6 +111,95 @@ const Wardrobe = () => {
     );
   };
 
+  const expandBox = (
+    box: DetectBox,
+    attrs?: CandidateAttrs,
+    mode: 'display' | 'crop' = 'display'
+  ): DetectBox => {
+    const title = String(attrs?.title || '').toLowerCase();
+    const category = String(attrs?.category || '').toLowerCase();
+    const tags = Array.isArray(attrs?.tags) ? attrs?.tags.map((t) => String(t).toLowerCase()) : [];
+    const haystack = [title, category, ...tags].join(' ');
+
+    let left = mode === 'crop' ? 0.05 : 0.04;
+    let right = mode === 'crop' ? 0.05 : 0.04;
+    let top = mode === 'crop' ? 0.05 : 0.04;
+    let bottom = mode === 'crop' ? 0.06 : 0.04;
+
+    const isTie = haystack.includes('галст');
+    const isTrousers = haystack.includes('брюк') || haystack.includes('брюки') || category.includes('низ');
+    const isJacket =
+      haystack.includes('пиджак') ||
+      haystack.includes('рубаш') ||
+      haystack.includes('верх') ||
+      haystack.includes('жакет');
+
+    if (isTie) {
+      left += mode === 'crop' ? 0.03 : 0.025;
+      right += mode === 'crop' ? 0.03 : 0.025;
+      top += mode === 'crop' ? 0.08 : 0.06;
+      bottom += mode === 'crop' ? 0.18 : 0.12;
+    }
+
+    if (isTrousers) {
+      left += mode === 'crop' ? 0.05 : 0.04;
+      right += mode === 'crop' ? 0.05 : 0.04;
+      top += mode === 'crop' ? 0.03 : 0.02;
+      bottom += mode === 'crop' ? 0.16 : 0.12;
+    }
+
+    if (isJacket) {
+      left += mode === 'crop' ? 0.05 : 0.04;
+      right += mode === 'crop' ? 0.05 : 0.04;
+      top += mode === 'crop' ? 0.05 : 0.04;
+      bottom += mode === 'crop' ? 0.08 : 0.06;
+    }
+
+    const x = Math.max(0, box.x - left);
+    const y = Math.max(0, box.y - top);
+    const maxX = Math.min(1, box.x + box.w + right);
+    const maxY = Math.min(1, box.y + box.h + bottom);
+
+    return {
+      x,
+      y,
+      w: Math.max(0.02, maxX - x),
+      h: Math.max(0.02, maxY - y),
+    };
+  };
+
+  const cropImageToBox = (dataUrl: string, box: DetectBox) =>
+    new Promise<string>((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          const sx = Math.round(box.x * img.width);
+          const sy = Math.round(box.y * img.height);
+          const sw = Math.max(1, Math.round(box.w * img.width));
+          const sh = Math.max(1, Math.round(box.h * img.height));
+
+          const canvas = document.createElement('canvas');
+          canvas.width = sw;
+          canvas.height = sh;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Не удалось получить canvas context'));
+            return;
+          }
+
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+          resolve(canvas.toDataURL('image/jpeg', 0.92));
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      img.onerror = () => reject(new Error('Не удалось загрузить изображение для crop'));
+      img.src = dataUrl;
+    });
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -201,11 +290,22 @@ const Wardrobe = () => {
       const queue: Array<{ original: string; cutout: string; attrs: any }> = [];
 
       for (const c of selected) {
+        let photoDataUrlForCutout = c.original;
+
+        if (c.box) {
+          try {
+            const expandedCropBox = expandBox(c.box, c.attributes, 'crop');
+            photoDataUrlForCutout = await cropImageToBox(c.original, expandedCropBox);
+          } catch (err) {
+            console.warn('[wardrobe] crop before cutout failed, fallback to original', err);
+          }
+        }
+
         const resp = await fetch('/api/wardrobe/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            photoDataUrl: c.original,
+            photoDataUrl: photoDataUrlForCutout,
             hintCategory: c?.attributes?.category,
             targetItem: c?.attributes || {},
           }),
@@ -424,12 +524,15 @@ const Wardrobe = () => {
                               ? 'border-zinc-900 bg-zinc-900/10 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]'
                               : 'border-white/90 bg-white/10 hover:bg-white/20'
                           }`}
-                          style={{
-                            left: `${c.box.x * 100}%`,
-                            top: `${c.box.y * 100}%`,
-                            width: `${c.box.w * 100}%`,
-                            height: `${c.box.h * 100}%`,
-                          }}
+                          style={(() => {
+                            const displayBox = expandBox(c.box, c.attributes, 'display');
+                            return {
+                              left: `${displayBox.x * 100}%`,
+                              top: `${displayBox.y * 100}%`,
+                              width: `${displayBox.w * 100}%`,
+                              height: `${displayBox.h * 100}%`,
+                            };
+                          })()}
                           aria-label={c?.attributes?.title || `Вещь ${i + 1}`}
                         >
                           <span
