@@ -424,16 +424,48 @@ const Wardrobe = () => {
         throw new Error('Не удалось вырезать выбранные вещи');
       }
 
-      const [first, ...rest] = queue;
-      setPendingExtracted(rest);
-      setExtracted(first);
-      setDraftTitle(first.attrs?.title || 'Моя вещь');
-      setDraftCategory((Object.values(Category) as any).includes(first.attrs?.category) ? first.attrs.category : Category.TOPS);
-      setDraftGender((Object.values(Gender) as any).includes(first.attrs?.gender) ? first.attrs.gender : Gender.UNISEX);
-      setDraftTags(Array.isArray(first.attrs?.tags) ? first.attrs.tags.join(', ') : '');
-      setDraftColor(first.attrs?.color || '');
-      setDraftMaterial(first.attrs?.material || '');
+      if (!user?.id) {
+        throw new Error('Чтобы добавлять вещи, нужно войти в аккаунт');
+      }
+
+      // 🔥 сразу сохраняем все вещи
+      for (const item of queue) {
+        const saveResp = await fetch('/api/wardrobe/save', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: item.attrs?.title || 'Моя вещь',
+            category: item.attrs?.category || 'TOPS',
+            gender: item.attrs?.gender || 'UNISEX',
+            tags: Array.isArray(item.attrs?.tags) ? item.attrs.tags : [],
+            color: item.attrs?.color || undefined,
+            material: item.attrs?.material || undefined,
+            originalDataUrl: item.original,
+            cutoutDataUrl: item.cutout,
+          }),
+        });
+
+        if (!saveResp.ok) {
+          const data = await saveResp.json().catch(() => ({}));
+          throw new Error(data?.error || `Ошибка сохранения (${saveResp.status})`);
+        }
+
+        const data = await saveResp.json();
+        const saved = data?.item;
+
+        if (saved) {
+          actions.upsertWardrobeItem({
+            ...saved,
+            addedAt: saved?.addedAt ? new Date(saved.addedAt) : new Date(),
+          });
+        }
+      }
+
+      // ✅ очистка UI
       setCandidates(null);
+      setExtracted(null);
+      setPendingExtracted([]);
     } catch (err: any) {
       setExtractError(err?.message || 'Не удалось вырезать выбранные вещи');
     } finally {
