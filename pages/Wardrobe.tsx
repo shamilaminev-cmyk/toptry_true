@@ -49,6 +49,7 @@ const Wardrobe = () => {
   const [candidates, setCandidates] = useState<WardrobeCandidate[] | null>(null);
   const [pendingExtracted, setPendingExtracted] = useState<Array<{ original: string; cutout: string; attrs: any }>>([]);
   const [hoveredCandidateId, setHoveredCandidateId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -295,6 +296,7 @@ const Wardrobe = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setExtractError(null);
+    setSuccessMessage(null);
     setCandidates(null);
     setPendingExtracted([]);
     setIsRecognizing(true);
@@ -375,6 +377,7 @@ const Wardrobe = () => {
     }
 
     setExtractError(null);
+    setSuccessMessage(null);
     setIsRecognizing(true);
 
     try {
@@ -462,10 +465,15 @@ const Wardrobe = () => {
         }
       }
 
-      // ✅ очистка UI
+      // ✅ очистка UI + success feedback
       setCandidates(null);
       setExtracted(null);
       setPendingExtracted([]);
+      setSuccessMessage(`Добавлено ${queue.length} ${queue.length === 1 ? 'вещь' : queue.length < 5 ? 'вещи' : 'вещей'} в гардероб`);
+
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 2200);
     } catch (err: any) {
       setExtractError(err?.message || 'Не удалось вырезать выбранные вещи');
     } finally {
@@ -614,6 +622,12 @@ const Wardrobe = () => {
                   {extractError && (
                     <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-700">
                       {extractError}
+                    </div>
+                  )}
+
+                  {successMessage && (
+                    <div className="p-3 rounded-2xl bg-zinc-900 text-white text-xs font-bold uppercase tracking-widest">
+                      {successMessage}
                     </div>
                   )}
                   
