@@ -549,36 +549,27 @@ const Wardrobe = () => {
   return (
     <div className="pb-24">
       <div className="p-4 space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold uppercase tracking-tighter">Мой Шкаф</h1>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-zinc-100 p-3 rounded-full hover:bg-zinc-900 hover:text-white transition-all shadow-sm"
-          >
-            <ICONS.Plus className="w-6 h-6" />
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-            accept="image/*"
-          />
-
-        <div className="rounded-3xl border border-zinc-200 bg-white p-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Быстрый старт</div>
-            <div className="text-sm font-semibold">Добавь свою вещь по фото → она появится в шкафу → дальше можно примерять</div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold uppercase tracking-tighter">Мой Шкаф</h1>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-zinc-100 p-3 rounded-full hover:bg-zinc-900 hover:text-white transition-all shadow-sm"
+            >
+              <ICONS.Plus className="w-6 h-6" />
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept="image/*"
+            />
           </div>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="shrink-0 px-4 py-3 rounded-2xl bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all"
-          >
-            Загрузить фото
-          </button>
-        </div>
 
-
+          <div className="text-xs text-zinc-400">
+            Добавьте вещь по фото
+          </div>
         </div>
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
