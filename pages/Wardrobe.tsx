@@ -549,15 +549,19 @@ const Wardrobe = () => {
   return (
     <div className="pb-24">
       <div className="p-4 space-y-6">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold uppercase tracking-tighter">Мой Шкаф</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="pt-2 text-2xl font-bold uppercase tracking-tighter">Мой Шкаф</h1>
+
+          <div className="flex flex-col items-center gap-2 shrink-0">
             <button
               onClick={() => fileInputRef.current?.click()}
               className="bg-zinc-100 p-3 rounded-full hover:bg-zinc-900 hover:text-white transition-all shadow-sm"
             >
               <ICONS.Plus className="w-6 h-6" />
             </button>
+            <div className="text-[11px] text-zinc-400 text-center leading-none whitespace-nowrap">
+              Добавьте вещь по фото
+            </div>
             <input
               type="file"
               ref={fileInputRef}
@@ -565,10 +569,6 @@ const Wardrobe = () => {
               className="hidden"
               accept="image/*"
             />
-          </div>
-
-          <div className="text-xs text-zinc-400">
-            Добавьте вещь по фото
           </div>
         </div>
 
