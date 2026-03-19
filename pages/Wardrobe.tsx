@@ -168,6 +168,24 @@ const Wardrobe = () => {
     };
   };
 
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+  const getAnchorPoint = (box: DetectBox) => ({
+    x: clamp01(box.x + box.w / 2),
+    y: clamp01(box.y + Math.min(box.h * 0.35, 0.18)),
+  });
+
+  const getCalloutLayout = (box: DetectBox, index: number, total: number) => {
+    const anchor = getAnchorPoint(box);
+    const preferLeft = anchor.x > 0.55;
+    const side = preferLeft ? 'left' : 'right';
+    const spread = (index - (total - 1) / 2) * 0.08;
+    const labelY = clamp01(Math.max(0.1, Math.min(0.9, anchor.y + spread)));
+    const labelX = side == 'left' ? 0.06 : 0.94;
+    const elbowX = clamp01(side == 'left' ? anchor.x - 0.06 : anchor.x + 0.06);
+    return { anchor, side, labelX, labelY, elbowX };
+  };
+
   const cropImageToBox = (dataUrl: string, box: DetectBox) =>
     new Promise<string>((resolve, reject) => {
       const img = new Image();
@@ -513,40 +531,73 @@ const Wardrobe = () => {
                     className="w-full max-h-[50vh] object-contain"
                   />
                   <div className="absolute inset-0">
-                    {candidates.map((c, i) =>
-                      c?.box ? (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => toggleCandidateSelection(i)}
-                          className={`absolute rounded-2xl border-2 transition-all ${
-                            c.selected
-                              ? 'border-zinc-900 bg-zinc-900/10 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]'
-                              : 'border-white/90 bg-white/10 hover:bg-white/20'
-                          }`}
-                          style={(() => {
-                            const displayBox = expandBox(c.box, c.attributes, 'display');
-                            return {
-                              left: `${displayBox.x * 100}%`,
-                              top: `${displayBox.y * 100}%`,
-                              width: `${displayBox.w * 100}%`,
-                              height: `${displayBox.h * 100}%`,
-                            };
-                          })()}
-                          aria-label={c?.attributes?.title || `Вещь ${i + 1}`}
-                        >
-                          <span
-                            className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      {candidates.map((c, i) => {
+                        if (!c?.box) return null;
+                        const displayBox = expandBox(c.box, c.attributes, 'display');
+                        const layout = getCalloutLayout(displayBox, i, candidates.length);
+                        const edgeX = layout.side === 'left' ? 28 : 72;
+                        return (
+                          <g key={`line-${c.id}`}>
+                            <polyline
+                              points={`${layout.anchor.x * 100},${layout.anchor.y * 100} ${layout.elbowX * 100},${layout.labelY * 100} ${edgeX},${layout.labelY * 100}`}
+                              fill="none"
+                              stroke={c.selected ? 'rgba(24,24,27,0.95)' : 'rgba(255,255,255,0.95)'}
+                              strokeWidth="0.6"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <circle
+                              cx={layout.anchor.x * 100}
+                              cy={layout.anchor.y * 100}
+                              r="1.2"
+                              fill={c.selected ? 'rgba(24,24,27,0.95)' : 'rgba(255,255,255,0.95)'}
+                            />
+                          </g>
+                        );
+                      })}
+                    </svg>
+
+                    {candidates.map((c, i) => {
+                      if (!c?.box) return null;
+                      const displayBox = expandBox(c.box, c.attributes, 'display');
+                      const layout = getCalloutLayout(displayBox, i, candidates.length);
+                      const title = c?.attributes?.title || `Вещь ${i + 1}`;
+
+                      return (
+                        <React.Fragment key={c.id}>
+                          <button
+                            type="button"
+                            onClick={() => toggleCandidateSelection(i)}
+                            className="absolute -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-transparent"
+                            style={{
+                              left: `${layout.anchor.x * 100}%`,
+                              top: `${layout.anchor.y * 100}%`,
+                            }}
+                            aria-label={title}
+                          >
+                            <span className="sr-only">{title}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleCandidateSelection(i)}
+                            className={`absolute -translate-y-1/2 rounded-full px-3 py-2 text-[10px] font-bold uppercase tracking-widest shadow-sm transition-all ${
                               c.selected
                                 ? 'bg-zinc-900 text-white'
-                                : 'bg-white/90 text-zinc-900'
+                                : 'bg-white/90 text-zinc-900 hover:bg-white'
                             }`}
+                            style={{
+                              left: layout.side === 'left' ? `${layout.labelX * 100}%` : undefined,
+                              right: layout.side === 'right' ? `${(1 - layout.labelX) * 100}%` : undefined,
+                              top: `${layout.labelY * 100}%`,
+                            }}
                           >
-                            {c?.attributes?.title || `Вещь ${i + 1}`}
-                          </span>
-                        </button>
-                      ) : null
-                    )}
+                            {title}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
                   </div>
                 </div>
               </>
