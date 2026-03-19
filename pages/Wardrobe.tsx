@@ -170,13 +170,57 @@ const Wardrobe = () => {
 
   const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
-  const getAnchorPoint = (box: DetectBox) => ({
-    x: clamp01(box.x + box.w / 2),
-    y: clamp01(box.y + Math.min(box.h * 0.35, 0.18)),
-  });
+  const getAnchorPoint = (box: DetectBox, attrs?: CandidateAttrs) => {
+    const title = String(attrs?.title || '').toLowerCase();
+    const category = String(attrs?.category || '').toLowerCase();
+    const tags = Array.isArray(attrs?.tags) ? attrs?.tags.map((t) => String(t).toLowerCase()) : [];
+    const haystack = [title, category, ...tags].join(' ');
 
-  const getCalloutLayout = (box: DetectBox, index: number, total: number) => {
-    const anchor = getAnchorPoint(box);
+    const isTie = haystack.includes('галст');
+    const isFootwear =
+      haystack.includes('ботин') ||
+      haystack.includes('кроссов') ||
+      haystack.includes('туф') ||
+      haystack.includes('обув');
+    const isBottom =
+      haystack.includes('джинс') ||
+      haystack.includes('брюк') ||
+      haystack.includes('брюки') ||
+      haystack.includes('низ');
+    const isTop =
+      haystack.includes('кардиган') ||
+      haystack.includes('пиджак') ||
+      haystack.includes('рубаш') ||
+      haystack.includes('футбол') ||
+      haystack.includes('свитер') ||
+      haystack.includes('худи') ||
+      haystack.includes('верх');
+
+    let ax = box.x + box.w / 2;
+    let ay = box.y + box.h * 0.35;
+
+    if (isTie) {
+      ax = box.x + box.w * 0.5;
+      ay = box.y + box.h * 0.58;
+    } else if (isTop) {
+      ax = box.x + box.w * 0.5;
+      ay = box.y + box.h * 0.52;
+    } else if (isBottom) {
+      ax = box.x + box.w * 0.5;
+      ay = box.y + box.h * 0.3;
+    } else if (isFootwear) {
+      ax = box.x + box.w * 0.5;
+      ay = box.y + box.h * 0.55;
+    }
+
+    return {
+      x: clamp01(ax),
+      y: clamp01(ay),
+    };
+  };
+
+  const getCalloutLayout = (box: DetectBox, attrs: CandidateAttrs | undefined, index: number, total: number) => {
+    const anchor = getAnchorPoint(box, attrs);
     const preferLeft = anchor.x > 0.55;
     const side = preferLeft ? 'left' : 'right';
     const spread = (index - (total - 1) / 2) * 0.08;
@@ -535,7 +579,7 @@ const Wardrobe = () => {
                       {candidates.map((c, i) => {
                         if (!c?.box) return null;
                         const displayBox = expandBox(c.box, c.attributes, 'display');
-                        const layout = getCalloutLayout(displayBox, i, candidates.length);
+                        const layout = getCalloutLayout(displayBox, c.attributes, i, candidates.length);
                         const edgeX = layout.side === 'left' ? 28 : 72;
                         return (
                           <g key={`line-${c.id}`}>
@@ -561,7 +605,7 @@ const Wardrobe = () => {
                     {candidates.map((c, i) => {
                       if (!c?.box) return null;
                       const displayBox = expandBox(c.box, c.attributes, 'display');
-                      const layout = getCalloutLayout(displayBox, i, candidates.length);
+                      const layout = getCalloutLayout(displayBox, c.attributes, i, candidates.length);
                       const title = c?.attributes?.title || `Вещь ${i + 1}`;
 
                       return (
