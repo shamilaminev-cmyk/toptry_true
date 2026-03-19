@@ -96,11 +96,6 @@ const Wardrobe = () => {
     [candidates]
   );
 
-  const resolvedDotPoints = useMemo(
-    () => getResolvedDotPoints(candidates || []),
-    [candidates]
-  );
-
   const selectedCandidatesCount = useMemo(
 
     () => (candidates || []).filter((c) => c.selected).length,
@@ -258,6 +253,11 @@ const Wardrobe = () => {
       return next;
     });
   };
+
+  const resolvedDotPoints = useMemo(
+    () => getResolvedDotPoints(candidates || []),
+    [candidates]
+  );
 
   const cropImageToBox = (dataUrl: string, box: DetectBox) =>
     new Promise<string>((resolve, reject) => {
