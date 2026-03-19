@@ -48,6 +48,7 @@ const Wardrobe = () => {
   const [draftMaterial, setDraftMaterial] = useState<string>('');
   const [candidates, setCandidates] = useState<WardrobeCandidate[] | null>(null);
   const [pendingExtracted, setPendingExtracted] = useState<Array<{ original: string; cutout: string; attrs: any }>>([]);
+  const [hoveredCandidateId, setHoveredCandidateId] = useState<string | null>(null);
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +93,11 @@ const Wardrobe = () => {
 
   const hasBoxes = useMemo(
     () => (candidates || []).some((c) => c?.box),
+    [candidates]
+  );
+
+  const resolvedDotPoints = useMemo(
+    () => getResolvedDotPoints(candidates || []),
     [candidates]
   );
 
@@ -187,36 +193,70 @@ const Wardrobe = () => {
       haystack.includes('брюк') ||
       haystack.includes('брюки') ||
       haystack.includes('низ');
-    const isTop =
+    const isShirt =
+      haystack.includes('рубаш');
+    const isJacket =
       haystack.includes('кардиган') ||
       haystack.includes('пиджак') ||
-      haystack.includes('рубаш') ||
-      haystack.includes('футбол') ||
       haystack.includes('свитер') ||
       haystack.includes('худи') ||
       haystack.includes('верх');
+    const isTee =
+      haystack.includes('футбол');
 
-    let x = box.x + box.w / 2;
-    let y = box.y + box.h * 0.35;
+    let x = box.x + box.w * 0.5;
+    let y = box.y + box.h * 0.38;
 
     if (isTie) {
       x = box.x + box.w * 0.5;
-      y = box.y + box.h * 0.58;
-    } else if (isTop) {
+      y = box.y + box.h * 0.63;
+    } else if (isShirt) {
+      x = box.x + box.w * 0.48;
+      y = box.y + box.h * 0.34;
+    } else if (isTee) {
       x = box.x + box.w * 0.5;
-      y = box.y + box.h * 0.52;
+      y = box.y + box.h * 0.42;
+    } else if (isJacket) {
+      x = box.x + box.w * 0.52;
+      y = box.y + box.h * 0.5;
     } else if (isBottom) {
       x = box.x + box.w * 0.5;
-      y = box.y + box.h * 0.28;
+      y = box.y + box.h * 0.22;
     } else if (isFootwear) {
       x = box.x + box.w * 0.5;
-      y = box.y + box.h * 0.55;
+      y = box.y + box.h * 0.58;
     }
 
     return {
       x: clamp01(x),
       y: clamp01(y),
     };
+  };
+
+  const getResolvedDotPoints = (items: WardrobeCandidate[]) => {
+    const placed: Array<{ x: number; y: number }> = [];
+
+    return items.map((c) => {
+      if (!c?.box) return null;
+
+      const displayBox = expandBox(c.box, c.attributes, 'display');
+      const base = getDotPoint(displayBox, c.attributes);
+      const next = { ...base };
+
+      for (const prev of placed) {
+        const dx = next.x - prev.x;
+        const dy = next.y - prev.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 0.085) {
+          next.y = clamp01(next.y + 0.075);
+          next.x = clamp01(next.x + (dx >= 0 ? 0.018 : -0.018));
+        }
+      }
+
+      placed.push(next);
+      return next;
+    });
   };
 
   const cropImageToBox = (dataUrl: string, box: DetectBox) =>
@@ -566,20 +606,23 @@ const Wardrobe = () => {
                   <div className="absolute inset-0">
                     {candidates.map((c, i) => {
                       if (!c?.box) return null;
-                      const displayBox = expandBox(c.box, c.attributes, 'display');
-                      const dot = getDotPoint(displayBox, c.attributes);
+                      const dot = resolvedDotPoints[i];
+                      if (!dot) return null;
                       const title = c?.attributes?.title || `Вещь ${i + 1}`;
+                      const isActive = c.selected || hoveredCandidateId === c.id;
 
                       return (
                         <button
                           key={c.id}
                           type="button"
                           onClick={() => toggleCandidateSelection(i)}
-                          className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-full border text-[11px] font-black shadow-sm transition-all ${
-                            c.selected
-                              ? 'bg-zinc-900 text-white border-zinc-900'
-                              : 'bg-white/95 text-zinc-900 border-white'
-                          }`}
+                          onMouseEnter={() => setHoveredCandidateId(c.id)}
+                          onMouseLeave={() => setHoveredCandidateId(null)}
+                          className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center rounded-full border font-black shadow-sm transition-all ${
+                            isActive
+                              ? 'bg-zinc-900 text-white border-zinc-900 scale-110 ring-4 ring-white/70'
+                              : 'bg-white/95 text-zinc-900 border-white hover:scale-105'
+                          } ${c.selected ? 'w-9 h-9 text-[12px]' : 'w-8 h-8 text-[11px]'}`}
                           style={{
                             left: `${dot.x * 100}%`,
                             top: `${dot.y * 100}%`,
@@ -594,33 +637,44 @@ const Wardrobe = () => {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  {candidates.map((c, i) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => toggleCandidateSelection(i)}
-                      className={`w-full rounded-xl px-4 py-3 text-left transition flex items-start gap-3 border ${
-                        c?.selected
-                          ? 'border-zinc-900 bg-zinc-50'
-                          : 'border-zinc-200 hover:border-zinc-900'
-                      }`}
-                    >
-                      <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${
-                        c?.selected ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-900'
-                      }`}>
-                        {i + 1}
-                      </div>
+                  {candidates.map((c, i) => {
+                    const isActive = c?.selected || hoveredCandidateId === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => toggleCandidateSelection(i)}
+                        onMouseEnter={() => setHoveredCandidateId(c.id)}
+                        onMouseLeave={() => setHoveredCandidateId(null)}
+                        className={`w-full rounded-xl px-4 py-3 text-left transition flex items-start gap-3 border ${
+                          c?.selected
+                            ? 'border-zinc-900 bg-zinc-50'
+                            : isActive
+                              ? 'border-zinc-400 bg-zinc-50'
+                              : 'border-zinc-200 hover:border-zinc-900'
+                        }`}
+                      >
+                        <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black transition-all ${
+                          c?.selected
+                            ? 'bg-zinc-900 text-white'
+                            : isActive
+                              ? 'bg-zinc-200 text-zinc-900'
+                              : 'bg-zinc-100 text-zinc-900'
+                        }`}>
+                          {i + 1}
+                        </div>
 
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold uppercase tracking-widest text-zinc-900">
-                          {c?.attributes?.title || `Вещь ${i + 1}`}
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold uppercase tracking-widest text-zinc-900">
+                            {c?.attributes?.title || `Вещь ${i + 1}`}
+                          </div>
+                          <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                            {c?.attributes?.category || 'Категория'}
+                          </div>
                         </div>
-                        <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                          {c?.attributes?.category || 'Категория'}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               </>
             ) : (
