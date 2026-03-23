@@ -18,6 +18,8 @@ interface AppState {
   actions: {
     login: (emailOrUsername: string, password: string) => Promise<void>;
     register: (email: string, username: string, password: string) => Promise<void>;
+    startPhoneAuth: (phone: string) => Promise<void>;
+    verifyPhoneAuth: (phone: string, code: string) => Promise<any>;
     logout: () => Promise<void>;
     toggleHomeLayout: () => void;
     addToWardrobe: (product: Product) => void;
@@ -258,6 +260,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [user, wardrobe, looks, homeLayout]);
 
   const actions = useMemo(() => ({
+    startPhoneAuth: async (phone: string) => {
+      const resp = await fetch('/api/auth/phone/start', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось отправить код');
+      }
+    },
+
+    verifyPhoneAuth: async (phone: string, code: string) => {
+      const resp = await fetch('/api/auth/phone/verify', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Неверный код');
+      }
+
+      const u = data?.user;
+      if (!u?.id) throw new Error('Сервер не вернул пользователя');
+
+      setUser({
+        id: u.id,
+        email: u.email || undefined,
+        name: u.username || undefined,
+        username: u.username || undefined,
+        phone: u.phone || phone,
+        avatarUrl: u.avatarUrl || undefined,
+        selfieUrl: undefined,
+        tier: SubscriptionTier.FREE,
+        limits: { hdTryOnRemaining: 5, looksRemaining: 10 },
+        isPublic: u.isPublic ?? false,
+      });
+
+      return data;
+    },
 login: async (emailOrUsername: string, password: string) => {
   console.log('[auth] login start');
 
