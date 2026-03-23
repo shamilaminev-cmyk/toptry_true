@@ -8,19 +8,23 @@ datasource db {
 }
 
 model User {
-  id              String   @id
+  id              String    @id
   username        String?
-  phone           String   @unique
+  phone           String    @unique
   phoneVerifiedAt DateTime?
-  email           String?  @unique
+  email           String?   @unique
   emailVerifiedAt DateTime?
   avatarUrl       String?
-  isPublic        Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isPublic        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   wardrobeItems WardrobeItem[]
   looks         Look[]
+  likes         Like[]
+  comments      Comment[]
+  following     Follow[]       @relation("following")
+  followers     Follow[]       @relation("followers")
   phoneOtps     PhoneOtp[]
 }
 
@@ -106,14 +110,14 @@ model Clickout {
 }
 
 model PhoneOtp {
-  id         String   @id
+  id         String    @id
   userId     String?
   phone      String
   codeHash   String
   expiresAt  DateTime
-  attempts   Int      @default(0)
+  attempts   Int       @default(0)
   consumedAt DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
