@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
@@ -253,6 +254,53 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+
+// ---------- PHONE AUTH HELPERS ----------
+const SMSRU_API_ID = process.env.SMSRU_API_ID || "";
+const OTP_SECRET = process.env.OTP_SECRET || "otp_secret_change_me";
+
+function normalizePhone(input) {
+  const digits = String(input || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 11 && digits.startsWith("8")) return "7" + digits.slice(1);
+  if (digits.length === 11 && digits.startsWith("7")) return digits;
+  return "";
+}
+
+function generateOtpCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function hashOtpCode(code) {
+  return crypto.createHash("sha256").update(String(code) + OTP_SECRET).digest("hex");
+}
+
+async function sendSmsRu(phone, message) {
+  if (!SMSRU_API_ID) {
+    throw new Error("SMSRU_API_ID is not configured");
+  }
+
+  const url =
+    "https://sms.ru/sms/send" +
+    `?api_id=${encodeURIComponent(SMSRU_API_ID)}` +
+    `&to=${encodeURIComponent(phone)}` +
+    `&msg=${encodeURIComponent(message)}` +
+    "&json=1";
+
+  const resp = await fetch(url, { method: "GET" });
+  const data = await resp.json().catch(() => null);
+
+  if (!resp.ok) {
+    throw new Error(`sms.ru http ${resp.status}`);
+  }
+
+  if (!data || (String(data.status) !== "OK" && Number(data.status_code) !== 100)) {
+    throw new Error(`sms.ru send failed: ${JSON.stringify(data)}`);
+  }
+
+  return data;
+}
+
 // ---------- AUTH ----------
 app.post("/api/auth/register", async (req, res) => {
   try {
@@ -317,6 +365,153 @@ app.post("/api/auth/login", async (req, res) => {
     res.json({ user });
   } catch (e) {
     res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+
+app.post("/api/auth/phone/start", async (req, res) => {
+  try {
+    const p = getPrisma();
+    if (!p) return res.status(500).json({ error: "Database is not configured" });
+
+    const phone = normalizePhone(req.body?.phone);
+    if (!phone) {
+      return res.status(400).json({ error: "Valid phone is required" });
+    }
+
+    const existingActive = await p.phoneOtp.findFirst({
+      where: {
+        phone,
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingActive) {
+      const ageMs = Date.now() - new Date(existingActive.createdAt).getTime();
+      const retryAfterSec = Math.max(0, 60 - Math.floor(ageMs / 1000));
+      if (retryAfterSec > 0) {
+        return res.status(429).json({
+          error: "Повторная отправка кода пока недоступна",
+          retryAfterSec,
+        });
+      }
+    }
+
+    const code = generateOtpCode();
+    const codeHash = hashOtpCode(code);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await p.phoneOtp.create({
+      data: {
+        id: "otp-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+        phone,
+        codeHash,
+        expiresAt,
+      },
+    });
+
+    await sendSmsRu(phone, `Код входа TopTry: ${code}`);
+
+    return res.json({ ok: true, retryAfterSec: 60 });
+  } catch (e) {
+    console.error("[toptry] /api/auth/phone/start error", e);
+    return res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.post("/api/auth/phone/verify", async (req, res) => {
+  try {
+    const p = getPrisma();
+    if (!p) return res.status(500).json({ error: "Database is not configured" });
+
+    const phone = normalizePhone(req.body?.phone);
+    const code = String(req.body?.code || "").trim();
+
+    if (!phone || !code) {
+      return res.status(400).json({ error: "phone and code are required" });
+    }
+
+    const otp = await p.phoneOtp.findFirst({
+      where: {
+        phone,
+        consumedAt: null,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!otp) {
+      return res.status(400).json({ error: "Код не найден" });
+    }
+
+    if (otp.expiresAt < new Date()) {
+      return res.status(400).json({ error: "Срок действия кода истек" });
+    }
+
+    if ((otp.attempts || 0) >= 5) {
+      return res.status(429).json({ error: "Превышено число попыток" });
+    }
+
+    const codeHash = hashOtpCode(code);
+
+    if (otp.codeHash !== codeHash) {
+      await p.phoneOtp.update({
+        where: { id: otp.id },
+        data: { attempts: { increment: 1 } },
+      });
+      return res.status(400).json({ error: "Неверный код" });
+    }
+
+    await p.phoneOtp.update({
+      where: { id: otp.id },
+      data: { consumedAt: new Date() },
+    });
+
+    let user = await p.user.findUnique({
+      where: { phone },
+    });
+
+    if (!user) {
+      user = await p.user.create({
+        data: {
+          id: "u-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+          phone,
+          phoneVerifiedAt: new Date(),
+        },
+      });
+    } else if (!user.phoneVerifiedAt) {
+      user = await p.user.update({
+        where: { id: user.id },
+        data: { phoneVerifiedAt: new Date() },
+      });
+    }
+
+    const token = signSession(user);
+    const { cookieName, cookieOptions } = getAuthConfig();
+    const isProd = process.env.NODE_ENV === "production";
+
+    res.cookie(cookieName, token, {
+      ...cookieOptions,
+      ...(isProd ? { domain: ".toptry.ru" } : {}),
+    });
+
+    return res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        email: user.email || null,
+        username: user.username || null,
+        avatarUrl: user.avatarUrl || null,
+        isPublic: !!user.isPublic,
+        createdAt: user.createdAt,
+      },
+      needsProfileCompletion: !user.username,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/auth/phone/verify error", e);
+    return res.status(500).json({ error: String(e?.message || e) });
   }
 });
 

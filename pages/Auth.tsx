@@ -6,11 +6,9 @@ import Logo from '../components/Logo';
 const Auth = () => {
   const { actions } = useAppState();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [emailOrUsername, setEmailOrUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [step, setStep] = useState<'phone' | 'code'>('phone');
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -18,17 +16,24 @@ const Auth = () => {
     setError(null);
     setBusy(true);
     try {
-      if (mode === 'login') {
-        await actions.login(emailOrUsername.trim(), password);
+      if (step === 'phone') {
+        await actions.startPhoneAuth(phone.trim());
+        setStep('code');
       } else {
-        await actions.register(email.trim(), username.trim(), password);
+        await actions.verifyPhoneAuth(phone.trim(), code.trim());
+        navigate('/');
       }
-      navigate('/');
     } catch (e: any) {
       setError(e?.message || 'Ошибка');
     } finally {
       setBusy(false);
     }
+  };
+
+  const goBackToPhone = () => {
+    setCode('');
+    setError(null);
+    setStep('phone');
   };
 
   return (
@@ -46,23 +51,15 @@ const Auth = () => {
       </div>
 
       <div className="w-full max-w-sm space-y-4">
-        <div className="flex gap-2 bg-zinc-100 p-1 rounded-full">
-          <button
-            onClick={() => setMode('login')}
-            className={`flex-1 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
-              mode === 'login' ? 'bg-white shadow-sm' : 'text-zinc-500'
-            }`}
-          >
-            Войти
-          </button>
-          <button
-            onClick={() => setMode('register')}
-            className={`flex-1 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
-              mode === 'register' ? 'bg-white shadow-sm' : 'text-zinc-500'
-            }`}
-          >
-            Регистрация
-          </button>
+        <div className="text-center space-y-2">
+          <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-400">
+            {step === 'phone' ? 'Вход по номеру телефона' : 'Введите код из SMS'}
+          </div>
+          <div className="text-sm text-zinc-500">
+            {step === 'phone'
+              ? 'Мы отправим одноразовый код подтверждения'
+              : `Код отправлен на ${phone || 'ваш номер'}`}
+          </div>
         </div>
 
         {error && (
@@ -72,61 +69,45 @@ const Auth = () => {
         )}
 
         <div className="space-y-3">
-          {mode === 'register' ? (
+          {step === 'phone' ? (
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
+                Номер телефона
+              </label>
+              <input
+                type="tel"
+                placeholder="+7 999 123 45 67"
+                className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+          ) : (
             <>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  placeholder="name@example.com"
-                  className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
-                  Никнейм
+                  Код из SMS
                 </label>
                 <input
                   type="text"
-                  placeholder="toptry_user"
-                  className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="123456"
+                  className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-center text-lg tracking-[0.4em] focus:ring-2 focus:ring-zinc-900 outline-none"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 />
               </div>
-            </>
-          ) : (
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
-                Email или ник
-              </label>
-              <input
-                type="text"
-                placeholder="name@example.com / username"
-                className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
-                value={emailOrUsername}
-                onChange={(e) => setEmailOrUsername(e.target.value)}
-              />
-            </div>
-          )}
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 ml-4">
-              Пароль
-            </label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              className="w-full bg-zinc-100 border-none rounded-full py-4 px-6 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
+              <button
+                type="button"
+                onClick={goBackToPhone}
+                className="w-full py-3 rounded-full bg-zinc-100 text-zinc-700 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all"
+              >
+                Изменить номер
+              </button>
+            </>
+          )}
         </div>
 
         <button
@@ -136,7 +117,7 @@ const Auth = () => {
             busy ? 'opacity-60 pointer-events-none' : ''
           }`}
         >
-          {busy ? '...' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
+          {busy ? '...' : step === 'phone' ? 'Получить код' : 'Войти'}
         </button>
       </div>
 
