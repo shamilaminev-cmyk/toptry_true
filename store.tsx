@@ -121,6 +121,7 @@ const STORAGE_KEY = "toptry_state_v1";
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
   const [looks, setLooks] = useState<Look[]>(MOCK_LOOKS);
   const [homeLayout, setHomeLayout] = useState<HomeLayout>(HomeLayout.DASHBOARD);
@@ -151,6 +152,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Simulate small loading skeleton
     const t = setTimeout(() => setLoading(false), 450);
     return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const resp = await fetch('/api/catalog/products', { credentials: 'include' });
+        if (!resp.ok) return;
+        const data = await resp.json().catch(() => null);
+        const items = Array.isArray(data?.products) ? data.products : [];
+        if (!items.length) return;
+        setProducts(items);
+      } catch {
+        // ignore
+      }
+    })();
   }, []);
 
   // Restore server session (JWT in httpOnly cookie)
@@ -543,7 +559,7 @@ register: async (email: string, username: string, password: string) => {
   }), [user, looks, wardrobe, homeLayout]);
 
   return (
-    <AppContext.Provider value={{ user, products: MOCK_PRODUCTS, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
+      <AppContext.Provider value={{ user, products: (products.length ? products : MOCK_PRODUCTS), wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
       {children}
     </AppContext.Provider>
   );

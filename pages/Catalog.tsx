@@ -21,7 +21,7 @@ const Catalog = () => {
     { id: "mock-006", title: "Платье миди", price: 11990, gender: Gender.FEMALE, category: Category.DRESS, images: ["/mock/items/dress.jpg"], storeName: "MANGO" },
   ];
 
-  const USE_MOCK_CATALOG = true;
+  const USE_MOCK_CATALOG = false;
   const baseProducts = USE_MOCK_CATALOG
     ? mockProducts
     : (products && products.length ? products : mockProducts);
@@ -113,7 +113,13 @@ const Catalog = () => {
                     <p className="text-sm font-black">{p.price} {CURRENCY}</p>
                     <span className="text-[8px] font-bold uppercase text-zinc-400 px-2 py-1 bg-zinc-50 rounded-md border border-zinc-100">{((p as any).storeName || (p as any).brand || "Store-A")}</span>
                  </div>
-                 <button className="w-full mt-3 py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm">
+                 <button
+                   onClick={() => {
+                     const url = (p as any).affiliateUrl || (p as any).productUrl;
+                     if (url) window.open(url, "_blank", "noopener,noreferrer");
+                   }}
+                   className="w-full mt-3 py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm"
+                 >
                    Купить сейчас
                  </button>
               </div>
