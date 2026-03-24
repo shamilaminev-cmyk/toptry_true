@@ -46,7 +46,7 @@ const CreateLook = () => {
     const steps = [
       "Анализируем ваш аватар...",
       "Гармонизируем стили...",
-      "Gemini 3 стилизует образ...",
+      "Создаем образ...",
       "Финальный рендеринг..."
     ];
 
@@ -175,11 +175,11 @@ const CreateLook = () => {
           <div className="relative">
             <div className="w-40 h-40 border-[8px] border-zinc-50 border-t-zinc-900 rounded-full animate-spin"></div>
             <div className="absolute inset-0 flex items-center justify-center">
-               <span className="text-3xl font-black italic tracking-tighter">G3</span>
+               <span className="text-3xl font-black italic tracking-tighter">AI</span>
             </div>
           </div>
           <div className="space-y-4">
-            <h2 className="text-lg font-black uppercase tracking-[0.4em]">Gemini 3 Processing</h2>
+            <h2 className="text-lg font-black uppercase tracking-[0.4em]">TOPTRY СОЗДАЕТ ОБРАЗ</h2>
             <div className="flex gap-2 justify-center">
               {[0, 1, 2, 3].map(i => (
                 <div key={i} className={`h-1.5 w-10 rounded-full transition-all duration-700 ${genStep >= i ? 'bg-zinc-900' : 'bg-zinc-100'}`}></div>
