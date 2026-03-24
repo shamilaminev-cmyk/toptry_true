@@ -51,6 +51,7 @@ const LookDetails = () => {
   if (!look) return <div className="p-10 text-center">Образ не найден</div>;
 
   const lookProducts = products.filter((p) => (look.items || look.itemIds || []).includes(p.id));
+  const isOwnLook = !!localLooks.find((l) => String(l.id) === String(look?.id));
 
   const handleTryOn = () => {
     setIsTryingOn(true);
@@ -110,7 +111,7 @@ const LookDetails = () => {
           </div>
         )}
 
-        {!showResult && !isTryingOn && look?.userId !== user?.id && (
+        {!showResult && !isTryingOn && !isOwnLook && (
           <div className="absolute inset-0 flex items-center justify-center">
             <button
               onClick={handleTryOn}
