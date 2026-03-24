@@ -13,6 +13,7 @@ const CreateLook = () => {
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
   const [isGenerating, setIsGenerating] = useState(false);
   const [genStep, setGenStep] = useState(0);
+  const selfie = user?.selfieUrl || user?.avatarUrl;
 
   const filteredItems = activeCategory === 'all' 
     ? wardrobe 
