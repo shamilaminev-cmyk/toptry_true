@@ -30,7 +30,6 @@ const CreateLook = () => {
   };
 
   const handleGenerate = async () => {
-    const selfie = user?.selfieUrl || user?.avatarUrl;
     if (!selfie) {
       alert("Сначала загрузите селфи на главной странице или в профиле!");
       return;
