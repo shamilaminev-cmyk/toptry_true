@@ -816,6 +816,8 @@ app.post("/api/looks/create", async (req, res) => {
       id: "l-" + Date.now(),
       title: "Сгенерированный образ",
       items: Array.isArray(b.itemIds) ? b.itemIds : [],
+      sourceItems: Array.isArray(b.sourceItems) ? b.sourceItems : [],
+      priceBuyNowRUB: Number(b.priceBuyNowRUB || 0),
       resultImageUrl: imageDataUrl,
       createdAt: now.toISOString(),
       isPublic: false,

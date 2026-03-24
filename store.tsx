@@ -503,6 +503,21 @@ register: async (email: string, username: string, password: string) => {
 
 
         const itemIds = selectedItems.map((i) => i.id);
+        const sourceItems = selectedItems.map((i) => ({
+          id: i.id,
+          title: i.title,
+          price: i.price || 0,
+          currency: i.currency || 'RUB',
+          category: i.category,
+          gender: i.gender,
+          images: Array.isArray(i.images) ? i.images : [],
+          brand: (i as any).brand || undefined,
+          storeId: i.storeId,
+          storeName: (i as any).storeName || undefined,
+          isCatalog: !!i.isCatalog,
+          affiliateUrl: (i as any).affiliateUrl || undefined,
+          productUrl: (i as any).productUrl || undefined,
+        }));
         const priceBuyNowRUB = selectedItems.filter((i) => i.isCatalog).reduce((s, i) => s + (i.price || 0), 0);
         const resp = await fetch('/api/looks/create', {
           method: 'POST',
@@ -512,6 +527,7 @@ register: async (email: string, username: string, password: string) => {
             selfieDataUrl: withApiOrigin(selfieUrl),
             itemImageUrls,
             itemIds,
+            sourceItems,
             aspectRatio: '3:4',
             priceBuyNowRUB,
           }),
