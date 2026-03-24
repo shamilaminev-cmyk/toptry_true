@@ -50,7 +50,10 @@ const LookDetails = () => {
   if (loading) return <div className="p-10 text-center text-zinc-400">Загрузка...</div>;
   if (!look) return <div className="p-10 text-center">Образ не найден</div>;
 
-  const lookProducts = products.filter((p) => (look.items || look.itemIds || []).includes(p.id));
+  const lookProducts =
+    Array.isArray(look.sourceItems) && look.sourceItems.length > 0
+      ? look.sourceItems
+      : products.filter((p) => (look.items || look.itemIds || []).includes(p.id));
   const isOwnLook = !!localLooks.find((l) => String(l.id) === String(look?.id));
 
   const handleTryOn = () => {
@@ -188,12 +191,48 @@ const LookDetails = () => {
                     {p.price} {CURRENCY}
                   </p>
                 </div>
-                <button className="bg-zinc-900 text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest">
-                  Купить
-                </button>
+                {p.affiliateUrl || p.productUrl ? (
+                  <a
+                    href={p.affiliateUrl || p.productUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-zinc-900 text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                  >
+                    Купить
+                  </a>
+                ) : (
+                  <button className="bg-zinc-300 text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest cursor-not-allowed">
+                    Нет ссылки
+                  </button>
+                )}
               </div>
             ))}
           </div>
+
+          {Array.isArray(look.sourceItems) && look.sourceItems.some((i: any) => i.isCatalog) && (
+            <div className="pt-4">
+              <div className="bg-zinc-900 text-white p-4 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest opacity-70">Купить всё</p>
+                  <p className="text-lg font-bold">
+                    {look.priceBuyNowRUB || 0} {CURRENCY}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    (look.sourceItems || [])
+                      .filter((i: any) => i.affiliateUrl || i.productUrl)
+                      .forEach((i: any) => {
+                        window.open(i.affiliateUrl || i.productUrl, '_blank');
+                      });
+                  }}
+                  className="bg-white text-black px-5 py-3 rounded-full text-xs font-bold uppercase tracking-widest"
+                >
+                  Купить
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="space-y-4">
