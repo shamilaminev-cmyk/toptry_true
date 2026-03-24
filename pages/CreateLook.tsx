@@ -30,7 +30,8 @@ const CreateLook = () => {
   };
 
   const handleGenerate = async () => {
-    if (!user?.selfieUrl) {
+    const selfie = user?.selfieUrl || user?.avatarUrl;
+    if (!selfie) {
       alert("Сначала загрузите селфи на главной странице или в профиле!");
       return;
     }
@@ -68,7 +69,7 @@ const CreateLook = () => {
     }
   };
 
-  if (!user?.selfieUrl) {
+  if (!selfie) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center p-8 text-center space-y-8 animate-in fade-in duration-700">
         <div className="w-24 h-24 bg-zinc-50 rounded-full flex items-center justify-center border-2 border-dashed border-zinc-200">
@@ -91,7 +92,7 @@ const CreateLook = () => {
       <div className="p-6 bg-zinc-50 border-b border-zinc-100">
         <div className="flex items-center gap-6">
           <div className="w-16 h-16 rounded-full border-2 border-white shadow-md overflow-hidden bg-zinc-200">
-            <img src={withApiOrigin(user.selfieUrl)} alt="Avatar" className="w-full h-full object-cover" />
+            <img src={withApiOrigin(selfie)} alt="Avatar" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="text-2xl font-black uppercase tracking-tighter">Создать образ</h1>
