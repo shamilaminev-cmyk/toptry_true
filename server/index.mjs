@@ -1309,6 +1309,236 @@ app.get("/api/wardrobe/list", requireAuth, async (req, res) => {
 // ... (ниже оставь без изменений, если хочешь — я продолжу весь файл до конца)
 // В твоём файле дальше идёт весь блок looks/comments/follow/feed — он совместим с этим CORS.
 
+
+
+// ---------- CATALOG (Admitad / Sportcourt) ----------
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = "";
+  let q = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (ch === '"') {
+      if (q && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        q = !q;
+      }
+      continue;
+    }
+
+    if (ch === ';' && !q) {
+      out.push(cur);
+      cur = "";
+      continue;
+    }
+
+    cur += ch;
+  }
+
+  out.push(cur);
+  return out.map((v) => String(v || "").trim());
+}
+
+function parseCsv(text) {
+  const lines = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .filter((line) => line.trim());
+
+  if (!lines.length) return [];
+
+  const header = parseCsvLine(lines[0]);
+
+  return lines.slice(1).map((line) => {
+    const cols = parseCsvLine(line);
+    const row = {};
+    header.forEach((h, i) => {
+      row[String(h || "").trim()] = cols[i] ?? "";
+    });
+    return row;
+  });
+}
+
+function pickFirst(row, keys) {
+  for (const key of keys) {
+    const val = row?.[key];
+    if (val !== undefined && val !== null && String(val).trim() !== "") {
+      return String(val).trim();
+    }
+  }
+  return "";
+}
+
+function toPrice(value) {
+  const s = String(value || "")
+    .replace(",", ".")
+    .replace(/[^\d.\-]/g, "")
+    .trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
+  try {
+    const FEED_URL = process.env.ADMITAD_SPORTCOURT_FEED_URL || "";
+    if (!FEED_URL) {
+      return res.status(500).json({ error: "ADMITAD_SPORTCOURT_FEED_URL is not set" });
+    }
+
+    const resp = await fetch(FEED_URL);
+    if (!resp.ok) {
+      return res.status(502).json({ error: `Feed fetch failed: ${resp.status}` });
+    }
+
+    const csv = await resp.text();
+    const rows = parseCsv(csv);
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const r of rows) {
+      const externalId = pickFirst(r, [
+        "id",
+        "product_id",
+        "productid",
+        "sku",
+        "vendorCode",
+        "offer_id",
+      ]);
+
+      const title = pickFirst(r, [
+        "name",
+        "title",
+        "product_name",
+      ]);
+
+      const imageUrl = pickFirst(r, [
+        "image",
+        "imageurl",
+        "picture",
+        "img",
+      ]);
+
+      const productUrl = pickFirst(r, [
+        "url",
+        "product_url",
+        "link",
+      ]);
+
+      const affiliateUrl = pickFirst(r, [
+        "deeplink",
+        "affiliate_url",
+        "url",
+        "product_url",
+        "link",
+      ]);
+
+      const price = toPrice(pickFirst(r, ["price", "current_price", "price_value"]));
+      const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
+
+      if (!externalId || !title || !imageUrl || !affiliateUrl) {
+        skipped++;
+        continue;
+      }
+
+      const data = {
+        id: `cat-sportcourt-${externalId}`,
+        merchant: "sportcourt",
+        externalId,
+        title,
+        brand: pickFirst(r, ["brand", "vendor", "manufacturer"]) || null,
+        category: pickFirst(r, ["category", "category_name", "google_product_category"]) || null,
+        gender: pickFirst(r, ["gender", "sex"]) || null,
+        price,
+        oldPrice,
+        currency: pickFirst(r, ["currency", "currencyId"]) || "RUB",
+        imageUrl,
+        productUrl: productUrl || affiliateUrl,
+        affiliateUrl,
+        isActive: true,
+        rawPayload: r,
+      };
+
+      const existing = await prisma.catalogProduct.findUnique({
+        where: {
+          merchant_externalId: {
+            merchant: "sportcourt",
+            externalId,
+          },
+        },
+      });
+
+      if (existing) {
+        await prisma.catalogProduct.update({
+          where: { id: existing.id },
+          data,
+        });
+        updated++;
+      } else {
+        await prisma.catalogProduct.create({ data });
+        created++;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      merchant: "sportcourt",
+      total: rows.length,
+      created,
+      updated,
+      skipped,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/import/sportcourt error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.get("/api/catalog/products", async (_req, res) => {
+  try {
+    const items = await prisma.catalogProduct.findMany({
+      where: {
+        isActive: true,
+        merchant: "sportcourt",
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 200,
+    });
+
+    const products = items.map((p) => ({
+      id: p.id,
+      title: p.title,
+      price: p.price || 0,
+      currency: p.currency || "RUB",
+      gender: p.gender || "UNISEX",
+      category: p.category || "OTHER",
+      sizes: ["ONE"],
+      images: p.imageUrl ? [p.imageUrl] : [],
+      storeId: p.merchant,
+      storeName: "Sportcourt",
+      availability: p.isActive,
+      isCatalog: true,
+      brand: p.brand || undefined,
+      productUrl: p.productUrl || undefined,
+      affiliateUrl: p.affiliateUrl || undefined,
+    }));
+
+    return res.json({ products });
+  } catch (e) {
+    console.error("[toptry] /api/catalog/products error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "toptry-api" });
 });

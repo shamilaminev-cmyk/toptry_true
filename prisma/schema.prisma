@@ -124,3 +124,32 @@ model PhoneOtp {
   @@index([phone, createdAt])
   @@index([phone, expiresAt])
 }
+
+
+model CatalogProduct {
+  id            String   @id
+  merchant      String
+  externalId    String
+
+  title         String
+  brand         String?
+  category      String?
+  gender        String?
+
+  price         Float?
+  oldPrice      Float?
+  currency      String?
+
+  imageUrl      String?
+  productUrl    String?
+  affiliateUrl  String?
+
+  isActive      Boolean  @default(true)
+
+  rawPayload    Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([merchant, externalId])
+}
