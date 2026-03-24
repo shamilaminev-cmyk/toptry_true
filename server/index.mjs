@@ -1432,18 +1432,34 @@ function normalizeCatalogCategory(raw) {
   return "OTHER";
 }
 
+function normalizeCatalogImageForDedupe(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/+/g, "/");
+}
+
+function normalizeCatalogBrandForDedupe(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function buildCatalogDedupeKey(row) {
-  const title = pickFirst(row, ["name", "title", "product_name"]).toLowerCase();
-  const imageUrl = pickFirst(row, ["image", "imageurl", "picture", "img"]).toLowerCase();
-  const affiliateUrl = pickFirst(row, ["deeplink", "affiliate_url", "url", "product_url", "link"]).toLowerCase();
-  const price = String(toPrice(pickFirst(row, ["price", "current_price", "price_value"])) || "");
-  const brand = pickFirst(row, ["brand", "vendor", "manufacturer"]).toLowerCase();
+  const imageUrl = normalizeCatalogImageForDedupe(
+    pickFirst(row, ["image", "imageurl", "picture", "img"])
+  );
+  const price = String(
+    toPrice(pickFirst(row, ["price", "current_price", "price_value"])) || ""
+  );
+  const brand = normalizeCatalogBrandForDedupe(
+    pickFirst(row, ["brand", "vendor", "manufacturer"])
+  );
 
-  const stableUrl = affiliateUrl
-    .replace(/([?&])erid=[^&]+/gi, "$1")
-    .replace(/[?&]$/g, "");
-
-  return [title, brand, price, imageUrl || stableUrl].join("|");
+  return [imageUrl, brand, price].join("|");
 }
 
 function buildCatalogExternalId(row) {
