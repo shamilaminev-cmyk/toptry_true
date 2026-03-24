@@ -1387,6 +1387,72 @@ function toPrice(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function normalizeCatalogCurrency(value) {
+  const s = String(value || "").trim().toUpperCase();
+  if (!s || s === "RUR") return "RUB";
+  return s;
+}
+
+function normalizeCatalogGender(raw) {
+  const s = String(raw || "").toLowerCase();
+
+  const femaleRx = /(жен|female|women|woman|girl|для нее|бюстгаль|бра|лиф|бикини|купальник|юбк|плать|туник|балетк)/i;
+  const maleRx = /(муж|male|men|man|boy|для него)/i;
+
+  if (femaleRx.test(s) && !maleRx.test(s)) return "FEMALE";
+  if (maleRx.test(s) && !femaleRx.test(s)) return "MALE";
+  return "UNISEX";
+}
+
+function normalizeCatalogCategory(raw) {
+  const s = String(raw || "").toLowerCase();
+
+  if (/(кроссов|кед|ботин|сапог|туфл|shoe|sneaker|loafer|sandals|сланц|шлеп)/i.test(s)) {
+    return "SHOES";
+  }
+
+  if (/(шапк|кепк|cap|bag|сумк|belt|ремень|очки|очк|watch|час|перчат|шарф|рюкзак|кошелек|wallet|gloves|scarf)/i.test(s)) {
+    return "ACCESSORIES";
+  }
+
+  if (/(куртк|пальто|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
+    return "JACKETS";
+  }
+
+  if (/(плать|dress)/i.test(s)) {
+    return "DRESS";
+  }
+
+  if (/(брюк|джинс|trouser|pants|shorts|юбк|skirt|legging|леггин|плавки|шорты)/i.test(s)) {
+    return "BOTTOMS";
+  }
+
+  if (/(футбол|майк|поло|рубаш|лонгслив|топ|худи|свитш|свитер|джемпер|shirt|t-shirt|tee|hoodie|sweat|bra|бюстгаль|лиф|бикини)/i.test(s)) {
+    return "TOPS";
+  }
+
+  return "OTHER";
+}
+
+function buildCatalogDedupeKey(row) {
+  const title = pickFirst(row, ["name", "title", "product_name"]).toLowerCase();
+  const imageUrl = pickFirst(row, ["image", "imageurl", "picture", "img"]).toLowerCase();
+  const affiliateUrl = pickFirst(row, ["deeplink", "affiliate_url", "url", "product_url", "link"]).toLowerCase();
+  const price = String(toPrice(pickFirst(row, ["price", "current_price", "price_value"])) || "");
+  const brand = pickFirst(row, ["brand", "vendor", "manufacturer"]).toLowerCase();
+
+  const stableUrl = affiliateUrl
+    .replace(/([?&])erid=[^&]+/gi, "$1")
+    .replace(/[?&]$/g, "");
+
+  return [title, brand, price, imageUrl || stableUrl].join("|");
+}
+
+function buildCatalogExternalId(row) {
+  const dedupeKey = buildCatalogDedupeKey(row);
+  return "dedupe-" + crypto.createHash("md5").update(dedupeKey).digest("hex");
+}
+
 app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
   try {
     const FEED_URL = process.env.ADMITAD_SPORTCOURT_FEED_URL || "";
@@ -1405,63 +1471,55 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
     let created = 0;
     let updated = 0;
     let skipped = 0;
+    const seen = new Set();
+
+    await prisma.catalogProduct.updateMany({
+      where: { merchant: "sportcourt" },
+      data: { isActive: false },
+    });
 
     for (const r of rows) {
-      const externalId = pickFirst(r, [
-        "id",
-        "product_id",
-        "productid",
-        "sku",
-        "vendorCode",
-        "offer_id",
-      ]);
-
-      const title = pickFirst(r, [
-        "name",
-        "title",
-        "product_name",
-      ]);
-
-      const imageUrl = pickFirst(r, [
-        "image",
-        "imageurl",
-        "picture",
-        "img",
-      ]);
-
-      const productUrl = pickFirst(r, [
-        "url",
-        "product_url",
-        "link",
-      ]);
-
-      const affiliateUrl = pickFirst(r, [
-        "deeplink",
-        "affiliate_url",
-        "url",
-        "product_url",
-        "link",
-      ]);
-
+      const title = pickFirst(r, ["name", "title", "product_name"]);
+      const brand = pickFirst(r, ["brand", "vendor", "manufacturer"]);
+      const imageUrl = pickFirst(r, ["image", "imageurl", "picture", "img"]);
+      const productUrl = pickFirst(r, ["url", "product_url", "link"]);
+      const affiliateUrl = pickFirst(r, ["deeplink", "affiliate_url", "url", "product_url", "link"]);
       const price = toPrice(pickFirst(r, ["price", "current_price", "price_value"]));
       const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
 
-      if (!externalId || !title || !imageUrl || !affiliateUrl) {
+      if (!title || !imageUrl || !affiliateUrl || price === null) {
         skipped++;
         continue;
       }
+
+      const haystack = [
+        title,
+        brand,
+        pickFirst(r, ["category", "category_name", "google_product_category"]),
+        pickFirst(r, ["gender", "sex"]),
+      ].join(" ");
+
+      const externalId = buildCatalogExternalId(r);
+      if (seen.has(externalId)) {
+        skipped++;
+        continue;
+      }
+      seen.add(externalId);
+
+      const gender = normalizeCatalogGender(haystack);
+      const category = normalizeCatalogCategory(haystack);
 
       const data = {
         id: `cat-sportcourt-${externalId}`,
         merchant: "sportcourt",
         externalId,
         title,
-        brand: pickFirst(r, ["brand", "vendor", "manufacturer"]) || null,
-        category: pickFirst(r, ["category", "category_name", "google_product_category"]) || null,
-        gender: pickFirst(r, ["gender", "sex"]) || null,
+        brand: brand || null,
+        category,
+        gender,
         price,
         oldPrice,
-        currency: pickFirst(r, ["currency", "currencyId"]) || "RUB",
+        currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
         imageUrl,
         productUrl: productUrl || affiliateUrl,
         affiliateUrl,
@@ -1497,6 +1555,7 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
       created,
       updated,
       skipped,
+      active: created + updated,
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/sportcourt error", e);
@@ -1519,7 +1578,7 @@ app.get("/api/catalog/products", async (_req, res) => {
       id: p.id,
       title: p.title,
       price: p.price || 0,
-      currency: p.currency || "RUB",
+      currency: normalizeCatalogCurrency(p.currency || "RUB"),
       gender: p.gender || "UNISEX",
       category: p.category || "OTHER",
       sizes: ["ONE"],
