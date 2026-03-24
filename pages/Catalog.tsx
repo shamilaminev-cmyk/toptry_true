@@ -31,9 +31,68 @@ const Catalog = () => {
   }
 
 
+  const getHaystack = (p: any) =>
+    [p?.title, p?.category, p?.brand, p?.storeName]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+  const matchesGenderFilter = (p: any, activeGender?: Gender) => {
+    if (!activeGender) return true;
+
+    const hay = getHaystack(p);
+    const selected = String(activeGender || '').toLowerCase();
+    const productGender = String(p?.gender || '').toLowerCase();
+    const full = `${productGender} ${hay}`;
+
+    const wantsMale = /male|man|men|муж/.test(selected);
+    const wantsFemale = /female|woman|women|жен/.test(selected);
+
+    if (wantsMale) {
+      if (/жен|female|woman|women/.test(full)) return false;
+      if (/муж|male|man|men/.test(full)) return true;
+      return productGender === 'unisex';
+    }
+
+    if (wantsFemale) {
+      if (/муж|male|man|men/.test(full)) return false;
+      if (/жен|female|woman|women/.test(full)) return true;
+      return productGender === 'unisex';
+    }
+
+    return productGender === selected;
+  };
+
+  const matchesCategoryFilter = (p: any, activeCategory?: Category) => {
+    if (!activeCategory) return true;
+
+    const hay = getHaystack(p);
+    const selected = String(activeCategory || '').toLowerCase();
+    const productCategory = String(p?.category || '').toLowerCase();
+
+    if (productCategory === selected) return true;
+
+    const categoryMatchers: Array<[RegExp, RegExp]> = [
+      [/(jacket|outer|верх|coat|куртк|пальто|бомбер|парка|ветров|пухов|blazer)/, /(jacket|outer|верх|coat|куртк|пальто|бомбер|парка|ветров|пухов|blazer)/],
+      [/(pants|bottom|низ|брюк|брюки|джинс|trouser|shorts|юбк|skirt|legging)/, /(pants|bottom|низ|брюк|брюки|джинс|trouser|shorts|юбк|skirt|legging)/],
+      [/(dress|плать)/, /(dress|плать)/],
+      [/(shoes|обув|кроссов|кед|ботин|туфл|сапог|loafer|sneaker|sandals)/, /(shoes|обув|кроссов|кед|ботин|туфл|сапог|loafer|sneaker|sandals)/],
+      [/(accessor|аксесс|шапк|сумк|bag|belt|ремень|шарф|перчат|cap|кепк|очк|watch)/, /(accessor|аксесс|шапк|сумк|bag|belt|ремень|шарф|перчат|cap|кепк|очк|watch)/],
+      [/(tops|top|верх|футбол|майк|рубаш|лонгслив|поло|худи|свитш|свитер|джемпер)/, /(tops|top|верх|футбол|майк|рубаш|лонгслив|поло|худи|свитш|свитер|джемпер)/],
+    ];
+
+    for (const [selectedRx, productRx] of categoryMatchers) {
+      if (selectedRx.test(selected)) {
+        return productRx.test(`${productCategory} ${hay}`);
+      }
+    }
+
+    return (`${productCategory} ${hay}`).includes(selected);
+  };
+
   const filtered = baseProducts.filter(p => {
-    const matchesGender = !filter.gender || p.gender === filter.gender || p.gender === Gender.UNISEX;
-    const matchesCategory = !filter.category || p.category === filter.category;
+    const matchesGender = matchesGenderFilter(p, filter.gender);
+    const matchesCategory = matchesCategoryFilter(p, filter.category);
     const matchesSearch = p.title.toLowerCase().includes(search.toLowerCase());
     return matchesGender && matchesCategory && matchesSearch;
   });
