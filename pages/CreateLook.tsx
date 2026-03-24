@@ -60,6 +60,9 @@ const CreateLook = () => {
       clearInterval(interval);
       if (lookId) {
         navigate(`/look/${lookId}`);
+      } else {
+        setIsGenerating(false);
+        alert("Не удалось сгенерировать образ. Проверьте, что аватар доступен для генерации.");
       }
     } catch (err) {
       clearInterval(interval);

@@ -458,7 +458,8 @@ register: async (email: string, username: string, password: string) => {
       setWardrobe(prev => prev.filter(i => i.id !== id));
     },
     createLook: async (selectedItems: WardrobeItem[]) => {
-      if (!user || !user.selfieUrl) return;
+      const selfieUrl = user?.selfieUrl || user?.avatarUrl;
+      if (!user || !selfieUrl) return;
       if (!selectedItems?.length) return;
 
       setAiError(null);
@@ -492,7 +493,7 @@ register: async (email: string, username: string, password: string) => {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            selfieDataUrl: withApiOrigin(user.selfieUrl),
+            selfieDataUrl: withApiOrigin(selfieUrl),
             itemImageUrls,
             itemIds,
             aspectRatio: '3:4',
