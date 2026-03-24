@@ -13,6 +13,7 @@ const CreateLook = () => {
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
   const [isGenerating, setIsGenerating] = useState(false);
   const [genStep, setGenStep] = useState(0);
+  const [progress, setProgress] = useState(0);
   const selfie = user?.selfieUrl || user?.avatarUrl;
 
   const filteredItems = activeCategory === 'all' 
@@ -41,34 +42,50 @@ const CreateLook = () => {
     }
 
     setIsGenerating(true);
-    setGenStep(1);
+    setGenStep(0);
+    setProgress(7);
 
     const steps = [
       "Анализируем ваш аватар...",
-      "Гармонизируем стили...",
+      "Подбираем сочетание вещей...",
       "Создаем образ...",
-      "Финальный рендеринг..."
+      "Финализируем результат..."
     ];
 
     const interval = setInterval(() => {
       setGenStep(s => (s < steps.length - 1 ? s + 1 : s));
     }, 3000);
 
+    const progressInterval = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 92) return p;
+        if (p < 20) return p + 6;
+        if (p < 45) return p + 4;
+        if (p < 70) return p + 3;
+        return p + 2;
+      });
+    }, 900);
+
     try {
       const selectedItems = wardrobe.filter(i => selectedIds.has(i.id));
       const lookId = await actions.createLook(selectedItems);
       clearInterval(interval);
+      clearInterval(progressInterval);
       if (lookId) {
+        setProgress(100);
         navigate(`/look/${lookId}`);
       } else {
         setIsGenerating(false);
+        setProgress(0);
         alert("Не удалось сгенерировать образ. Проверьте, что аватар доступен для генерации.");
       }
     } catch (err) {
       clearInterval(interval);
+      clearInterval(progressInterval);
       console.error(err);
       alert(aiError || "Не удалось сгенерировать образ. Проверьте соединение и настройки сервера.");
       setIsGenerating(false);
+      setProgress(0);
     }
   };
 
@@ -175,7 +192,7 @@ const CreateLook = () => {
           <div className="relative">
             <div className="w-40 h-40 border-[8px] border-zinc-50 border-t-zinc-900 rounded-full animate-spin"></div>
             <div className="absolute inset-0 flex items-center justify-center">
-               <span className="text-3xl font-black italic tracking-tighter">AI</span>
+               <span className="text-3xl font-black italic tracking-tighter">{Math.round(progress)}%</span>
             </div>
           </div>
           <div className="space-y-4">
@@ -188,9 +205,9 @@ const CreateLook = () => {
             <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-[0.2em] mt-6 animate-pulse">
               {[
                 "Анализируем ваш аватар...",
-                "Гармонизируем стили...",
-                "Gemini 3 стилизует образ...",
-                "Финальный рендеринг..."
+                "Подбираем сочетание вещей...",
+                "Создаем образ...",
+                "Финализируем результат..."
               ][genStep]}
             </p>
           </div>
