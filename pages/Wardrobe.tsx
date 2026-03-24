@@ -48,6 +48,8 @@ const Wardrobe = () => {
   const [draftMaterial, setDraftMaterial] = useState<string>('');
   const [candidates, setCandidates] = useState<WardrobeCandidate[] | null>(null);
   const [pendingExtracted, setPendingExtracted] = useState<Array<{ original: string; cutout: string; attrs: any }>>([]);
+  const [hoveredCandidateId, setHoveredCandidateId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,7 +92,13 @@ const Wardrobe = () => {
     return { x: x as number, y: y as number, w: clampedW, h: clampedH };
   };
 
+  const hasBoxes = useMemo(
+    () => (candidates || []).some((c) => c?.box),
+    [candidates]
+  );
+
   const selectedCandidatesCount = useMemo(
+
     () => (candidates || []).filter((c) => c.selected).length,
     [candidates]
   );
@@ -105,10 +113,190 @@ const Wardrobe = () => {
     );
   };
 
+  const expandBox = (
+    box: DetectBox,
+    attrs?: CandidateAttrs,
+    mode: 'display' | 'crop' = 'display'
+  ): DetectBox => {
+    const title = String(attrs?.title || '').toLowerCase();
+    const category = String(attrs?.category || '').toLowerCase();
+    const tags = Array.isArray(attrs?.tags) ? attrs?.tags.map((t) => String(t).toLowerCase()) : [];
+    const haystack = [title, category, ...tags].join(' ');
+
+    let left = mode === 'crop' ? 0.05 : 0.04;
+    let right = mode === 'crop' ? 0.05 : 0.04;
+    let top = mode === 'crop' ? 0.05 : 0.04;
+    let bottom = mode === 'crop' ? 0.06 : 0.04;
+
+    const isTie = haystack.includes('галст');
+    const isTrousers = haystack.includes('брюк') || haystack.includes('брюки') || category.includes('низ');
+    const isJacket =
+      haystack.includes('пиджак') ||
+      haystack.includes('рубаш') ||
+      haystack.includes('верх') ||
+      haystack.includes('жакет');
+
+    if (isTie) {
+      left += mode === 'crop' ? 0.03 : 0.025;
+      right += mode === 'crop' ? 0.03 : 0.025;
+      top += mode === 'crop' ? 0.08 : 0.06;
+      bottom += mode === 'crop' ? 0.18 : 0.12;
+    }
+
+    if (isTrousers) {
+      left += mode === 'crop' ? 0.05 : 0.04;
+      right += mode === 'crop' ? 0.05 : 0.04;
+      top += mode === 'crop' ? 0.03 : 0.02;
+      bottom += mode === 'crop' ? 0.16 : 0.12;
+    }
+
+    if (isJacket) {
+      left += mode === 'crop' ? 0.05 : 0.04;
+      right += mode === 'crop' ? 0.05 : 0.04;
+      top += mode === 'crop' ? 0.05 : 0.04;
+      bottom += mode === 'crop' ? 0.08 : 0.06;
+    }
+
+    const x = Math.max(0, box.x - left);
+    const y = Math.max(0, box.y - top);
+    const maxX = Math.min(1, box.x + box.w + right);
+    const maxY = Math.min(1, box.y + box.h + bottom);
+
+    return {
+      x,
+      y,
+      w: Math.max(0.02, maxX - x),
+      h: Math.max(0.02, maxY - y),
+    };
+  };
+
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+  const getDotPoint = (box: DetectBox, attrs?: CandidateAttrs) => {
+    const title = String(attrs?.title || '').toLowerCase();
+    const category = String(attrs?.category || '').toLowerCase();
+    const tags = Array.isArray(attrs?.tags) ? attrs?.tags.map((t) => String(t).toLowerCase()) : [];
+    const haystack = [title, category, ...tags].join(' ');
+
+    const isTie = haystack.includes('галст');
+    const isFootwear =
+      haystack.includes('ботин') ||
+      haystack.includes('кроссов') ||
+      haystack.includes('туф') ||
+      haystack.includes('обув');
+    const isBottom =
+      haystack.includes('джинс') ||
+      haystack.includes('брюк') ||
+      haystack.includes('брюки') ||
+      haystack.includes('низ');
+    const isShirt =
+      haystack.includes('рубаш');
+    const isJacket =
+      haystack.includes('кардиган') ||
+      haystack.includes('пиджак') ||
+      haystack.includes('свитер') ||
+      haystack.includes('худи') ||
+      haystack.includes('верх');
+    const isTee =
+      haystack.includes('футбол');
+
+    let x = box.x + box.w * 0.5;
+    let y = box.y + box.h * 0.38;
+
+    if (isTie) {
+      x = box.x + box.w * 0.5;
+      y = box.y + box.h * 0.63;
+    } else if (isShirt) {
+      x = box.x + box.w * 0.48;
+      y = box.y + box.h * 0.34;
+    } else if (isTee) {
+      x = box.x + box.w * 0.5;
+      y = box.y + box.h * 0.42;
+    } else if (isJacket) {
+      x = box.x + box.w * 0.52;
+      y = box.y + box.h * 0.5;
+    } else if (isBottom) {
+      x = box.x + box.w * 0.5;
+      y = box.y + box.h * 0.22;
+    } else if (isFootwear) {
+      x = box.x + box.w * 0.5;
+      y = box.y + box.h * 0.58;
+    }
+
+    return {
+      x: clamp01(x),
+      y: clamp01(y),
+    };
+  };
+
+  const getResolvedDotPoints = (items: WardrobeCandidate[]) => {
+    const placed: Array<{ x: number; y: number }> = [];
+
+    return items.map((c) => {
+      if (!c?.box) return null;
+
+      const displayBox = expandBox(c.box, c.attributes, 'display');
+      const base = getDotPoint(displayBox, c.attributes);
+      const next = { ...base };
+
+      for (const prev of placed) {
+        const dx = next.x - prev.x;
+        const dy = next.y - prev.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 0.085) {
+          next.y = clamp01(next.y + 0.075);
+          next.x = clamp01(next.x + (dx >= 0 ? 0.018 : -0.018));
+        }
+      }
+
+      placed.push(next);
+      return next;
+    });
+  };
+
+  const resolvedDotPoints = useMemo(
+    () => getResolvedDotPoints(candidates || []),
+    [candidates]
+  );
+
+  const cropImageToBox = (dataUrl: string, box: DetectBox) =>
+    new Promise<string>((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          const sx = Math.round(box.x * img.width);
+          const sy = Math.round(box.y * img.height);
+          const sw = Math.max(1, Math.round(box.w * img.width));
+          const sh = Math.max(1, Math.round(box.h * img.height));
+
+          const canvas = document.createElement('canvas');
+          canvas.width = sw;
+          canvas.height = sh;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Не удалось получить canvas context'));
+            return;
+          }
+
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+          resolve(canvas.toDataURL('image/jpeg', 0.92));
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      img.onerror = () => reject(new Error('Не удалось загрузить изображение для crop'));
+      img.src = dataUrl;
+    });
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setExtractError(null);
+    setSuccessMessage(null);
     setCandidates(null);
     setPendingExtracted([]);
     setIsRecognizing(true);
@@ -189,17 +377,29 @@ const Wardrobe = () => {
     }
 
     setExtractError(null);
+    setSuccessMessage(null);
     setIsRecognizing(true);
 
     try {
       const queue: Array<{ original: string; cutout: string; attrs: any }> = [];
 
       for (const c of selected) {
+        let photoDataUrlForCutout = c.original;
+
+        if (c.box) {
+          try {
+            const expandedCropBox = expandBox(c.box, c.attributes, 'crop');
+            photoDataUrlForCutout = await cropImageToBox(c.original, expandedCropBox);
+          } catch (err) {
+            console.warn('[wardrobe] crop before cutout failed, fallback to original', err);
+          }
+        }
+
         const resp = await fetch('/api/wardrobe/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            photoDataUrl: c.original,
+            photoDataUrl: photoDataUrlForCutout,
             hintCategory: c?.attributes?.category,
             targetItem: c?.attributes || {},
           }),
@@ -227,16 +427,53 @@ const Wardrobe = () => {
         throw new Error('Не удалось вырезать выбранные вещи');
       }
 
-      const [first, ...rest] = queue;
-      setPendingExtracted(rest);
-      setExtracted(first);
-      setDraftTitle(first.attrs?.title || 'Моя вещь');
-      setDraftCategory((Object.values(Category) as any).includes(first.attrs?.category) ? first.attrs.category : Category.TOPS);
-      setDraftGender((Object.values(Gender) as any).includes(first.attrs?.gender) ? first.attrs.gender : Gender.UNISEX);
-      setDraftTags(Array.isArray(first.attrs?.tags) ? first.attrs.tags.join(', ') : '');
-      setDraftColor(first.attrs?.color || '');
-      setDraftMaterial(first.attrs?.material || '');
-      setCandidates(null);
+      if (!user?.id) {
+        throw new Error('Чтобы добавлять вещи, нужно войти в аккаунт');
+      }
+
+      // 🔥 сразу сохраняем все вещи
+      for (const item of queue) {
+        const saveResp = await fetch('/api/wardrobe/save', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: item.attrs?.title || 'Моя вещь',
+            category: item.attrs?.category || 'TOPS',
+            gender: item.attrs?.gender || 'UNISEX',
+            tags: Array.isArray(item.attrs?.tags) ? item.attrs.tags : [],
+            color: item.attrs?.color || undefined,
+            material: item.attrs?.material || undefined,
+            originalDataUrl: item.original,
+            cutoutDataUrl: item.cutout,
+          }),
+        });
+
+        if (!saveResp.ok) {
+          const data = await saveResp.json().catch(() => ({}));
+          throw new Error(data?.error || `Ошибка сохранения (${saveResp.status})`);
+        }
+
+        const data = await saveResp.json();
+        const saved = data?.item;
+
+        if (saved) {
+          actions.upsertWardrobeItem({
+            ...saved,
+            addedAt: saved?.addedAt ? new Date(saved.addedAt) : new Date(),
+          });
+        }
+      }
+
+      // ✅ success feedback: сначала показать подтверждение, потом закрыть modal
+      setSuccessMessage(`Добавлено ${queue.length} ${queue.length === 1 ? 'вещь' : queue.length < 5 ? 'вещи' : 'вещей'} в гардероб`);
+
+      setTimeout(() => {
+        setCandidates(null);
+        setExtracted(null);
+        setPendingExtracted([]);
+        setSuccessMessage(null);
+      }, 2200);
     } catch (err: any) {
       setExtractError(err?.message || 'Не удалось вырезать выбранные вещи');
     } finally {
@@ -312,36 +549,27 @@ const Wardrobe = () => {
   return (
     <div className="pb-24">
       <div className="p-4 space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold uppercase tracking-tighter">Мой Шкаф</h1>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-zinc-100 p-3 rounded-full hover:bg-zinc-900 hover:text-white transition-all shadow-sm"
-          >
-            <ICONS.Plus className="w-6 h-6" />
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-            accept="image/*"
-          />
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="pt-2 text-2xl font-bold uppercase tracking-tighter">Мой Шкаф</h1>
 
-        <div className="rounded-3xl border border-zinc-200 bg-white p-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Быстрый старт</div>
-            <div className="text-sm font-semibold">Добавь свою вещь по фото → она появится в шкафу → дальше можно примерять</div>
+          <div className="flex flex-col items-center gap-2 shrink-0">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-zinc-100 p-3 rounded-full hover:bg-zinc-900 hover:text-white transition-all shadow-sm"
+            >
+              <ICONS.Plus className="w-6 h-6" />
+            </button>
+            <div className="text-[11px] text-zinc-400 text-center leading-none whitespace-nowrap">
+              Добавьте вещь по фото
+            </div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept="image/*"
+            />
           </div>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="shrink-0 px-4 py-3 rounded-2xl bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all"
-          >
-            Загрузить фото
-          </button>
-        </div>
-
-
         </div>
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
@@ -371,7 +599,7 @@ const Wardrobe = () => {
         </div>
 
         {/* Upload Recognition UI */}
-        {(isRecognizing || candidates || extracted || extractError) && (
+        {(isRecognizing || candidates || extracted || extractError || successMessage) && (
           <div className="fixed inset-0 z-[100] bg-zinc-950/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-sm rounded-[40px] p-8 space-y-8 animate-in zoom-in">
               {isRecognizing ? (
@@ -387,6 +615,12 @@ const Wardrobe = () => {
                       {extractError}
                     </div>
                   )}
+
+                  {successMessage && (
+                    <div className="p-3 rounded-2xl bg-zinc-900 text-white text-xs font-bold uppercase tracking-widest">
+                      {successMessage}
+                    </div>
+                  )}
                   
         {candidates && (
           <div className="space-y-4">
@@ -394,52 +628,93 @@ const Wardrobe = () => {
               Выберите вещи
             </h3>
 
-            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-              Нажмите на вещь прямо на фото или выберите её в списке • максимум 3
-            </div>
+            {hasBoxes ? (
+              <>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                  Нажмите на вещь прямо на фото • максимум 3
+                </div>
 
-            <div className="flex flex-col gap-4">
-              <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
-                <img
-                  src={withApiOrigin(candidates[0]?.original)}
-                  alt=""
-                  className="w-full max-h-[50vh] object-contain"
-                />
-                <div className="absolute inset-0">
-                  {candidates.map((c, i) =>
-                    c?.box ? (
+                <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
+                  <img
+                    src={withApiOrigin(candidates[0]?.original)}
+                    alt=""
+                    className="w-full max-h-[50vh] object-contain"
+                  />
+                  <div className="absolute inset-0">
+                    {candidates.map((c, i) => {
+                      if (!c?.box) return null;
+                      const dot = resolvedDotPoints[i];
+                      if (!dot) return null;
+                      const title = c?.attributes?.title || `Вещь ${i + 1}`;
+                      const isActive = c.selected || hoveredCandidateId === c.id;
+
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => toggleCandidateSelection(i)}
+                          onMouseEnter={() => setHoveredCandidateId(c.id)}
+                          onMouseLeave={() => setHoveredCandidateId(null)}
+                          className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center rounded-full border font-black shadow-sm transition-all ${
+                            isActive
+                              ? 'bg-zinc-900 text-white border-zinc-900 scale-110 ring-4 ring-white/70'
+                              : 'bg-white/95 text-zinc-900 border-white hover:scale-105'
+                          } ${c.selected ? 'w-9 h-9 text-[12px]' : 'w-8 h-8 text-[11px]'}`}
+                          style={{
+                            left: `${dot.x * 100}%`,
+                            top: `${dot.y * 100}%`,
+                          }}
+                          aria-label={title}
+                        >
+                          {i + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {candidates.map((c, i) => {
+                    const isActive = c?.selected || hoveredCandidateId === c.id;
+                    return (
                       <button
                         key={c.id}
                         type="button"
                         onClick={() => toggleCandidateSelection(i)}
-                        className={`absolute rounded-2xl border-2 transition-all ${
-                          c.selected
-                            ? 'border-zinc-900 bg-zinc-900/10 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]'
-                            : 'border-white/90 bg-white/10 hover:bg-white/20'
+                        onMouseEnter={() => setHoveredCandidateId(c.id)}
+                        onMouseLeave={() => setHoveredCandidateId(null)}
+                        className={`w-full rounded-xl px-4 py-3 text-left transition flex items-start gap-3 border ${
+                          c?.selected
+                            ? 'border-zinc-900 bg-zinc-50'
+                            : isActive
+                              ? 'border-zinc-400 bg-zinc-50'
+                              : 'border-zinc-200 hover:border-zinc-900'
                         }`}
-                        style={{
-                          left: `${c.box.x * 100}%`,
-                          top: `${c.box.y * 100}%`,
-                          width: `${c.box.w * 100}%`,
-                          height: `${c.box.h * 100}%`,
-                        }}
-                        aria-label={c?.attributes?.title || `Вещь ${i + 1}`}
                       >
-                        <span
-                          className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${
-                            c.selected
-                              ? 'bg-zinc-900 text-white'
-                              : 'bg-white/90 text-zinc-900'
-                          }`}
-                        >
-                          {c?.attributes?.title || `Вещь ${i + 1}`}
-                        </span>
-                      </button>
-                    ) : null
-                  )}
-                </div>
-              </div>
+                        <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black transition-all ${
+                          c?.selected
+                            ? 'bg-zinc-900 text-white'
+                            : isActive
+                              ? 'bg-zinc-200 text-zinc-900'
+                              : 'bg-zinc-100 text-zinc-900'
+                        }`}>
+                          {i + 1}
+                        </div>
 
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold uppercase tracking-widest text-zinc-900">
+                            {c?.attributes?.title || `Вещь ${i + 1}`}
+                          </div>
+                          <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                            {c?.attributes?.category || 'Категория'}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
               <div className="flex flex-col gap-2">
                 {candidates.map((c, i) => (
                   <button
@@ -452,31 +727,18 @@ const Wardrobe = () => {
                         : 'border-zinc-200 hover:border-zinc-900'
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={!!c?.selected}
-                      onChange={() => toggleCandidateSelection(i)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-1"
-                    />
                     <div className="min-w-0">
                       <div className="text-xs font-bold uppercase tracking-widest text-zinc-900">
                         {c?.attributes?.title || `Вещь ${i + 1}`}
                       </div>
                       <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                         {c?.attributes?.category || 'Категория'}
-                        {!c?.box ? ' • без рамки' : ''}
                       </div>
-                      {(c?.attributes?.color || c?.attributes?.material) && (
-                        <div className="mt-1 text-[10px] uppercase tracking-widest text-zinc-400">
-                          {[c?.attributes?.color, c?.attributes?.material].filter(Boolean).join(' • ')}
-                        </div>
-                      )}
                     </div>
                   </button>
                 ))}
               </div>
-            </div>
+            )}
 
             <div className="flex gap-2">
               <button
@@ -495,7 +757,7 @@ const Wardrobe = () => {
           </div>
         )}
 
-{extracted && (
+                  {extracted && (
                     <div className="space-y-4">
                       <div className="flex gap-3">
                         <div className="w-28 h-28 rounded-2xl bg-zinc-50 border border-zinc-100 p-2 flex items-center justify-center">
