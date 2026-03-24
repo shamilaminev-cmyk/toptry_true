@@ -1427,7 +1427,7 @@ function normalizeCatalogCategory(raw) {
     return "BOTTOMS";
   }
 
-  if (/(футбол|майк|поло|рубаш|лонгслив|топ|худи|свитш|свитер|джемпер|shirt|t-shirt|tee|hoodie|sweat|bra|бюстгаль|лиф|бикини)/i.test(s)) {
+  if (/(футбол|майк|поло|рубаш|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat|bra|бюстгаль|лиф|бикини)/i.test(s)) {
     return "TOPS";
   }
 
