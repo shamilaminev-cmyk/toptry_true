@@ -110,7 +110,7 @@ const LookDetails = () => {
           </div>
         )}
 
-        {!showResult && !isTryingOn && (
+        {!showResult && !isTryingOn && look?.userId !== user?.id && (
           <div className="absolute inset-0 flex items-center justify-center">
             <button
               onClick={handleTryOn}
