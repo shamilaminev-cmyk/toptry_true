@@ -10,15 +10,15 @@ const Catalog = () => {
   const [filter, setFilter] = useState<{ gender?: Gender; category?: Category }>({});
   const [search, setSearch] = useState('');
 
-  const IMG_FALLBACK = "/mock/placeholder.svg";
+  const IMG_FALLBACK = "https://i.pravatar.cc/150?u=toptry-demo";
 
   const mockProducts: any[] = [
-    { id: "mock-001", title: "Блейзер прямого кроя", price: 12990, gender: Gender.FEMALE, category: Category.JACKETS, images: ["/mock/items/blazer.jpg"], storeName: "ZARA" },
-    { id: "mock-002", title: "Пальто шерстяное", price: 24990, gender: Gender.FEMALE, category: Category.JACKETS, images: ["/mock/items/coat.jpg"], storeName: "MASSIMO DUTTI" },
-    { id: "mock-003", title: "Куртка бомбер", price: 15990, gender: Gender.MALE, category: Category.JACKETS, images: ["/mock/items/bomber.jpg"], storeName: "H&M" },
-    { id: "mock-004", title: "Джинсы straight", price: 7990, gender: Gender.MALE, category: Category.PANTS, images: ["/mock/items/jeans.jpg"], storeName: "UNIQLO" },
-    { id: "mock-005", title: "Брюки классические", price: 9990, gender: Gender.UNISEX, category: Category.PANTS, images: ["/mock/items/trousers.jpg"], storeName: "COS" },
-    { id: "mock-006", title: "Платье миди", price: 11990, gender: Gender.FEMALE, category: Category.DRESS, images: ["/mock/items/dress.jpg"], storeName: "MANGO" },
+    { id: "mock-001", title: "Блейзер прямого кроя", price: 12990, gender: Gender.FEMALE, category: Category.JACKETS, images: ["https://picsum.photos/seed/home-blazer/400/600"], storeName: "ZARA" },
+    { id: "mock-002", title: "Пальто шерстяное", price: 24990, gender: Gender.FEMALE, category: Category.JACKETS, images: ["https://picsum.photos/seed/home-coat/400/600"], storeName: "MASSIMO DUTTI" },
+    { id: "mock-003", title: "Куртка бомбер", price: 15990, gender: Gender.MALE, category: Category.JACKETS, images: ["https://picsum.photos/seed/home-bomber/400/600"], storeName: "H&M" },
+    { id: "mock-004", title: "Джинсы straight", price: 7990, gender: Gender.MALE, category: Category.PANTS, images: ["https://picsum.photos/seed/home-jeans/400/600"], storeName: "UNIQLO" },
+    { id: "mock-005", title: "Брюки классические", price: 9990, gender: Gender.UNISEX, category: Category.PANTS, images: ["https://picsum.photos/seed/home-trousers/400/600"], storeName: "COS" },
+    { id: "mock-006", title: "Платье миди", price: 11990, gender: Gender.FEMALE, category: Category.DRESS, images: ["https://picsum.photos/seed/home-dress/400/600"], storeName: "MANGO" },
   ];
 
   const USE_MOCK_CATALOG = false;

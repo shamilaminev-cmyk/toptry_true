@@ -277,12 +277,12 @@ const Dashboard = () => {
   const USE_MOCK_HOME_CATALOG = true;
 
   const mockHomeProducts: any[] = [
-    { id: "home-mock-001", title: "Блейзер прямого кроя", price: 12990, images: ["/mock/items/blazer.jpg"], storeName: "ZARA" },
-    { id: "home-mock-002", title: "Пальто шерстяное", price: 24990, images: ["/mock/items/coat.jpg"], storeName: "MASSIMO DUTTI" },
-    { id: "home-mock-003", title: "Куртка бомбер", price: 15990, images: ["/mock/items/bomber.jpg"], storeName: "H&M" },
-    { id: "home-mock-004", title: "Джинсы straight", price: 7990, images: ["/mock/items/jeans.jpg"], storeName: "UNIQLO" },
-    { id: "home-mock-005", title: "Брюки классические", price: 9990, images: ["/mock/items/trousers.jpg"], storeName: "COS" },
-    { id: "home-mock-006", title: "Платье миди", price: 11990, images: ["/mock/items/dress.jpg"], storeName: "MANGO" },
+    { id: "home-mock-001", title: "Блейзер прямого кроя", price: 12990, images: ["https://picsum.photos/seed/home-blazer/400/600"], storeName: "ZARA" },
+    { id: "home-mock-002", title: "Пальто шерстяное", price: 24990, images: ["https://picsum.photos/seed/home-coat/400/600"], storeName: "MASSIMO DUTTI" },
+    { id: "home-mock-003", title: "Куртка бомбер", price: 15990, images: ["https://picsum.photos/seed/home-bomber/400/600"], storeName: "H&M" },
+    { id: "home-mock-004", title: "Джинсы straight", price: 7990, images: ["https://picsum.photos/seed/home-jeans/400/600"], storeName: "UNIQLO" },
+    { id: "home-mock-005", title: "Брюки классические", price: 9990, images: ["https://picsum.photos/seed/home-trousers/400/600"], storeName: "COS" },
+    { id: "home-mock-006", title: "Платье миди", price: 11990, images: ["https://picsum.photos/seed/home-dress/400/600"], storeName: "MANGO" },
   ];
 
   const homeCatalog = USE_MOCK_HOME_CATALOG ? mockHomeProducts : products;
@@ -438,8 +438,8 @@ const Feed = () => {
     {
       id: "mock-feed-001",
       authorName: "style.daily",
-      authorAvatar: "/mock/placeholder.svg",
-      resultImageUrl: "/mock/looks/feed-1.jpg",
+      authorAvatar: "https://i.pravatar.cc/150?u=toptry-demo",
+      resultImageUrl: "https://picsum.photos/seed/feed1/800/1200",
       likes: 124,
       comments: 12,
       aiDescription: "Базовый образ на каждый день. 3 вещи • 34 970 ₽",
@@ -448,8 +448,8 @@ const Feed = () => {
     {
       id: "mock-feed-002",
       authorName: "minimal.mood",
-      authorAvatar: "/mock/placeholder.svg",
-      resultImageUrl: "/mock/looks/feed-2.jpg",
+      authorAvatar: "https://i.pravatar.cc/150?u=toptry-demo",
+      resultImageUrl: "https://picsum.photos/seed/feed2/800/1200",
       likes: 88,
       comments: 7,
       aiDescription: "Капсула в стиле минимализм. 4 вещи • 52 990 ₽",
@@ -458,8 +458,8 @@ const Feed = () => {
     {
       id: "mock-feed-003",
       authorName: "moscow.fit",
-      authorAvatar: "/mock/placeholder.svg",
-      resultImageUrl: "/mock/looks/feed-3.jpg",
+      authorAvatar: "https://i.pravatar.cc/150?u=toptry-demo",
+      resultImageUrl: "https://picsum.photos/seed/feed3/800/1200",
       likes: 203,
       comments: 19,
       aiDescription: "Уличный casual. 2 вещи • 27 990 ₽",
@@ -468,8 +468,8 @@ const Feed = () => {
     {
       id: "mock-feed-004",
       authorName: "capsule.club",
-      authorAvatar: "/mock/placeholder.svg",
-      resultImageUrl: "/mock/looks/feed-4.jpg",
+      authorAvatar: "https://i.pravatar.cc/150?u=toptry-demo",
+      resultImageUrl: "https://picsum.photos/seed/feed4/800/1200",
       likes: 61,
       comments: 3,
       aiDescription: "Собранный smart casual. 5 вещей • 79 990 ₽",
