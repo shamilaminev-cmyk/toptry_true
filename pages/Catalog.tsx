@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
+import { catalogImageSrc } from "../utils/catalogImageSrc";
 import { useAppState } from '../store';
 import { Category, Gender } from '../types';
 import { CURRENCY, ICONS } from '../constants';
@@ -143,7 +144,7 @@ const Catalog = () => {
             <div key={p.id} className="group">
               <div className="relative aspect-[3/4] rounded-[24px] overflow-hidden bg-zinc-50 p-6 border border-zinc-100 transition-all hover:shadow-xl hover:border-zinc-200">
                  <img
-                   src={(p as any).images?.[0] ? `/api/catalog/image?url=${encodeURIComponent((p as any).images[0])}` : IMG_FALLBACK}
+                   src={(p as any).images?.[0] ? catalogImageSrc((p as any).images[0]) : IMG_FALLBACK}
                    alt={p.title || ""}
                    onError={(e) => {
                      const el = e.currentTarget as HTMLImageElement;

@@ -4,6 +4,7 @@ import { HomeLayout, SubscriptionTier } from '../types';
 import { ICONS, CURRENCY } from '../constants';
 import { Link } from 'react-router-dom';
 import { withApiOrigin } from '../utils/withApiOrigin';
+import { catalogImageSrc } from '../utils/catalogImageSrc';
 
 const Hero = () => {
   const { user, actions } = useAppState();
@@ -391,7 +392,7 @@ const Dashboard = () => {
               >
                 <div className="aspect-[4/5] bg-zinc-50 rounded-2xl overflow-hidden p-6 border border-zinc-100">
                   <img
-                    src={p.images?.[0] ? `/api/catalog/image?url=${encodeURIComponent(p.images[0])}` : ""}
+                    src={catalogImageSrc(p.images?.[0])}
                     alt=""
                     className="w-full h-full object-contain mix-blend-multiply"
                   />
@@ -431,7 +432,7 @@ const Dashboard = () => {
                     SALE -{20 + idx * 5}%
                   </div>
                   <img
-                    src={p.images?.[0] ? `/api/catalog/image?url=${encodeURIComponent(p.images[0])}` : ""}
+                    src={catalogImageSrc(p.images?.[0])}
                     alt=""
                     className="w-full h-full object-contain mix-blend-multiply"
                   />
