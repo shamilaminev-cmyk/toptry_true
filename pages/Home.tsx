@@ -391,7 +391,7 @@ const Dashboard = () => {
               >
                 <div className="aspect-[4/5] bg-zinc-50 rounded-2xl overflow-hidden p-6 border border-zinc-100">
                   <img
-                    src={withApiOrigin(p.images?.[0])}
+                    src={p.images?.[0] ? withApiOrigin(`/api/catalog/image?url=${encodeURIComponent(p.images[0])}`) : ""}
                     alt=""
                     className="w-full h-full object-contain mix-blend-multiply"
                   />
@@ -431,7 +431,7 @@ const Dashboard = () => {
                     SALE -{20 + idx * 5}%
                   </div>
                   <img
-                    src={withApiOrigin(p.images?.[0])}
+                    src={p.images?.[0] ? withApiOrigin(`/api/catalog/image?url=${encodeURIComponent(p.images[0])}`) : ""}
                     alt=""
                     className="w-full h-full object-contain mix-blend-multiply"
                   />
