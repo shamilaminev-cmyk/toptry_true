@@ -73,3 +73,5 @@ server/index.mjs.bak
 server/index.mjs.BEFORE_*
 *.bak
 patch_*.py
+# local patch / backup artifacts
+*.bak.*
