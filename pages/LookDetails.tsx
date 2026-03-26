@@ -98,6 +98,32 @@ const LookDetails = () => {
     }
   };
 
+  const handleShare = async () => {
+    const url = window.location.href;
+    const title = look?.title || 'Образ TopTry';
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title,
+          text: 'Посмотри этот образ в TopTry',
+          url,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(url);
+      alert('Ссылка на образ скопирована');
+    } catch {
+      try {
+        await navigator.clipboard.writeText(url);
+        alert('Ссылка на образ скопирована');
+      } catch {
+        alert(url);
+      }
+    }
+  };
+
   return (
     <div className="pb-12">
       <div className="relative aspect-[3/4] bg-zinc-100">
@@ -330,7 +356,10 @@ const LookDetails = () => {
         </section>
 
         <div className="pt-4 border-t border-zinc-100">
-          <button className="w-full flex items-center justify-center gap-2 text-zinc-400 uppercase font-bold text-[10px] tracking-widest py-4">
+          <button
+            onClick={handleShare}
+            className="w-full flex items-center justify-center gap-2 text-zinc-400 uppercase font-bold text-[10px] tracking-widest py-4"
+          >
             <ICONS.Share className="w-4 h-4" /> Поделиться этим образом
           </button>
         </div>

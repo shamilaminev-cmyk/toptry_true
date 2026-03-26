@@ -463,6 +463,32 @@ const Feed = () => {
   const [feedLooks, setFeedLooks] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
 
+  const handleShare = async (look: any) => {
+    const path = `${window.location.origin}${window.location.pathname}#/look/${look.id}`;
+    const title = look?.title || 'Образ TopTry';
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title,
+          text: 'Посмотри этот образ в TopTry',
+          url: path,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(path);
+      alert('Ссылка на образ скопирована');
+    } catch {
+      try {
+        await navigator.clipboard.writeText(path);
+        alert('Ссылка на образ скопирована');
+      } catch {
+        alert(path);
+      }
+    }
+  };
+
   // Demo public feed (used when public endpoints are empty/unavailable)
   const USE_MOCK_PUBLIC_FEED = true;
   const mockPublicLooks: any[] = [
@@ -610,7 +636,10 @@ const Feed = () => {
                 <p className="text-[10px] text-zinc-400 uppercase tracking-wide">2 часа назад</p>
               </div>
             </div>
-            <button className="p-2 text-zinc-400">
+            <button
+              onClick={() => handleShare(look)}
+              className="p-2 text-zinc-400"
+            >
               <ICONS.Share className="w-5 h-5" />
             </button>
           </div>
