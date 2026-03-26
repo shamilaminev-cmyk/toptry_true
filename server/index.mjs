@@ -816,8 +816,6 @@ app.post("/api/looks/create", async (req, res) => {
       id: "l-" + Date.now(),
       title: "Сгенерированный образ",
       items: Array.isArray(b.itemIds) ? b.itemIds : [],
-      sourceItems: Array.isArray(b.sourceItems) ? b.sourceItems : [],
-      priceBuyNowRUB: Number(b.priceBuyNowRUB || 0),
       resultImageUrl: imageDataUrl,
       createdAt: now.toISOString(),
       isPublic: false,
@@ -1578,6 +1576,62 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
+
+
+
+app.get("/api/catalog/image", async (req, res) => {
+  try {
+    const rawUrl = String(req.query.url || "").trim();
+    if (!rawUrl) {
+      return res.status(400).json({ error: "url is required" });
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ error: "invalid url" });
+    }
+
+    if (!/^https?:$/i.test(parsed.protocol)) {
+      return res.status(400).json({ error: "unsupported protocol" });
+    }
+
+    const allowedHosts = new Set([
+      "sportcourt.ru",
+      "www.sportcourt.ru",
+    ]);
+
+    if (!allowedHosts.has(parsed.hostname)) {
+      return res.status(403).json({ error: "host is not allowed" });
+    }
+
+    const upstream = await fetch(parsed.toString(), {
+      headers: {
+        "user-agent": "Mozilla/5.0 TopTryCatalogProxy",
+        "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "referer": "https://toptry.ru/",
+      },
+    });
+
+    if (!upstream.ok) {
+      return res.status(upstream.status).send("upstream image fetch failed");
+    }
+
+    const ct = upstream.headers.get("content-type") || "image/jpeg";
+    const cc = upstream.headers.get("cache-control") || "public, max-age=3600";
+
+    res.setHeader("Content-Type", ct);
+    res.setHeader("Cache-Control", cc);
+
+    const ab = await upstream.arrayBuffer();
+    return res.send(Buffer.from(ab));
+  } catch (e) {
+    console.error("[toptry] /api/catalog/image error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
 
 app.get("/api/catalog/products", async (_req, res) => {
   try {
