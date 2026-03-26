@@ -865,32 +865,66 @@ const Wardrobe = () => {
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-4">
-            {filteredItems.map((item) => (
-              <div
-                key={item.id}
-                className={`relative group aspect-square rounded-[24px] bg-zinc-50 border border-zinc-100 transition-all overflow-hidden p-3 hover:border-zinc-300 hover:shadow-md`}
-              >
-                {/* ✅ ВАЖНО: префиксуем /media/* на apiOrigin */}
-                <img
-                  src={withApiOrigin(item.images?.[0])}
-                  alt=""
-                  className="w-full h-full object-contain mix-blend-multiply transition-all duration-500"
-                />
-                <button
-                  onClick={() => actions.removeFromWardrobe(item.id)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-lg text-zinc-400 hover:text-red-500 shadow-sm"
+            {filteredItems.map((item) => {
+              const isCatalogItem = item.sourceType === 'catalog' || item.isCatalog;
+
+              return (
+                <div
+                  key={item.id}
+                  className={`relative group aspect-square rounded-[24px] bg-zinc-50 border border-zinc-100 transition-all overflow-hidden p-3 hover:border-zinc-300 hover:shadow-md`}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    ></path>
-                  </svg>
-                </button>
-              </div>
-            ))}
+                  <img
+                    src={withApiOrigin(item.images?.[0])}
+                    alt=""
+                    className="w-full h-full object-contain mix-blend-multiply transition-all duration-500"
+                  />
+
+                  {!isCatalogItem && (
+                    <div className="absolute top-2 left-2 bg-white/90 backdrop-blur px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest text-zinc-900 shadow-sm">
+                      Ваше
+                    </div>
+                  )}
+
+                  <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-white via-white/95 to-transparent">
+                    <div className="text-[10px] font-bold uppercase tracking-tight text-zinc-900 truncate">
+                      {item.title || 'Без названия'}
+                    </div>
+
+                    {isCatalogItem ? (
+                      <>
+                        <div className="mt-1 text-[9px] uppercase tracking-widest text-zinc-400 truncate">
+                          {item.storeName || item.storeId || 'Каталог'}
+                        </div>
+                        <div className="mt-1 text-[10px] font-bold text-zinc-900">
+                          {item.price ? `${item.price} ₽` : ''}
+                        </div>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => navigate('/catalog')}
+                        className="mt-2 text-[9px] font-bold uppercase tracking-widest text-zinc-900 underline"
+                      >
+                        Найти похожее
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => actions.removeFromWardrobe(item.id)}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-lg text-zinc-400 hover:text-red-500 shadow-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      ></path>
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 
