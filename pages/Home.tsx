@@ -274,7 +274,7 @@ const SectionHeader = ({ title, linkTo, linkText }: { title: string; linkTo: str
 
 const Dashboard = () => {
   const { products, wardrobe, looks } = useAppState();
-  const USE_MOCK_HOME_CATALOG = true;
+  const USE_MOCK_HOME_CATALOG = false;
 
   const mockHomeProducts: any[] = [
     { id: "home-mock-001", title: "Блейзер прямого кроя", price: 12990, images: ["https://picsum.photos/seed/home-blazer/400/600"], storeName: "ZARA" },
@@ -285,10 +285,15 @@ const Dashboard = () => {
     { id: "home-mock-006", title: "Платье миди", price: 11990, images: ["https://picsum.photos/seed/home-dress/400/600"], storeName: "MANGO" },
   ];
 
-  const homeCatalog = USE_MOCK_HOME_CATALOG ? mockHomeProducts : products;
+  const homeCatalog =
+  products && products.length > 0
+    ? products
+    : mockHomeProducts;
 
   const recentProducts = homeCatalog.slice(0, 4);
-  const saleProducts = homeCatalog.slice(2, 6);
+  const saleProducts = [...homeCatalog]
+  .sort((a, b) => a.price - b.price)
+  .slice(0, 4);
   const recentWardrobe = wardrobe.slice(0, 4);
   const trendingLooks = looks.slice(0, 4);
 
