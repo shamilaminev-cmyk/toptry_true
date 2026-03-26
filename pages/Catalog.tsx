@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
 import { catalogImageSrc } from "../utils/catalogImageSrc";
 import { useAppState } from '../store';
@@ -10,6 +10,25 @@ const Catalog = () => {
   const { products, wardrobe, actions } = useAppState();
   const [filter, setFilter] = useState<{ gender?: Gender; category?: Category }>({});
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const rawHash = window.location.hash || '';
+    const query = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : '';
+    const params = new URLSearchParams(query);
+
+    const q = params.get('q') || '';
+    const category = params.get('category') || '';
+
+    if (q) setSearch(q);
+
+    if (category) {
+      setFilter((prev) => ({
+        ...prev,
+        category: category as Category
+      }));
+    }
+  }, []);
+
 
   const IMG_FALLBACK = "https://i.pravatar.cc/150?u=toptry-demo";
 
