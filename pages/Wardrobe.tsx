@@ -908,22 +908,6 @@ const Wardrobe = () => {
                             params.set('category', String(item.category));
                           }
 
-                          const rawTitle = String(item.title || '')
-                            .toLowerCase()
-                            .replace(/\b(мужская|мужской|женская|женский|unisex|для|него|неё|нее)\b/g, ' ')
-                            .replace(/\s+/g, ' ')
-                            .trim();
-
-                          const query = rawTitle
-                            .split(' ')
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .join(' ');
-
-                          if (query) {
-                            params.set('q', query);
-                          }
-
                           navigate(`/catalog?${params.toString()}`);
                         }}
                         className="mt-2 text-[9px] font-bold uppercase tracking-widest text-zinc-900 underline"
