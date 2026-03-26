@@ -29,6 +29,8 @@ interface AppState {
     createLook: (items: WardrobeItem[]) => Promise<string | undefined>;
     setSelfie: (url: string) => void;
     likeLook: (id: string) => void;
+    reactToLook: (id: string, reaction: 'like' | 'want_try' | 'would_buy') => Promise<void>;
+    saveLook: (id: string) => Promise<void>;
   };
 }
 
@@ -450,6 +452,7 @@ register: async (email: string, username: string, password: string) => {
           userId: userId,
           addedAt: new Date(),
           isCatalog: true,
+          sourceType: 'catalog',
         };
         return [newItem, ...prev];
       });
@@ -461,6 +464,7 @@ register: async (email: string, username: string, password: string) => {
         userId: userId,
         addedAt: new Date(),
         isCatalog: false,
+        sourceType: 'own',
       }));
       setWardrobe(prev => [...newItems, ...prev]);
     },
@@ -569,6 +573,60 @@ register: async (email: string, username: string, password: string) => {
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data?.error || 'Like failed');
         setLooks((prev) => prev.map((l) => (l.id === id ? { ...l, likes: data.likes } : l)));
+      } catch {
+        // ignore
+      }
+    },
+
+    reactToLook: async (id: string, reaction: 'like' | 'want_try' | 'would_buy') => {
+      try {
+        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/react`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reaction }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data?.error || 'Reaction failed');
+
+        setLooks((prev) =>
+          prev.map((l) =>
+            l.id === id
+              ? {
+                  ...l,
+                  likes: data?.likes ?? l.likes,
+                  wantTryCount: data?.wantTryCount ?? l.wantTryCount ?? 0,
+                  wouldBuyCount: data?.wouldBuyCount ?? l.wouldBuyCount ?? 0,
+                  viewerReaction: reaction,
+                }
+              : l
+          )
+        );
+      } catch {
+        // ignore
+      }
+    },
+
+    saveLook: async (id: string) => {
+      try {
+        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/save`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data?.error || 'Save failed');
+
+        setLooks((prev) =>
+          prev.map((l) =>
+            l.id === id
+              ? {
+                  ...l,
+                  saves: data?.saves ?? ((l.saves || 0) + 1),
+                  viewerSaved: true,
+                }
+              : l
+          )
+        );
       } catch {
         // ignore
       }

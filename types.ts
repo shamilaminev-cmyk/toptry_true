@@ -37,6 +37,10 @@ export interface Product {
   sizes: string[];
   images: string[];
   storeId: string;
+  storeName?: string;
+  brand?: string;
+  productUrl?: string;
+  affiliateUrl?: string;
   availability: boolean;
   isCatalog: boolean;
 }
@@ -84,6 +88,9 @@ export interface Look {
   isPublic: boolean;
   likes: number;
   comments: number;
+  wantTryCount?: number;
+  wouldBuyCount?: number;
+  saves?: number;
   createdAt: Date;
   authorName?: string;
   authorAvatar?: string;
@@ -92,6 +99,9 @@ export interface Look {
   aiDescription?: string;
   priceBuyNowRUB?: number;
   buyLinks?: string[];
+
+  viewerReaction?: 'like' | 'want_try' | 'would_buy' | null;
+  viewerSaved?: boolean;
 }
 
 export interface Comment {
@@ -101,6 +111,7 @@ export interface Comment {
   userName: string;
   text: string;
   createdAt: Date;
+  authorAvatar?: string;
 }
 
 export enum HomeLayout {

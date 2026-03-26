@@ -15,6 +15,14 @@ const LookDetails = () => {
   const [commentText, setCommentText] = useState('');
   const [commentBusy, setCommentBusy] = useState(false);
 
+  const quickComments = [
+    'Очень удачно',
+    'Хочу такой же',
+    'Лучше с другими брюками',
+    'Слишком спортивно',
+    'Где купить?',
+  ];
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -148,9 +156,18 @@ const LookDetails = () => {
               </span>
             </div>
           </div>
-          <div className="flex gap-4">
-            <button onClick={() => actions.likeLook(look.id)} className="flex items-center gap-1.5 font-bold">
+          <div className="flex gap-4 flex-wrap justify-end">
+            <button onClick={() => actions.reactToLook(look.id, 'like')} className="flex items-center gap-1.5 font-bold">
               <ICONS.Heart className="w-6 h-6" /> {look.likes}
+            </button>
+            <button onClick={() => actions.reactToLook(look.id, 'want_try')} className="flex items-center gap-1.5 font-bold">
+              <span className="text-lg leading-none">🔥</span> {look.wantTryCount || 0}
+            </button>
+            <button onClick={() => actions.reactToLook(look.id, 'would_buy')} className="flex items-center gap-1.5 font-bold">
+              <span className="text-lg leading-none">🛍️</span> {look.wouldBuyCount || 0}
+            </button>
+            <button onClick={() => actions.saveLook(look.id)} className="flex items-center gap-1.5 font-bold">
+              <span className="text-lg leading-none">🔖</span> {look.saves || 0}
             </button>
           </div>
         </div>
@@ -278,22 +295,36 @@ const LookDetails = () => {
           )}
 
           {user?.id && (
-            <div className="flex gap-2">
-              <input
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Написать комментарий..."
-                className="flex-1 border border-zinc-200 rounded-full px-5 py-3 text-sm focus:outline-none focus:border-zinc-900"
-              />
-              <button
-                onClick={submitComment}
-                disabled={commentBusy}
-                className={`bg-zinc-900 text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest ${
-                  commentBusy ? 'opacity-60 pointer-events-none' : ''
-                }`}
-              >
-                Отправить
-              </button>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {quickComments.map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => setCommentText(preset)}
+                    className="px-3 py-2 rounded-full border border-zinc-200 text-[10px] font-bold uppercase tracking-widest hover:border-zinc-900"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Написать комментарий..."
+                  className="flex-1 border border-zinc-200 rounded-full px-5 py-3 text-sm focus:outline-none focus:border-zinc-900"
+                />
+                <button
+                  onClick={submitComment}
+                  disabled={commentBusy}
+                  className={`bg-zinc-900 text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest ${
+                    commentBusy ? 'opacity-60 pointer-events-none' : ''
+                  }`}
+                >
+                  Отправить
+                </button>
+              </div>
             </div>
           )}
         </section>
