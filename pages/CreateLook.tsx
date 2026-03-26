@@ -1,14 +1,15 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
 import { useAppState } from '../store';
 import { ICONS } from '../constants';
 import { Category, WardrobeItem } from '../types';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 
 const CreateLook = () => {
   const { wardrobe, user, actions, aiError } = useAppState();
   const navigate = useNavigate();
+  const location = useLocation();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -17,6 +18,28 @@ const CreateLook = () => {
   const filteredItems = activeCategory === 'all' 
     ? wardrobe 
     : wardrobe.filter(i => i.category === activeCategory);
+
+  useEffect(() => {
+    const state = (location.state || {}) as any;
+    const preselectedItemId = state?.preselectedItemId;
+
+    if (!preselectedItemId) return;
+    if (!wardrobe.some((i) => i.id === preselectedItemId)) return;
+
+    setSelectedIds((prev) => {
+      if (prev.has(preselectedItemId)) return prev;
+      const next = new Set(prev);
+      if (next.size >= 5) return next;
+      next.add(preselectedItemId);
+      return next;
+    });
+
+    if (state?.preselectedCategory) {
+      setActiveCategory(state.preselectedCategory);
+    }
+
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, location.pathname, navigate, wardrobe]);
 
   const toggleItem = (item: WardrobeItem) => {
     const next = new Set(selectedIds);

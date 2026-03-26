@@ -377,21 +377,34 @@ const Dashboard = () => {
         <SectionHeader title="Новое в каталоге" linkTo="/catalog" linkText="Смотреть" />
         <div className="grid grid-cols-2 gap-4 px-4">
           {recentProducts.map((p) => (
-            <div key={p.id} className="space-y-2">
-              <div className="aspect-[4/5] bg-zinc-50 rounded-2xl overflow-hidden p-6 border border-zinc-100">
-                <img
-                  src={withApiOrigin(p.images?.[0])}
-                  alt=""
-                  className="w-full h-full object-contain mix-blend-multiply"
-                />
-              </div>
-              <div className="px-1">
-                <p className="text-xs font-bold truncate uppercase">{p.title}</p>
-                <p className="text-xs text-zinc-400">
-                  {p.price} {CURRENCY}
-                </p>
-              </div>
-            </div>
+            <button
+              key={p.id}
+              onClick={() => {
+                actions.addToWardrobe(p as any);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="space-y-2 text-left"
+            >
+              <Link
+                to="/create-look"
+                state={{ preselectedItemId: p.id, preselectedCategory: p.category }}
+                className="block"
+              >
+                <div className="aspect-[4/5] bg-zinc-50 rounded-2xl overflow-hidden p-6 border border-zinc-100">
+                  <img
+                    src={withApiOrigin(p.images?.[0])}
+                    alt=""
+                    className="w-full h-full object-contain mix-blend-multiply"
+                  />
+                </div>
+                <div className="px-1">
+                  <p className="text-xs font-bold truncate uppercase">{p.title}</p>
+                  <p className="text-xs text-zinc-400">
+                    {p.price} {CURRENCY}
+                  </p>
+                </div>
+              </Link>
+            </button>
           ))}
         </div>
       </section>
@@ -401,29 +414,42 @@ const Dashboard = () => {
         <SectionHeader title="Скидки" linkTo="/catalog" linkText="Все акции" />
         <div className="grid grid-cols-2 gap-4 px-4">
           {saleProducts.map((p, idx) => (
-            <div key={p.id} className="space-y-2">
-              <div className="relative aspect-[4/5] bg-zinc-50 rounded-2xl overflow-hidden p-6 border border-zinc-100">
-                <div className="absolute top-3 left-3 bg-zinc-900 text-white px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter">
-                  SALE -{20 + idx * 5}%
+            <button
+              key={p.id}
+              onClick={() => {
+                actions.addToWardrobe(p as any);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="space-y-2 text-left"
+            >
+              <Link
+                to="/create-look"
+                state={{ preselectedItemId: p.id, preselectedCategory: p.category }}
+                className="block"
+              >
+                <div className="relative aspect-[4/5] bg-zinc-50 rounded-2xl overflow-hidden p-6 border border-zinc-100">
+                  <div className="absolute top-3 left-3 bg-zinc-900 text-white px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter">
+                    SALE -{20 + idx * 5}%
+                  </div>
+                  <img
+                    src={withApiOrigin(p.images?.[0])}
+                    alt=""
+                    className="w-full h-full object-contain mix-blend-multiply"
+                  />
                 </div>
-                <img
-                  src={withApiOrigin(p.images?.[0])}
-                  alt=""
-                  className="w-full h-full object-contain mix-blend-multiply"
-                />
-              </div>
-              <div className="px-1">
-                <p className="text-xs font-bold truncate uppercase">{p.title}</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-xs font-black text-zinc-900">
-                    {Math.round(p.price * 0.7)} {CURRENCY}
-                  </p>
-                  <p className="text-[10px] text-zinc-400 line-through">
-                    {p.price} {CURRENCY}
-                  </p>
+                <div className="px-1">
+                  <p className="text-xs font-bold truncate uppercase">{p.title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-black text-zinc-900">
+                      {Math.round(p.price * 0.7)} {CURRENCY}
+                    </p>
+                    <p className="text-[10px] text-zinc-400 line-through">
+                      {p.price} {CURRENCY}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </Link>
+            </button>
           ))}
         </div>
       </section>
