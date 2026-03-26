@@ -478,11 +478,11 @@ const Feed = () => {
       }
 
       await navigator.clipboard.writeText(path);
-      alert('Ссылка на образ скопирована');
+      showToast('Ссылка скопирована');
     } catch {
       try {
         await navigator.clipboard.writeText(path);
-        alert('Ссылка на образ скопирована');
+        showToast('Ссылка скопирована');
       } catch {
         alert(path);
       }
@@ -697,5 +697,31 @@ const Home = () => {
     </div>
   );
 };
+
+
+function showToast(message: string) {
+  const el = document.createElement('div');
+  el.innerText = message;
+  el.style.position = 'fixed';
+  el.style.bottom = '24px';
+  el.style.left = '50%';
+  el.style.transform = 'translateX(-50%)';
+  el.style.background = '#111';
+  el.style.color = '#fff';
+  el.style.padding = '10px 16px';
+  el.style.borderRadius = '999px';
+  el.style.fontSize = '12px';
+  el.style.zIndex = '9999';
+  el.style.opacity = '0';
+  el.style.transition = 'opacity 0.2s ease';
+
+  document.body.appendChild(el);
+  requestAnimationFrame(() => (el.style.opacity = '1'));
+
+  setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 200);
+  }, 2000);
+}
 
 export default Home;
