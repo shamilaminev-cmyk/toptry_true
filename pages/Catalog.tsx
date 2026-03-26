@@ -83,7 +83,15 @@ const Catalog = () => {
           return (
             <div key={p.id} className="group">
               <div className="relative aspect-[3/4] rounded-[24px] overflow-hidden bg-zinc-50 p-6 border border-zinc-100 transition-all hover:shadow-xl hover:border-zinc-200">
-                 <img src={withApiOrigin((p as any).images?.[0] || IMG_FALLBACK)} alt={p.title || ""} onError={(e) => { const el = e.currentTarget as HTMLImageElement; el.src = IMG_FALLBACK; }} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-all duration-700" />
+                 <img
+                   src={(p as any).images?.[0] ? withApiOrigin(`/api/catalog/image?url=${encodeURIComponent((p as any).images[0])}`) : IMG_FALLBACK}
+                   alt={p.title || ""}
+                   onError={(e) => {
+                     const el = e.currentTarget as HTMLImageElement;
+                     el.src = IMG_FALLBACK;
+                   }}
+                   className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-all duration-700"
+                 />
                  
                  <button 
                    onClick={(e) => {
