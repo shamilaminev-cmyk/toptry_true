@@ -38,7 +38,7 @@ const AppContext = createContext<AppState | undefined>(undefined);
 
 // Using picsum.photos for better CORS support when fetching images for AI processing
 const getProductImage = (i: number, category: Category) => {
-  return `https://picsum.photos/seed/product-${i}-${category}/400/600`;
+  return "";
 };
 
 const MOCK_PRODUCTS: Product[] = Array.from({ length: 40 }).map((_, i) => {
@@ -63,7 +63,7 @@ const MOCK_LOOKS: Look[] = Array.from({ length: 12 }).map((_, i) => ({
   userId: `u-${i % 3}`,
   title: `Стильный образ ${i + 1}`,
   items: [`p-${i}`, `p-${(i + 5) % 40}`],
-  resultImageUrl: `https://picsum.photos/seed/look-${i}/600/800`,
+  resultImageUrl: "",
   isPublic: true,
   likes: Math.floor(Math.random() * 50),
   comments: Math.floor(Math.random() * 10),
@@ -559,7 +559,7 @@ register: async (email: string, username: string, password: string) => {
   }), [user, looks, wardrobe, homeLayout]);
 
   return (
-      <AppContext.Provider value={{ user, products: (products.length ? products : MOCK_PRODUCTS), wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
+      <AppContext.Provider value={{ user, products, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
       {children}
     </AppContext.Provider>
   );
