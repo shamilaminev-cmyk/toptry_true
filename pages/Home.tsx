@@ -329,8 +329,7 @@ const Dashboard = () => {
           {trendingLooks.map((look) => (
             <Link key={look.id} to={`/look/${look.id}`} className="flex-shrink-0 w-40 space-y-2">
               <div className="aspect-[3/4] rounded-2xl bg-zinc-100 overflow-hidden">
-                <img
-                  src={withApiOrigin(look.resultImageUrl)}
+                <img src={(look.resultImageUrl ? withApiOrigin(look.resultImageUrl) : "")} onError={(e)=>{(e.currentTarget as HTMLImageElement).style.display="none"}} 
                   alt=""
                   className="w-full h-full object-cover hover:scale-110 transition-all duration-500"
                 />
@@ -616,7 +615,7 @@ const Feed = () => {
           </div>
 
           <Link to={`/look/${look.id}`} className="block relative aspect-[4/5] rounded-[32px] overflow-hidden bg-zinc-100">
-            <img src={withApiOrigin(look.resultImageUrl)} alt="" className="w-full h-full object-cover" />
+            <img src={(look.resultImageUrl ? withApiOrigin(look.resultImageUrl) : "")} onError={(e)=>{(e.currentTarget as HTMLImageElement).style.display="none"}}  alt="" className="w-full h-full object-cover" />
             <div className="absolute bottom-4 left-4 right-4 flex gap-2">
               <button className="flex-1 bg-white/90 backdrop-blur py-3 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
                 Примерить
