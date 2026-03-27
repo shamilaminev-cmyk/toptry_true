@@ -1786,6 +1786,127 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
 });
 
 
+app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
+  try {
+    const FEED_URL = process.env.ADMITAD_SPORTMASTER_FEED_URL || "";
+    if (!FEED_URL) {
+      return res.status(500).json({ error: "ADMITAD_SPORTMASTER_FEED_URL is not set" });
+    }
+
+    const resp = await fetch(FEED_URL);
+    if (!resp.ok) {
+      return res.status(502).json({ error: `Feed fetch failed: ${resp.status}` });
+    }
+
+    const csv = await resp.text();
+    const rows = parseCsv(csv);
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const seen = new Set();
+
+    await prisma.catalogProduct.updateMany({
+      where: { merchant: "sportmaster" },
+      data: { isActive: false },
+    });
+
+    for (const r of rows) {
+      const title = pickFirst(r, ["name", "title", "product_name"]);
+      const brand = pickFirst(r, ["brand", "vendor", "manufacturer"]);
+      const imageUrl = pickFirst(r, ["image", "imageurl", "picture", "img"]);
+      const productUrl = pickFirst(r, ["url", "product_url", "link"]);
+      const affiliateUrl = pickFirst(r, ["deeplink", "affiliate_url", "url", "product_url", "link"]);
+      const price = toPrice(pickFirst(r, ["price", "current_price", "price_value"]));
+      const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
+
+      if (!title || !imageUrl || !affiliateUrl || price === null) {
+        skipped++;
+        continue;
+      }
+
+      const hasUsableImage =
+        String(imageUrl).includes("cdn.sportmaster.ru/")
+          ? true
+          : await isUsableCatalogImageUrl(imageUrl);
+
+      if (!hasUsableImage) {
+        skipped++;
+        continue;
+      }
+
+      const haystack = [
+        title,
+        brand,
+        pickFirst(r, ["category", "category_name", "google_product_category"]),
+        pickFirst(r, ["gender", "sex"]),
+      ].join(" ");
+
+      const externalId = buildCatalogExternalId(r);
+      if (seen.has(externalId)) {
+        skipped++;
+        continue;
+      }
+      seen.add(externalId);
+
+      const gender = normalizeCatalogGender(haystack);
+      const category = normalizeCatalogCategory(haystack);
+
+      const data = {
+        id: `cat-sportmaster-${externalId}`,
+        merchant: "sportmaster",
+        externalId,
+        title,
+        brand: brand || null,
+        category,
+        gender,
+        price,
+        oldPrice,
+        currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
+        imageUrl,
+        productUrl: productUrl || affiliateUrl,
+        affiliateUrl,
+        isActive: true,
+        rawPayload: r,
+      };
+
+      const existing = await prisma.catalogProduct.findUnique({
+        where: {
+          merchant_externalId: {
+            merchant: "sportmaster",
+            externalId,
+          },
+        },
+      });
+
+      if (existing) {
+        await prisma.catalogProduct.update({
+          where: { id: existing.id },
+          data,
+        });
+        updated++;
+      } else {
+        await prisma.catalogProduct.create({ data });
+        created++;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      merchant: "sportmaster",
+      total: rows.length,
+      created,
+      updated,
+      skipped,
+      active: created + updated,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/import/sportmaster error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
 
 app.get("/api/catalog/image", async (req, res) => {
   try {
@@ -1808,6 +1929,7 @@ app.get("/api/catalog/image", async (req, res) => {
     const allowedHosts = new Set([
       "sportcourt.ru",
       "www.sportcourt.ru",
+      "cdn.sportmaster.ru",
     ]);
 
     if (!allowedHosts.has(parsed.hostname)) {
@@ -1846,7 +1968,7 @@ app.get("/api/catalog/products", async (_req, res) => {
     const items = await prisma.catalogProduct.findMany({
       where: {
         isActive: true,
-        merchant: "sportcourt",
+        merchant: { in: ["sportcourt", "sportmaster"] },
       },
       orderBy: { updatedAt: "desc" },
       take: 200,
@@ -1862,7 +1984,7 @@ app.get("/api/catalog/products", async (_req, res) => {
       sizes: ["ONE"],
       images: p.imageUrl ? [p.imageUrl] : [],
       storeId: p.merchant,
-      storeName: "Sportcourt",
+      storeName: p.merchant === "sportmaster" ? "Спортмастер" : "Sportcourt",
       availability: p.isActive,
       isCatalog: true,
       brand: p.brand || undefined,
