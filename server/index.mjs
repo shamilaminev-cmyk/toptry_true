@@ -771,22 +771,13 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
       })
     );
 
-    const prompt =
-      "Act as a professional fashion photographer and AI stylist.
-" +
-      "I am providing a selfie of a person and images of " +
-      String(itemsAbs.length) +
-      " clothing items.
-" +
-      "Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.
-" +
-      "The person should have the same face as in the selfie.
-" +
-      "Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.
-" +
-      "Result should be front view, clean neutral background.
-" +
-      "Avoid brand logos and text.";
+    const prompt = `Act as a professional fashion photographer and AI stylist.
+I am providing a selfie of a person and images of ${itemsAbs.length} clothing items.
+Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.
+The person should have the same face as in the selfie.
+Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.
+Result should be front view, clean neutral background.
+Avoid brand logos and text.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-image-preview",
