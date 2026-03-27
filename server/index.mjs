@@ -731,9 +731,9 @@ app.get("/media/:key(*)", async (req, res) => {
 
 /**
  * POST /api/looks/create
- * Frontend endpoint: returns { look } (resultImageUrl is data:...)
+ * Server-first create: saves look in DB/MinIO and returns persistent URLs
  */
-app.post("/api/looks/create", async (req, res) => {
+app.post("/api/looks/create", requireAuth, async (req, res) => {
   try {
     if (!GEMINI_API_KEY) {
       return res
@@ -745,6 +745,9 @@ app.post("/api/looks/create", async (req, res) => {
     const selfieDataUrl = b.selfieDataUrl;
     const itemImageUrls = b.itemImageUrls;
     const aspectRatio = b.aspectRatio;
+    const sourceItems = Array.isArray(b.sourceItems) ? b.sourceItems : [];
+    const itemIds = Array.isArray(b.itemIds) ? b.itemIds.map(String) : [];
+    const priceBuyNowRUB = Number(b.priceBuyNowRUB || 0);
 
     if (!selfieDataUrl || !Array.isArray(itemImageUrls) || itemImageUrls.length === 0) {
       return res
@@ -755,7 +758,6 @@ app.post("/api/looks/create", async (req, res) => {
       return res.status(400).json({ error: "Maximum 5 items per try-on in MVP" });
     }
 
-    // Make URLs absolute for Node fetch (media URLs are often "/media/..." )
     const selfieAbs = absUrlFromReq(req, selfieDataUrl);
     const itemsAbs = itemImageUrls.map((u) => absUrlFromReq(req, u));
 
@@ -770,14 +772,20 @@ app.post("/api/looks/create", async (req, res) => {
     );
 
     const prompt =
-      "Act as a professional fashion photographer and AI stylist.\n" +
+      "Act as a professional fashion photographer and AI stylist.
+" +
       "I am providing a selfie of a person and images of " +
       String(itemsAbs.length) +
-      " clothing items.\n" +
-      "Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.\n" +
-      "The person should have the same face as in the selfie.\n" +
-      "Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.\n" +
-      "Result should be front view, clean neutral background.\n" +
+      " clothing items.
+" +
+      "Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.
+" +
+      "The person should have the same face as in the selfie.
+" +
+      "Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.
+" +
+      "Result should be front view, clean neutral background.
+" +
       "Avoid brand logos and text.";
 
     const response = await ai.models.generateContent({
@@ -811,16 +819,53 @@ app.post("/api/looks/create", async (req, res) => {
       return res.status(502).json({ error: "Gemini did not return an image" });
     }
 
+    const userId = req.auth.userId;
+    const p = getPrisma();
+    const storedResult = await putDataUrl(imageDataUrl, `users/${userId}/looks`);
+    const resultImageKey = storedResult?.key || null;
+    const resultImageUrl = resultImageKey ? `/media/${resultImageKey}` : imageDataUrl;
+    const buyLinks = sourceItems
+      .map((i) => i?.affiliateUrl || i?.productUrl)
+      .filter(Boolean)
+      .map(String);
+
+    const id = `l-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const title = "Сгенерированный образ";
+
+    if (p && resultImageKey) {
+      await p.look.create({
+        data: {
+          id,
+          userId,
+          title,
+          itemIds,
+          sourceItems,
+          resultImageKey,
+          isPublic: false,
+          aiDescription: null,
+          userDescription: null,
+          priceBuyNowRUB,
+          buyLinks,
+          likesCount: 0,
+          commentsCount: 0,
+        },
+      });
+    }
+
     const now = new Date();
     const look = {
-      id: "l-" + Date.now(),
-      title: "Сгенерированный образ",
-      items: Array.isArray(b.itemIds) ? b.itemIds : [],
-      resultImageUrl: imageDataUrl,
+      id,
+      userId,
+      title,
+      items: itemIds,
+      sourceItems,
+      resultImageUrl,
       createdAt: now.toISOString(),
       isPublic: false,
       likes: 0,
       comments: 0,
+      priceBuyNowRUB,
+      buyLinks,
     };
 
     return res.json({ look });
@@ -830,9 +875,6 @@ app.post("/api/looks/create", async (req, res) => {
   }
 });
 
-/**
- * POST /api/tryon
- */
 app.post("/api/tryon", async (req, res) => {
   try {
     if (!GEMINI_API_KEY) {
@@ -1182,6 +1224,92 @@ Hints:
   }
 });
 
+
+/**
+ * POST /api/wardrobe/save-catalog (auth required)
+ */
+app.post("/api/wardrobe/save-catalog", requireAuth, async (req, res) => {
+  try {
+    const {
+      id: externalId,
+      title,
+      price,
+      currency,
+      gender,
+      category,
+      images,
+      storeId,
+      storeName,
+      brand,
+      productUrl,
+      affiliateUrl,
+    } = req.body || {};
+
+    const userId = req.auth.userId;
+    const imageUrl = Array.isArray(images) && images[0] ? String(images[0]) : "";
+
+    if (!title || !category || !gender || !imageUrl) {
+      return res.status(400).json({ error: "Missing required catalog fields" });
+    }
+
+    const p = getPrisma();
+    const id = `w-cat-${externalId || Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    if (p) {
+      await p.wardrobeItem.create({
+        data: {
+          id,
+          userId,
+          title: String(title),
+          category: String(category),
+          gender: String(gender),
+          tags: [],
+          color: null,
+          material: null,
+          notes: null,
+          sourceType: "catalog",
+          price: Number.isFinite(Number(price)) ? Number(price) : null,
+          currency: currency ? String(currency) : "RUB",
+          storeId: storeId ? String(storeId) : null,
+          storeName: storeName ? String(storeName) : null,
+          brand: brand ? String(brand) : null,
+          productUrl: productUrl ? String(productUrl) : null,
+          affiliateUrl: affiliateUrl ? String(affiliateUrl) : null,
+          imageUrl: imageUrl,
+          originalKey: null,
+          cutoutKey: null,
+        },
+      });
+    }
+
+    const item = {
+      id,
+      title,
+      price: Number(price || 0),
+      currency: currency || "RUB",
+      gender,
+      category,
+      sizes: ["ONE"],
+      images: [imageUrl],
+      storeId: storeId || "catalog",
+      storeName: storeName || undefined,
+      brand: brand || undefined,
+      productUrl: productUrl || undefined,
+      affiliateUrl: affiliateUrl || undefined,
+      availability: true,
+      isCatalog: true,
+      userId,
+      addedAt: new Date().toISOString(),
+      sourceType: "catalog",
+    };
+
+    return res.json({ item });
+  } catch (err) {
+    console.error("[toptry] /api/wardrobe/save-catalog error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
 /**
  * POST /api/wardrobe/save (auth required)
  */
@@ -1225,6 +1353,15 @@ app.post("/api/wardrobe/save", requireAuth, async (req, res) => {
           color: color ? String(color) : null,
           material: material ? String(material) : null,
           notes: notes ? String(notes) : null,
+          sourceType: "own",
+          price: null,
+          currency: "RUB",
+          storeId: "user-upload",
+          storeName: null,
+          brand: null,
+          productUrl: null,
+          affiliateUrl: null,
+          imageUrl: null,
           originalKey: storedOriginal.key,
           cutoutKey: storedCutout.key,
         },
@@ -1275,28 +1412,57 @@ app.get("/api/wardrobe/list", requireAuth, async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
-    const items = rows.map((r) => ({
-      id: r.id,
-      title: r.title,
-      price: 0,
-      currency: "RUB",
-      gender: r.gender,
-      category: r.category,
-      sizes: ["ONE"],
-      images: [`/media/${r.cutoutKey}`],
-      storeId: "user-upload",
-      availability: true,
-      isCatalog: false,
-      userId: r.userId,
-      addedAt: r.createdAt.toISOString(),
-      sourceType: "own",
-      originalImage: `/media/${r.originalKey}`,
-      cutoutImage: `/media/${r.cutoutKey}`,
-      tags: r.tags || [],
-      color: r.color || undefined,
-      material: r.material || undefined,
-      notes: r.notes || undefined,
-    }));
+    const items = rows.map((r) => {
+      if (r.sourceType === "catalog") {
+        return {
+          id: r.id,
+          title: r.title,
+          price: r.price || 0,
+          currency: r.currency || "RUB",
+          gender: r.gender,
+          category: r.category,
+          sizes: ["ONE"],
+          images: r.imageUrl ? [r.imageUrl] : [],
+          storeId: r.storeId || "catalog",
+          storeName: r.storeName || undefined,
+          brand: r.brand || undefined,
+          productUrl: r.productUrl || undefined,
+          affiliateUrl: r.affiliateUrl || undefined,
+          availability: true,
+          isCatalog: true,
+          userId: r.userId,
+          addedAt: r.createdAt.toISOString(),
+          sourceType: "catalog",
+          tags: r.tags || [],
+          color: r.color || undefined,
+          material: r.material || undefined,
+          notes: r.notes || undefined,
+        };
+      }
+
+      return {
+        id: r.id,
+        title: r.title,
+        price: 0,
+        currency: "RUB",
+        gender: r.gender,
+        category: r.category,
+        sizes: ["ONE"],
+        images: r.cutoutKey ? [`/media/${r.cutoutKey}`] : [],
+        storeId: "user-upload",
+        availability: true,
+        isCatalog: false,
+        userId: r.userId,
+        addedAt: r.createdAt.toISOString(),
+        sourceType: "own",
+        originalImage: r.originalKey ? `/media/${r.originalKey}` : undefined,
+        cutoutImage: r.cutoutKey ? `/media/${r.cutoutKey}` : undefined,
+        tags: r.tags || [],
+        color: r.color || undefined,
+        material: r.material || undefined,
+        notes: r.notes || undefined,
+      };
+    });
 
     res.json({ items });
   } catch (err) {
@@ -1467,6 +1633,42 @@ function buildCatalogExternalId(row) {
   return "dedupe-" + crypto.createHash("md5").update(dedupeKey).digest("hex");
 }
 
+async function isUsableCatalogImageUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return false;
+  }
+
+  if (!/^https?:$/i.test(parsed.protocol)) return false;
+  if (!["sportcourt.ru", "www.sportcourt.ru"].includes(parsed.hostname)) return false;
+
+  try {
+    const resp = await fetch(parsed.toString(), {
+      method: "GET",
+      headers: {
+        "user-agent": "Mozilla/5.0 TopTryCatalogImport",
+        "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "referer": "https://toptry.ru/",
+        "range": "bytes=0-0",
+      },
+    });
+
+    if (!(resp.ok || resp.status === 206)) {
+      return false;
+    }
+
+    const ct = String(resp.headers.get("content-type") || "").toLowerCase();
+    return ct.startsWith("image/");
+  } catch {
+    return false;
+  }
+}
+
 app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
   try {
     const FEED_URL = process.env.ADMITAD_SPORTCOURT_FEED_URL || "";
@@ -1502,6 +1704,12 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
       const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
 
       if (!title || !imageUrl || !affiliateUrl || price === null) {
+        skipped++;
+        continue;
+      }
+
+      const hasUsableImage = await isUsableCatalogImageUrl(imageUrl);
+      if (!hasUsableImage) {
         skipped++;
         continue;
       }
@@ -1669,6 +1877,40 @@ app.get("/api/catalog/products", async (_req, res) => {
   }
 });
 
+
+
+app.get("/api/looks/my", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const p = getPrisma();
+    if (!p) return res.json({ looks: [] });
+
+    const rows = await p.look.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const looks = rows.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      title: r.title,
+      items: r.itemIds || [],
+      sourceItems: r.sourceItems || [],
+      resultImageUrl: r.resultImageKey ? `/media/${r.resultImageKey}` : "",
+      isPublic: !!r.isPublic,
+      likes: r.likesCount || 0,
+      comments: r.commentsCount || 0,
+      createdAt: r.createdAt.toISOString(),
+      priceBuyNowRUB: r.priceBuyNowRUB || 0,
+      buyLinks: r.buyLinks || [],
+    }));
+
+    return res.json({ looks });
+  } catch (err) {
+    console.error("[toptry] /api/looks/my error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
 
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "toptry-api" });
