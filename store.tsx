@@ -146,7 +146,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...l,
         createdAt: l?.createdAt ? new Date(l.createdAt) : new Date(),
       }));
-      setLooks(restoredLooks.length ? restoredLooks : MOCK_LOOKS);
+      setLooks(restoredLooks.length ? restoredLooks : []);
 
       setHomeLayout(saved.homeLayout || HomeLayout.DASHBOARD);
     }
@@ -163,7 +163,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
         const items = Array.isArray(data?.products) ? data.products : [];
-        if (!items.length) return;
+        // allow empty (server is source of truth)
         setProducts(items);
       } catch {
         // ignore
@@ -200,46 +200,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     })();
   }, []);
 
-  // Optional: sync wardrobe from server DB (if enabled)
+  // Always sync wardrobe from backend for authenticated user
   useEffect(() => {
-    if (!ENABLE_DB_SYNC) return;
     if (!user?.id) return;
     (async () => {
       try {
-        const resp = await fetch(`/api/wardrobe/list`);
+        const resp = await fetch(`/api/wardrobe/list`, { credentials: 'include' });
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
         const items = Array.isArray(data?.items) ? data.items : [];
-        if (!items.length) return;
-        setWardrobe((prev) => {
-          const byId = new Map(prev.map((i) => [i.id, i]));
-          for (const raw of items) {
-            byId.set(raw.id, {
+        setWardrobe(
+          items
+            .map((raw: any) => ({
               ...raw,
               addedAt: raw?.addedAt ? new Date(raw.addedAt) : new Date(),
-            });
-          }
-          return Array.from(byId.values()).sort((a, b) =>
-            new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()
-          );
-        });
+            }))
+            .sort((a: any, b: any) =>
+              new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()
+            )
+        );
       } catch {
         // ignore
       }
     })();
   }, [user?.id]);
 
-  // Optional: sync my looks from server
+  // Always sync my looks from backend for authenticated user
   useEffect(() => {
-    if (!ENABLE_DB_SYNC) return;
     if (!user?.id) return;
     (async () => {
       try {
-        const resp = await fetch('/api/looks/my');
+        const resp = await fetch('/api/looks/my', { credentials: 'include' });
         if (!resp.ok) return;
         const data = await resp.json().catch(() => null);
         const serverLooks = Array.isArray(data?.looks) ? data.looks : [];
-        if (!serverLooks.length) return;
         setLooks(serverLooks.map((l: any) => ({ ...l, createdAt: new Date(l.createdAt) })));
       } catch {
         // ignore
@@ -426,6 +420,8 @@ register: async (email: string, username: string, password: string) => {
     logout: async () => {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
       setUser(null);
+      setWardrobe([]);
+      setLooks([]);
     },
 
     refreshMe: async () => {
@@ -443,8 +439,29 @@ register: async (email: string, username: string, password: string) => {
     toggleHomeLayout: () => setHomeLayout(prev => 
       prev === HomeLayout.DASHBOARD ? HomeLayout.FEED : HomeLayout.DASHBOARD
     ),
-    addToWardrobe: (product: Product) => {
+    addToWardrobe: async (product: Product) => {
       const userId = user?.id || 'demo-user-id';
+
+      if (user?.id) {
+        try {
+          const resp = await fetch('/api/wardrobe/save-catalog', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(product),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (resp.ok && data?.item) {
+            const saved = data.item;
+            setWardrobe(prev => [
+              { ...saved, addedAt: saved?.addedAt ? new Date(saved.addedAt) : new Date() },
+              ...prev.filter(i => i.id !== saved.id)
+            ]);
+            return;
+          }
+        } catch {}
+      }
+
       setWardrobe(prev => {
         if (prev.some(item => item.id === product.id)) return prev;
         const newItem: WardrobeItem = {
@@ -471,7 +488,15 @@ register: async (email: string, username: string, password: string) => {
     upsertWardrobeItem: (item: WardrobeItem) => {
       setWardrobe((prev) => {
         const next = prev.filter((p) => p.id !== item.id);
-        return [{ ...item, addedAt: (item as any)?.addedAt ? new Date((item as any).addedAt) : new Date() }, ...next];
+        return [
+          {
+            ...item,
+            addedAt: (item as any)?.addedAt
+              ? new Date((item as any).addedAt)
+              : new Date(),
+          },
+          ...next,
+        ];
       });
     },
     removeFromWardrobe: (id: string) => {
