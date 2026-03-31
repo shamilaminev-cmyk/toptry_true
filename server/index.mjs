@@ -1644,6 +1644,31 @@ function buildCatalogFeedSimilarityKey(product) {
   return [displayCategory, brand, title].join("|");
 }
 
+function matchesCatalogRequestFilters(product, { q, displayCategory }) {
+  const normalizedDisplayCategory = String(displayCategory || "").trim().toUpperCase();
+  const productDisplayCategory = String(product?.displayCategory || "").trim().toUpperCase();
+
+  if (normalizedDisplayCategory && productDisplayCategory !== normalizedDisplayCategory) {
+    return false;
+  }
+
+  const needle = String(q || "").trim().toLowerCase();
+  if (!needle) return true;
+
+  const hay = [
+    product?.title,
+    product?.brand,
+    product?.storeName,
+    product?.category,
+    product?.displayCategory,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return hay.includes(needle);
+}
+
 function normalizeCatalogImageForDedupe(value) {
   return String(value || "")
     .trim()
@@ -2251,6 +2276,14 @@ app.get("/api/catalog/products", async (req, res) => {
       typeof req.query.category === "string" && req.query.category.trim()
         ? req.query.category.trim().toUpperCase()
         : "";
+    const displayCategory =
+      typeof req.query.displayCategory === "string" && req.query.displayCategory.trim()
+        ? req.query.displayCategory.trim().toUpperCase()
+        : "";
+    const q =
+      typeof req.query.q === "string" && req.query.q.trim()
+        ? req.query.q.trim()
+        : "";
 
     const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous"];
 
@@ -2261,7 +2294,7 @@ app.get("/api/catalog/products", async (req, res) => {
     };
 
     const mapProduct = (p) => {
-      const displayCategory = normalizeCatalogDisplayCategory([
+      const normalizedDisplayCategory = normalizeCatalogDisplayCategory([
         p.category,
         p.title,
         p.brand,
@@ -2274,7 +2307,7 @@ app.get("/api/catalog/products", async (req, res) => {
         currency: normalizeCatalogCurrency(p.currency || "RUB"),
         gender: p.gender || "UNISEX",
         category: p.category || "OTHER",
-        displayCategory,
+        displayCategory: normalizedDisplayCategory,
         sizes: ["ONE"],
         images: p.imageUrl ? [p.imageUrl] : [],
         storeId: p.merchant,
@@ -2294,51 +2327,39 @@ app.get("/api/catalog/products", async (req, res) => {
 
     if (merchant && allowedMerchants.includes(merchant)) {
       const where = { ...baseWhere, merchant };
-      const [total, items] = await Promise.all([
-        prisma.catalogProduct.count({ where }),
-        prisma.catalogProduct.findMany({
-          where,
-          orderBy: { updatedAt: "desc" },
-          skip: offset,
-          take: limit,
-        }),
-      ]);
+      const rows = await prisma.catalogProduct.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+      });
 
-      const products = items.map(mapProduct);
+      const allProducts = rows
+        .map(mapProduct)
+        .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory }));
+
+      const products = allProducts.slice(offset, offset + limit);
 
       return res.json({
         products,
-        total,
+        total: allProducts.length,
         limit,
         offset,
-        hasMore: offset + products.length < total,
+        hasMore: offset + products.length < allProducts.length,
       });
     }
-
-    const where = {
-      ...baseWhere,
-      merchant: { in: allowedMerchants },
-    };
-
-    const total = await prisma.catalogProduct.count({ where });
-
-    const perMerchant = Math.max(1, Math.ceil(limit / allowedMerchants.length));
-    const perMerchantOffset = Math.floor(offset / allowedMerchants.length);
-    const perMerchantTake = Math.max(perMerchant * 4, 12);
 
     const groups = await Promise.all(
       allowedMerchants.map((m) =>
         prisma.catalogProduct.findMany({
           where: { ...baseWhere, merchant: m },
           orderBy: { updatedAt: "desc" },
-          skip: perMerchantOffset,
-          take: perMerchantTake,
         })
       )
     );
 
     const merged = [];
-    for (let i = 0; i < perMerchantTake; i++) {
+    const maxGroupLen = Math.max(0, ...groups.map((g) => g.length));
+
+    for (let i = 0; i < maxGroupLen; i++) {
       for (const group of groups) {
         if (group[i]) merged.push(group[i]);
       }
@@ -2351,14 +2372,14 @@ app.get("/api/catalog/products", async (req, res) => {
 
     for (const item of merged) {
       const similarityKey = buildCatalogFeedSimilarityKey(item);
-      const displayCategory = normalizeCatalogDisplayCategory([
+      const normalizedDisplayCategory = normalizeCatalogDisplayCategory([
         item?.category,
         item?.title,
         item?.brand,
       ].filter(Boolean).join(" "));
       const brandCategoryKey = [
         String(item?.brand || "").toLowerCase().trim(),
-        displayCategory,
+        normalizedDisplayCategory,
       ].join("|");
 
       const currentCount = brandCategoryCounts.get(brandCategoryKey) || 0;
@@ -2372,21 +2393,20 @@ app.get("/api/catalog/products", async (req, res) => {
       }
     }
 
-    let items = primary.slice(0, limit);
+    const rankedRows = primary.concat(overflow);
 
-    if (items.length < limit) {
-      const filler = overflow.slice(0, limit - items.length);
-      items = items.concat(filler);
-    }
+    const allProducts = rankedRows
+      .map(mapProduct)
+      .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory }));
 
-    const products = items.map(mapProduct);
+    const products = allProducts.slice(offset, offset + limit);
 
     return res.json({
       products,
-      total,
+      total: allProducts.length,
       limit,
       offset,
-      hasMore: offset + products.length < total,
+      hasMore: offset + products.length < allProducts.length,
     });
   } catch (e) {
     console.error("[toptry] /api/catalog/products error", e);
