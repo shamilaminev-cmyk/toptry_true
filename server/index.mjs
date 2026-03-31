@@ -2324,6 +2324,7 @@ app.get("/api/catalog/products", async (req, res) => {
 
     const perMerchant = Math.max(1, Math.ceil(limit / allowedMerchants.length));
     const perMerchantOffset = Math.floor(offset / allowedMerchants.length);
+    const perMerchantTake = Math.max(perMerchant * 4, 12);
 
     const groups = await Promise.all(
       allowedMerchants.map((m) =>
@@ -2331,7 +2332,7 @@ app.get("/api/catalog/products", async (req, res) => {
           where: { ...baseWhere, merchant: m },
           orderBy: { updatedAt: "desc" },
           skip: perMerchantOffset,
-          take: perMerchant,
+          take: perMerchantTake,
         })
       )
     );
@@ -2371,7 +2372,13 @@ app.get("/api/catalog/products", async (req, res) => {
       }
     }
 
-    const items = primary.concat(overflow).slice(0, limit);
+    let items = primary.slice(0, limit);
+
+    if (items.length < limit) {
+      const filler = overflow.slice(0, limit - items.length);
+      items = items.concat(filler);
+    }
+
     const products = items.map(mapProduct);
 
     return res.json({
