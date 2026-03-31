@@ -1623,6 +1623,27 @@ function normalizeCatalogDisplayCategory(raw) {
   return "ACCESSORIES";
 }
 
+function normalizeCatalogTitleForFeed(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/[,/].*$/, "")
+    .replace(/\b(женск(ая|ие|ий)?|мужск(ая|ие|ий)?|детск(ая|ие|ий)?)\b/g, "")
+    .replace(/\b(черный|чёрный|белый|синий|розовый|бежевый|серый|коричневый|красный|зеленый|зелёный|голубой|фиолетовый|желтый|жёлтый|оранжевый)\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildCatalogFeedSimilarityKey(product) {
+  const displayCategory = normalizeCatalogDisplayCategory([
+    product?.category,
+    product?.title,
+    product?.brand,
+  ].filter(Boolean).join(" "));
+  const brand = String(product?.brand || "").toLowerCase().trim();
+  const title = normalizeCatalogTitleForFeed(product?.title || "");
+  return [displayCategory, brand, title].join("|");
+}
+
 function normalizeCatalogImageForDedupe(value) {
   return String(value || "")
     .trim()
@@ -2322,7 +2343,21 @@ app.get("/api/catalog/products", async (req, res) => {
       }
     }
 
-    const items = merged.slice(0, limit);
+    const seenKeys = new Set();
+    const deduped = [];
+    const overflow = [];
+
+    for (const item of merged) {
+      const key = buildCatalogFeedSimilarityKey(item);
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        deduped.push(item);
+      } else {
+        overflow.push(item);
+      }
+    }
+
+    const items = deduped.concat(overflow).slice(0, limit);
     const products = items.map(mapProduct);
 
     return res.json({
