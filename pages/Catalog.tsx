@@ -41,6 +41,7 @@ const Catalog = () => {
   const [displayCategory, setDisplayCategory] = useState<'' | DisplayCategory>('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [discountOnly, setDiscountOnly] = useState(false);
 
   const [items, setItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -58,8 +59,10 @@ const Catalog = () => {
     const q = params.get('q') || '';
     const genderParam = (params.get('gender') || '').toUpperCase();
     const categoryParam = (params.get('displayCategory') || params.get('category') || '').toUpperCase();
+    const discountOnlyParam = params.get('discountOnly') === '1';
 
     if (q) setSearch(q);
+    if (discountOnlyParam) setDiscountOnly(true);
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
@@ -86,6 +89,7 @@ const Catalog = () => {
     if (gender) params.set('gender', gender);
     if (displayCategory) params.set('displayCategory', displayCategory);
     if (debouncedSearch) params.set('q', debouncedSearch);
+    if (discountOnly) params.set('discountOnly', '1');
 
     const url = withApiOrigin(`/api/catalog/products?${params.toString()}`);
     const resp = await fetch(url, { credentials: 'include' });
@@ -116,6 +120,7 @@ const Catalog = () => {
         if (gender) params.set('gender', gender);
         if (displayCategory) params.set('displayCategory', displayCategory);
         if (debouncedSearch) params.set('q', debouncedSearch);
+        if (discountOnly) params.set('discountOnly', '1');
 
         const url = withApiOrigin(`/api/catalog/products?${params.toString()}`);
         const resp = await fetch(url, { credentials: 'include' });
@@ -146,7 +151,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, debouncedSearch]);
+  }, [gender, displayCategory, debouncedSearch, discountOnly]);
 
   const isInWardrobe = (productId: string) => {
     return wardrobe.some(item => item.id === productId);
@@ -156,6 +161,7 @@ const Catalog = () => {
     setGender('');
     setDisplayCategory('');
     setSearch('');
+    setDiscountOnly(false);
   };
 
   const handleLoadMore = async () => {
@@ -209,6 +215,14 @@ const Catalog = () => {
         </div>
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+          <button
+            onClick={() => setDiscountOnly((v) => !v)}
+            className={`flex-shrink-0 px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+              discountOnly ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-400'
+            }`}
+          >
+            Со скидкой
+          </button>
           {CATEGORY_TABS.map((tab) => {
             const active = displayCategory === tab.id;
             return (
@@ -230,7 +244,7 @@ const Catalog = () => {
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           Найдено: {filteredCountLabel}
         </p>
-        {(gender || displayCategory || search) && (
+        {(gender || displayCategory || search || discountOnly) && (
           <button
             onClick={clearFilters}
             className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 underline underline-offset-4"
@@ -301,9 +315,16 @@ const Catalog = () => {
                         {p.title}
                       </h3>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm font-black">{p.price} {CURRENCY}</p>
-                      <span className="text-[8px] font-bold uppercase text-zinc-400 px-2 py-1 bg-zinc-50 rounded-md border border-zinc-100">
+                    <div className="flex justify-between items-center gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-black">{p.price} {CURRENCY}</p>
+                        {!!p.oldPrice && p.oldPrice > p.price && (
+                          <p className="text-[10px] font-bold text-zinc-400 line-through">
+                            {p.oldPrice} {CURRENCY}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-[8px] font-bold uppercase text-zinc-400 px-2 py-1 bg-zinc-50 rounded-md border border-zinc-100 shrink-0">
                         {(p.storeName || p.brand || "Store")}
                       </span>
                     </div>
