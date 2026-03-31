@@ -1589,6 +1589,40 @@ function normalizeCatalogCategory(raw) {
   return "OTHER";
 }
 
+function normalizeCatalogDisplayCategory(raw) {
+  const s = String(raw || "").toLowerCase();
+
+  if (/(сумк|bag|клатч|тоут|шоппер|рюкзак|портфел|кошелек|wallet)/i.test(s)) {
+    return "BAGS";
+  }
+
+  if (/(кроссов|кед|ботин|сапог|туфл|shoe|sneaker|loafer|sandals|сланц|шлеп)/i.test(s)) {
+    return "SHOES";
+  }
+
+  if (/(куртк|пальто|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
+    return "OUTERWEAR";
+  }
+
+  if (/(плать|dress)/i.test(s)) {
+    return "DRESSES";
+  }
+
+  if (/(брюк|джинс|trouser|pants|shorts|юбк|skirt|legging|леггин|шорты)/i.test(s)) {
+    return "BOTTOMS";
+  }
+
+  if (/(футбол|майк|поло|рубаш|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat)/i.test(s)) {
+    return "TOPS";
+  }
+
+  if (/(шапк|кепк|cap|belt|ремень|очки|очк|watch|час|перчат|шарф|gloves|scarf)/i.test(s)) {
+    return "ACCESSORIES";
+  }
+
+  return "ACCESSORIES";
+}
+
 function normalizeCatalogImageForDedupe(value) {
   return String(value || "")
     .trim()
@@ -2217,28 +2251,37 @@ app.get("/api/catalog/products", async (req, res) => {
       }),
     ]);
 
-    const products = items.map((p) => ({
-      id: p.id,
-      title: p.title,
-      price: p.price || 0,
-      currency: normalizeCatalogCurrency(p.currency || "RUB"),
-      gender: p.gender || "UNISEX",
-      category: p.category || "OTHER",
-      sizes: ["ONE"],
-      images: p.imageUrl ? [p.imageUrl] : [],
-      storeId: p.merchant,
-      storeName:
-        p.merchant === "sportmaster"
-          ? "Спортмастер"
-          : p.merchant === "rendezvous"
-            ? "Rendez-Vous"
-            : "Sportcourt",
-      availability: p.isActive,
-      isCatalog: true,
-      brand: p.brand || undefined,
-      productUrl: p.productUrl || undefined,
-      affiliateUrl: p.affiliateUrl || undefined,
-    }));
+    const products = items.map((p) => {
+      const displayCategory = normalizeCatalogDisplayCategory([
+        p.category,
+        p.title,
+        p.brand,
+      ].filter(Boolean).join(" "));
+
+      return {
+        id: p.id,
+        title: p.title,
+        price: p.price || 0,
+        currency: normalizeCatalogCurrency(p.currency || "RUB"),
+        gender: p.gender || "UNISEX",
+        category: p.category || "OTHER",
+        displayCategory,
+        sizes: ["ONE"],
+        images: p.imageUrl ? [p.imageUrl] : [],
+        storeId: p.merchant,
+        storeName:
+          p.merchant === "sportmaster"
+            ? "Спортмастер"
+            : p.merchant === "rendezvous"
+              ? "Rendez-Vous"
+              : "Sportcourt",
+        availability: p.isActive,
+        isCatalog: true,
+        brand: p.brand || undefined,
+        productUrl: p.productUrl || undefined,
+        affiliateUrl: p.affiliateUrl || undefined,
+      };
+    });
 
     return res.json({
       products,
