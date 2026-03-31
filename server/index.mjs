@@ -1636,7 +1636,12 @@ async function isUsableCatalogImageUrl(url) {
   }
 
   if (!/^https?:$/i.test(parsed.protocol)) return false;
-  if (!["sportcourt.ru", "www.sportcourt.ru"].includes(parsed.hostname)) return false;
+  if (![
+  "sportcourt.ru",
+  "www.sportcourt.ru",
+  "cdn.sportmaster.ru",
+  "www.rendez-vous.ru",
+].includes(parsed.hostname)) return false;
 
   try {
     const resp = await fetch(parsed.toString(), {
