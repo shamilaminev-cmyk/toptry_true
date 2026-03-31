@@ -104,7 +104,7 @@ const Catalog = () => {
   };
 
   useEffect(() => {
-    let cancelled = False;
+    let cancelled = false;
 
     const run = async () => {
       setLoading(true);
