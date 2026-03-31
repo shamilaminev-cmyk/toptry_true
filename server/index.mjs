@@ -1624,6 +1624,24 @@ function buildCatalogExternalId(row) {
   return "dedupe-" + crypto.createHash("md5").update(dedupeKey).digest("hex");
 }
 
+function isTryOnRelevantCatalogItem(raw) {
+  const s = String(raw || "").toLowerCase();
+
+  const blocked = [
+    "для мальчик", "для девоч", "детск", "подростк", "baby", "kids", "junior",
+    "плаватель", "плавки", "купаль", "бикини", "пляжн",
+    "крем", "спрей", "уход", "стельк", "шнурк", "космет", "чист",
+    "салфет", "пропитк", "ложк", "щетк", "дезодорант", "средств",
+    "губка", "краск", "воск", "очистит", "растяжит",
+    "инвентарь", "мяч", "шлем", "клюш", "ракет", "велосип", "самокат",
+    "ролик", "коньк", "лыж", "сноуборд", "тренаж", "гантел", "штанг",
+    "турник", "палат", "спальник", "бутыл", "фляг", "коврик",
+    "защит", "маск", "очки для плав", "аксессуар для обуви"
+  ];
+
+  return !blocked.some((k) => s.includes(k));
+}
+
 async function isUsableCatalogImageUrl(url) {
   const raw = String(url || "").trim();
   if (!raw) return false;
@@ -1716,6 +1734,11 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
         pickFirst(r, ["category", "category_name", "google_product_category"]),
         pickFirst(r, ["gender", "sex"]),
       ].join(" ");
+
+      if (!isTryOnRelevantCatalogItem(haystack)) {
+        skipped++;
+        continue;
+      }
 
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
@@ -1870,6 +1893,11 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
         pickFirst(r, ["gender", "sex"]),
       ].join(" ");
 
+      if (!isTryOnRelevantCatalogItem([rawCategory, haystack].join(" "))) {
+        skipped++;
+        continue;
+      }
+
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
         skipped++;
@@ -2020,6 +2048,11 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
         pickFirst(r, ["gender", "sex"]),
         pickFirst(r, ["param"]),
       ].join(" ");
+
+      if (!isTryOnRelevantCatalogItem([rawCategory, haystack].join(" "))) {
+        skipped++;
+        continue;
+      }
 
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
