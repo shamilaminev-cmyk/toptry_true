@@ -1562,7 +1562,7 @@ function normalizeCatalogGender(raw) {
 function normalizeCatalogCategory(raw) {
   const s = String(raw || "").toLowerCase();
 
-  if (/(кроссов|кед|ботин|сапог|туфл|shoe|sneaker|loafer|sandals|сланц|шлеп)/i.test(s)) {
+  if (/(кроссов|кед|ботин|сапог|туфл|shoe|sneaker|loafer|sandals|сандал|сланц|шлеп)/i.test(s)) {
     return "SHOES";
   }
 
@@ -2232,26 +2232,14 @@ app.get("/api/catalog/products", async (req, res) => {
         : "";
 
     const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous"];
-    const where = {
+
+    const baseWhere = {
       isActive: true,
-      ...(merchant && allowedMerchants.includes(merchant)
-        ? { merchant }
-        : { merchant: { in: allowedMerchants } }),
       ...(gender ? { gender } : {}),
       ...(category ? { category } : {}),
     };
 
-    const [total, items] = await Promise.all([
-      prisma.catalogProduct.count({ where }),
-      prisma.catalogProduct.findMany({
-        where,
-        orderBy: { updatedAt: "desc" },
-        skip: offset,
-        take: limit,
-      }),
-    ]);
-
-    const products = items.map((p) => {
+    const mapProduct = (p) => {
       const displayCategory = normalizeCatalogDisplayCategory([
         p.category,
         p.title,
@@ -2281,7 +2269,61 @@ app.get("/api/catalog/products", async (req, res) => {
         productUrl: p.productUrl || undefined,
         affiliateUrl: p.affiliateUrl || undefined,
       };
-    });
+    };
+
+    if (merchant && allowedMerchants.includes(merchant)) {
+      const where = { ...baseWhere, merchant };
+      const [total, items] = await Promise.all([
+        prisma.catalogProduct.count({ where }),
+        prisma.catalogProduct.findMany({
+          where,
+          orderBy: { updatedAt: "desc" },
+          skip: offset,
+          take: limit,
+        }),
+      ]);
+
+      const products = items.map(mapProduct);
+
+      return res.json({
+        products,
+        total,
+        limit,
+        offset,
+        hasMore: offset + products.length < total,
+      });
+    }
+
+    const where = {
+      ...baseWhere,
+      merchant: { in: allowedMerchants },
+    };
+
+    const total = await prisma.catalogProduct.count({ where });
+
+    const perMerchant = Math.max(1, Math.ceil(limit / allowedMerchants.length));
+    const perMerchantOffset = Math.floor(offset / allowedMerchants.length);
+
+    const groups = await Promise.all(
+      allowedMerchants.map((m) =>
+        prisma.catalogProduct.findMany({
+          where: { ...baseWhere, merchant: m },
+          orderBy: { updatedAt: "desc" },
+          skip: perMerchantOffset,
+          take: perMerchant,
+        })
+      )
+    );
+
+    const merged = [];
+    for (let i = 0; i < perMerchant; i++) {
+      for (const group of groups) {
+        if (group[i]) merged.push(group[i]);
+      }
+    }
+
+    const items = merged.slice(0, limit);
+    const products = items.map(mapProduct);
 
     return res.json({
       products,
