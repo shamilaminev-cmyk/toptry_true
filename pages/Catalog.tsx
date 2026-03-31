@@ -252,6 +252,14 @@ const Catalog = () => {
               return (
                 <div key={p.id} className="group">
                   <div className="relative aspect-[3/4] rounded-[24px] overflow-hidden bg-zinc-50 p-6 border border-zinc-100 transition-all hover:shadow-xl hover:border-zinc-200">
+                    {!!p.discountPercent && p.discountPercent > 0 && (
+                      <div className="absolute top-4 left-4 z-10 bg-zinc-900 text-white px-2.5 py-1.5 rounded-full shadow-md">
+                        <span className="text-[9px] font-black uppercase tracking-[0.12em]">
+                          -{p.discountPercent}%
+                        </span>
+                      </div>
+                    )}
+
                     <img
                       src={p?.images?.[0] ? catalogImageSrc(p.images[0]) : IMG_FALLBACK}
                       alt={p.title || ""}
