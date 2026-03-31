@@ -2344,20 +2344,34 @@ app.get("/api/catalog/products", async (req, res) => {
     }
 
     const seenKeys = new Set();
-    const deduped = [];
+    const brandCategoryCounts = new Map();
+    const primary = [];
     const overflow = [];
 
     for (const item of merged) {
-      const key = buildCatalogFeedSimilarityKey(item);
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        deduped.push(item);
+      const similarityKey = buildCatalogFeedSimilarityKey(item);
+      const displayCategory = normalizeCatalogDisplayCategory([
+        item?.category,
+        item?.title,
+        item?.brand,
+      ].filter(Boolean).join(" "));
+      const brandCategoryKey = [
+        String(item?.brand || "").toLowerCase().trim(),
+        displayCategory,
+      ].join("|");
+
+      const currentCount = brandCategoryCounts.get(brandCategoryKey) || 0;
+
+      if (!seenKeys.has(similarityKey) && currentCount < 2) {
+        seenKeys.add(similarityKey);
+        brandCategoryCounts.set(brandCategoryKey, currentCount + 1);
+        primary.push(item);
       } else {
         overflow.push(item);
       }
     }
 
-    const items = deduped.concat(overflow).slice(0, limit);
+    const items = primary.concat(overflow).slice(0, limit);
     const products = items.map(mapProduct);
 
     return res.json({
