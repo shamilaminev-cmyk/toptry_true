@@ -562,7 +562,12 @@ register: async (email: string, username: string, password: string) => {
           }),
         });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(data?.error || `AI server error (${resp.status})`);
+        if (!resp.ok) {
+          if (resp.status === 401) {
+            throw new Error('AUTH_REQUIRED');
+          }
+          throw new Error(data?.error || `AI server error (${resp.status})`);
+        }
         const look = data?.look;
         if (!look) throw new Error('Server did not return look');
         const newLook: Look = { ...look, createdAt: new Date(look.createdAt) };

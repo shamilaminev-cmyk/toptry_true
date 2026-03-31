@@ -56,56 +56,44 @@ const CreateLook = () => {
 
   const handleGenerate = async () => {
     if (!selfie) {
-      alert("Сначала загрузите селфи на главной странице или в профиле!");
-      return;
-    }
-    if (selectedIds.size < 1) {
-      alert("Выберите хотя бы 1 вещь для полноценного образа");
+      alert("Не удалось сгенерировать образ. Проверьте, что аватар доступен для генерации.");
       return;
     }
 
     setIsGenerating(true);
-    setGenStep(0);
-    setProgress(7);
+    setProgress(5);
 
-    const steps = [
-      "Анализируем ваш аватар...",
-      "Подбираем сочетание вещей...",
-      "Создаем образ...",
-      "Финализируем результат..."
-    ];
-
-    const interval = setInterval(() => {
-      setGenStep(s => (s < steps.length - 1 ? s + 1 : s));
-    }, 3000);
-
-    const progressInterval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 92) return p;
-        if (p < 20) return p + 6;
-        if (p < 45) return p + 4;
-        if (p < 70) return p + 3;
-        return p + 2;
-      });
+    const progressInterval = window.setInterval(() => {
+      setProgress((prev) => (prev < 92 ? prev + Math.max(1, Math.round((100 - prev) / 18)) : prev));
     }, 900);
 
+    const interval = window.setInterval(() => {
+      setStage((prev) => (prev < STAGES.length - 1 ? prev + 1 : prev));
+    }, 2200);
+
     try {
-      const selectedItems = wardrobe.filter(i => selectedIds.has(i.id));
       const lookId = await actions.createLook(selectedItems);
       clearInterval(interval);
       clearInterval(progressInterval);
-      if (lookId) {
-        setProgress(100);
-        navigate(`/look/${lookId}`);
-      } else {
+      setProgress(100);
+      setTimeout(() => {
         setIsGenerating(false);
         setProgress(0);
-        alert("Не удалось сгенерировать образ. Проверьте, что аватар доступен для генерации.");
-      }
-    } catch (err) {
+        navigate(`/look/${lookId}`);
+      }, 350);
+    } catch (err: any) {
       clearInterval(interval);
       clearInterval(progressInterval);
       console.error(err);
+
+      if (err?.message === "AUTH_REQUIRED") {
+        alert("Сессия истекла. Пожалуйста, войдите снова");
+        setIsGenerating(false);
+        setProgress(0);
+        window.location.hash = "#/auth";
+        return;
+      }
+
       alert(aiError || "Не удалось сгенерировать образ. Проверьте соединение и настройки сервера.");
       setIsGenerating(false);
       setProgress(0);
