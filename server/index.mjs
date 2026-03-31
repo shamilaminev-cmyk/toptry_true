@@ -1596,7 +1596,7 @@ function normalizeCatalogDisplayCategory(raw) {
     return "BAGS";
   }
 
-  if (/(кроссов|кед|ботин|сапог|туфл|shoe|sneaker|loafer|sandals|сланц|шлеп)/i.test(s)) {
+  if (/(кроссов|кед|ботин|сапог|туфл|shoe|sneaker|loafer|sandals|сандал|сланц|шлеп)/i.test(s)) {
     return "SHOES";
   }
 
