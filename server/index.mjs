@@ -2143,7 +2143,7 @@ app.get("/api/catalog/image", async (req, res) => {
 });
 
 
-app.get("/api/catalog/products", async (_req, res) => {
+app.get("/api/catalog/products", async (req, res) => {
   try {
     const items = await prisma.catalogProduct.findMany({
       where: {
