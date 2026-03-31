@@ -2151,7 +2151,10 @@ app.get("/api/catalog/products", async (_req, res) => {
         merchant: { in: ["sportcourt", "sportmaster", "rendezvous"] },
       },
       orderBy: { updatedAt: "desc" },
-      take: 200,
+      take: Math.min(
+        Math.max(parseInt(req.query.limit || "40", 10), 1),
+        100
+      ),
     });
 
     const products = items.map((p) => ({
