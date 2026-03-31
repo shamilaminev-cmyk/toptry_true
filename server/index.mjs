@@ -1811,6 +1811,38 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       const price = toPrice(pickFirst(r, ["price", "current_price", "price_value"]));
       const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
 
+      const rawCategory = [
+        pickFirst(r, ["categoryId"]),
+        pickFirst(r, ["typePrefix"]),
+        pickFirst(r, ["param"]),
+        title,
+        brand,
+      ].join(" ").toLowerCase();
+
+      const allowKeywords = [
+        "курт", "пальто", "пуховик", "ветровк",
+        "футболк", "майк", "поло", "рубаш", "лонгслив",
+        "толстовк", "худи", "свитшот", "свитер", "джемпер", "кардиган",
+        "джинс", "брюк", "штаны", "леггин", "лосин",
+        "кроссовк", "ботин", "кед", "обув", "сапог", "туфл", "лофер", "сланц", "шлеп",
+        "шорт", "юбк", "плать"
+      ];
+
+      const blockKeywords = [
+        "инвентарь", "мяч", "шлем", "клюш", "ракет", "велосип", "самокат",
+        "ролик", "коньк", "лыж", "сноуборд", "тренаж", "гантел", "штанг",
+        "турник", "палат", "спальник", "рюкзак", "бутыл", "фляг", "коврик",
+        "защит", "маск", "очки", "час", "аксессуар", "перчатки хоккейные"
+      ];
+
+      const isAllowed = allowKeywords.some(k => rawCategory.includes(k));
+      const isBlocked = blockKeywords.some(k => rawCategory.includes(k));
+
+      if (!isAllowed || isBlocked) {
+        skipped++;
+        continue;
+      }
+
       if (!title || !imageUrl || !affiliateUrl || price === null) {
         skipped++;
         continue;
