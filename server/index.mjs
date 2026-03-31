@@ -2001,7 +2001,11 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
         continue;
       }
 
-      const hasUsableImage = await isUsableCatalogImageUrl(imageUrl);
+      const hasUsableImage =
+        String(imageUrl).includes("www.rendez-vous.ru/")
+          ? true
+          : await isUsableCatalogImageUrl(imageUrl);
+
       if (!hasUsableImage) {
         skipped++;
         continue;
