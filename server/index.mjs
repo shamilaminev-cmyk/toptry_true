@@ -2145,17 +2145,44 @@ app.get("/api/catalog/image", async (req, res) => {
 
 app.get("/api/catalog/products", async (req, res) => {
   try {
-    const items = await prisma.catalogProduct.findMany({
-      where: {
-        isActive: true,
-        merchant: { in: ["sportcourt", "sportmaster", "rendezvous"] },
-      },
-      orderBy: { updatedAt: "desc" },
-      take: Math.min(
-        Math.max(parseInt(req.query.limit || "40", 10), 1),
-        100
-      ),
-    });
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit || "40", 10), 1),
+      100
+    );
+    const offset = Math.max(parseInt(req.query.offset || "0", 10), 0);
+
+    const merchant =
+      typeof req.query.merchant === "string" && req.query.merchant.trim()
+        ? req.query.merchant.trim().toLowerCase()
+        : "";
+    const gender =
+      typeof req.query.gender === "string" && req.query.gender.trim()
+        ? req.query.gender.trim().toUpperCase()
+        : "";
+    const category =
+      typeof req.query.category === "string" && req.query.category.trim()
+        ? req.query.category.trim().toUpperCase()
+        : "";
+
+    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous"];
+    const where = {
+      isActive: true,
+      ...(merchant && allowedMerchants.includes(merchant)
+        ? { merchant }
+        : { merchant: { in: allowedMerchants } }),
+      ...(gender ? { gender } : {}),
+      ...(category ? { category } : {}),
+    };
+
+    const [total, items] = await Promise.all([
+      prisma.catalogProduct.count({ where }),
+      prisma.catalogProduct.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+        skip: offset,
+        take: limit,
+      }),
+    ]);
 
     const products = items.map((p) => ({
       id: p.id,
@@ -2180,7 +2207,13 @@ app.get("/api/catalog/products", async (req, res) => {
       affiliateUrl: p.affiliateUrl || undefined,
     }));
 
-    return res.json({ products });
+    return res.json({
+      products,
+      total,
+      limit,
+      offset,
+      hasMore: offset + products.length < total,
+    });
   } catch (e) {
     console.error("[toptry] /api/catalog/products error", e);
     return res.status(500).json({ error: e?.message || String(e) });
