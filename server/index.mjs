@@ -2338,7 +2338,7 @@ app.get("/api/catalog/products", async (req, res) => {
     );
 
     const merged = [];
-    for (let i = 0; i < perMerchant; i++) {
+    for (let i = 0; i < perMerchantTake; i++) {
       for (const group of groups) {
         if (group[i]) merged.push(group[i]);
       }
