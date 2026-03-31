@@ -1644,12 +1644,20 @@ function buildCatalogFeedSimilarityKey(product) {
   return [displayCategory, brand, title].join("|");
 }
 
-function matchesCatalogRequestFilters(product, { q, displayCategory }) {
+function matchesCatalogRequestFilters(product, { q, displayCategory, discountOnly }) {
   const normalizedDisplayCategory = String(displayCategory || "").trim().toUpperCase();
   const productDisplayCategory = String(product?.displayCategory || "").trim().toUpperCase();
 
   if (normalizedDisplayCategory && productDisplayCategory !== normalizedDisplayCategory) {
     return false;
+  }
+
+  if (discountOnly) {
+    const price = Number(product?.price || 0);
+    const oldPrice = Number(product?.oldPrice || 0);
+    if (!(oldPrice > price && price > 0)) {
+      return false;
+    }
   }
 
   const needle = String(q || "").trim().toLowerCase();
@@ -2284,6 +2292,8 @@ app.get("/api/catalog/products", async (req, res) => {
       typeof req.query.q === "string" && req.query.q.trim()
         ? req.query.q.trim()
         : "";
+    const discountOnly =
+      String(req.query.discountOnly || "").trim() === "1";
 
     const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous"];
 
@@ -2299,11 +2309,19 @@ app.get("/api/catalog/products", async (req, res) => {
         p.title,
         p.brand,
       ].filter(Boolean).join(" "));
+      const price = Number(p.price || 0);
+      const oldPrice = Number(p.oldPrice || 0);
+      const discountPercent =
+        oldPrice > price && price > 0
+          ? Math.max(1, Math.round(((oldPrice - price) / oldPrice) * 100))
+          : 0;
 
       return {
         id: p.id,
         title: p.title,
-        price: p.price || 0,
+        price,
+        oldPrice: oldPrice > price ? oldPrice : undefined,
+        discountPercent: discountPercent > 0 ? discountPercent : undefined,
         currency: normalizeCatalogCurrency(p.currency || "RUB"),
         gender: p.gender || "UNISEX",
         category: p.category || "OTHER",
@@ -2334,7 +2352,7 @@ app.get("/api/catalog/products", async (req, res) => {
 
       const allProducts = rows
         .map(mapProduct)
-        .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory }));
+        .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory, discountOnly }));
 
       const products = allProducts.slice(offset, offset + limit);
 
@@ -2397,7 +2415,7 @@ app.get("/api/catalog/products", async (req, res) => {
 
     const allProducts = rankedRows
       .map(mapProduct)
-      .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory }));
+      .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory, discountOnly }));
 
     const products = allProducts.slice(offset, offset + limit);
 

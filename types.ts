@@ -31,9 +31,12 @@ export interface Product {
   id: string;
   title: string;
   price: number;
+  oldPrice?: number;
+  discountPercent?: number;
   currency: string;
   gender: Gender;
   category: Category;
+  displayCategory?: string;
   sizes: string[];
   images: string[];
   storeId: string;
