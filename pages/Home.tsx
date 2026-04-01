@@ -105,6 +105,7 @@ const Hero = () => {
   };
 
   return (
+    <div className="max-w-[1400px] mx-auto px-3">
     <section className="px-4 py-8 bg-zinc-50 rounded-b-[40px] mb-8 relative">
       <div className="max-w-md mx-auto text-center space-y-6">
         {(user?.avatarUrl || user?.selfieUrl) ? (
@@ -343,7 +344,7 @@ const Dashboard = () => {
 
       <section>
         <SectionHeader title="Мой шкаф" linkTo="/wardrobe" linkText="В шкаф" />
-        <div className="grid grid-cols-2 gap-4 px-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 px-4">
           {recentWardrobe.length > 0 ? (
             recentWardrobe.map((item) => (
               <div key={item.id} className="aspect-square bg-zinc-100 rounded-2xl overflow-hidden p-4 border border-zinc-200">
@@ -375,7 +376,7 @@ const Dashboard = () => {
 
       <section>
         <SectionHeader title="Новое в каталоге" linkTo="/catalog" linkText="Смотреть" />
-        <div className="grid grid-cols-2 gap-4 px-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 px-4">
           {recentProducts.map((p) => (
             <button
               key={p.id}
@@ -395,7 +396,7 @@ const Dashboard = () => {
                     src={catalogImageSrc(p.images?.[0])}
                     alt=""
                     className="w-full h-full object-contain mix-blend-multiply"
-                  />
+                  / loading="lazy" decoding="async">
                 </div>
                 <div className="px-1">
                   <p className="text-xs font-bold truncate uppercase">{p.title}</p>
@@ -412,7 +413,7 @@ const Dashboard = () => {
       {/* ADDED: Discounts Section */}
       <section>
         <SectionHeader title="Скидки" linkTo="/catalog" linkText="Все акции" />
-        <div className="grid grid-cols-2 gap-4 px-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 px-4">
           {saleProducts.map((p, idx) => (
             <button
               key={p.id}
@@ -435,7 +436,7 @@ const Dashboard = () => {
                     src={catalogImageSrc(p.images?.[0])}
                     alt=""
                     className="w-full h-full object-contain mix-blend-multiply"
-                  />
+                  / loading="lazy" decoding="async">
                 </div>
                 <div className="px-1">
                   <p className="text-xs font-bold truncate uppercase">{p.title}</p>
@@ -724,4 +725,6 @@ function showToast(message: string) {
   }, 2000);
 }
 
-export default Home;
+export default Home
+    </div>
+)
