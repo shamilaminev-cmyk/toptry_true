@@ -105,7 +105,6 @@ const Hero = () => {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-3">
     <section className="px-4 py-8 bg-zinc-50 rounded-b-[40px] mb-8 relative">
       <div className="max-w-md mx-auto text-center space-y-6">
         {(user?.avatarUrl || user?.selfieUrl) ? (
@@ -393,10 +392,12 @@ const Dashboard = () => {
               >
                 <div className="aspect-[4/5] bg-zinc-50 rounded-2xl overflow-hidden p-6 border border-zinc-100">
                   <img
-                    src={catalogImageSrc(p.images?.[0])}
+                    src={catalogImageSrc(p.images?.[0], { w: 420 })}
                     alt=""
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-contain mix-blend-multiply"
-                  / loading="lazy" decoding="async">
+                  />
                 </div>
                 <div className="px-1">
                   <p className="text-xs font-bold truncate uppercase">{p.title}</p>
@@ -433,10 +434,12 @@ const Dashboard = () => {
                     SALE -{20 + idx * 5}%
                   </div>
                   <img
-                    src={catalogImageSrc(p.images?.[0])}
+                    src={catalogImageSrc(p.images?.[0], { w: 420 })}
                     alt=""
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-contain mix-blend-multiply"
-                  / loading="lazy" decoding="async">
+                  />
                 </div>
                 <div className="px-1">
                   <p className="text-xs font-bold truncate uppercase">{p.title}</p>
@@ -725,6 +728,4 @@ function showToast(message: string) {
   }, 2000);
 }
 
-export default Home
-    </div>
-)
+export default Home;
