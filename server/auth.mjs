@@ -17,7 +17,7 @@ export function getAuthConfig() {
       sameSite: secure ? 'none' : 'lax',
       secure,
       path: '/',
-      maxAge: 60 * 60 * 24 * 14, // 14 days
+      maxAge: 60 * 60 * 24 * 30, // 14 days
     },
   };
 }
@@ -32,7 +32,7 @@ export function signSession(user) {
   return jwt.sign(
     { sub: user.id, username: user.username, email: user.email },
     JWT_SECRET,
-    { expiresIn: '14d' }
+    { expiresIn: '30d' }
   );
 }
 
