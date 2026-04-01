@@ -42,6 +42,10 @@ const Catalog = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [discountOnly, setDiscountOnly] = useState(false);
+  const [brand, setBrand] = useState('');
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const [sort, setSort] = useState('');
 
   const [items, setItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -90,6 +94,10 @@ const Catalog = () => {
     if (displayCategory) params.set('displayCategory', displayCategory);
     if (debouncedSearch) params.set('q', debouncedSearch);
     if (discountOnly) params.set('discountOnly', '1');
+    if (brand) params.set('brand', brand);
+    if (priceMin) params.set('priceMin', priceMin);
+    if (priceMax) params.set('priceMax', priceMax);
+    if (sort) params.set('sort', sort);
 
     const url = withApiOrigin(`/api/catalog/products?${params.toString()}`);
     const resp = await fetch(url, { credentials: 'include' });
@@ -121,6 +129,10 @@ const Catalog = () => {
         if (displayCategory) params.set('displayCategory', displayCategory);
         if (debouncedSearch) params.set('q', debouncedSearch);
         if (discountOnly) params.set('discountOnly', '1');
+    if (brand) params.set('brand', brand);
+    if (priceMin) params.set('priceMin', priceMin);
+    if (priceMax) params.set('priceMax', priceMax);
+    if (sort) params.set('sort', sort);
 
         const url = withApiOrigin(`/api/catalog/products?${params.toString()}`);
         const resp = await fetch(url, { credentials: 'include' });
@@ -197,6 +209,40 @@ const Catalog = () => {
           </div>
         </div>
 
+        <div className="flex gap-2 flex-wrap">
+          <input
+            placeholder="Бренд"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-xs"
+          />
+
+          <input
+            placeholder="Цена от"
+            value={priceMin}
+            onChange={(e) => setPriceMin(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-xs w-24"
+          />
+
+          <input
+            placeholder="Цена до"
+            value={priceMax}
+            onChange={(e) => setPriceMax(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-xs w-24"
+          />
+
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-xs"
+          >
+            <option value="">Сортировка</option>
+            <option value="price_asc">Цена ↑</option>
+            <option value="price_desc">Цена ↓</option>
+            <option value="discount_desc">Скидка ↓</option>
+          </select>
+        </div>
+
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
           {GENDER_TABS.map((tab) => {
             const active = gender === tab.id;
@@ -212,6 +258,40 @@ const Catalog = () => {
               </button>
             );
           })}
+        </div>
+
+        <div className="flex gap-2 flex-wrap">
+          <input
+            placeholder="Бренд"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-xs"
+          />
+
+          <input
+            placeholder="Цена от"
+            value={priceMin}
+            onChange={(e) => setPriceMin(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-xs w-24"
+          />
+
+          <input
+            placeholder="Цена до"
+            value={priceMax}
+            onChange={(e) => setPriceMax(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-xs w-24"
+          />
+
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-xs"
+          >
+            <option value="">Сортировка</option>
+            <option value="price_asc">Цена ↑</option>
+            <option value="price_desc">Цена ↓</option>
+            <option value="discount_desc">Скидка ↓</option>
+          </select>
         </div>
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
