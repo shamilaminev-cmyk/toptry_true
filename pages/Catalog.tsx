@@ -275,8 +275,10 @@ const Catalog = () => {
                     )}
 
                     <img
-                      src={p?.images?.[0] ? catalogImageSrc(p.images[0]) : IMG_FALLBACK}
+                      src={p?.images?.[0] ? catalogImageSrc(p.images[0], { w: 420 }) : IMG_FALLBACK}
                       alt={p.title || ""}
+                      loading="lazy"
+                      decoding="async"
                       onError={(e) => {
                         const el = e.currentTarget as HTMLImageElement;
                         el.src = IMG_FALLBACK;

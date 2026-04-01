@@ -2226,6 +2226,11 @@ app.get("/api/catalog/image", async (req, res) => {
       return res.status(400).json({ error: "unsupported protocol" });
     }
 
+    const requestedWidth = Math.min(
+      Math.max(parseInt(String(req.query.w || "0"), 10) || 0, 0),
+      1600
+    );
+
     const allowedHosts = new Set([
       "sportcourt.ru",
       "www.sportcourt.ru",
@@ -2249,14 +2254,47 @@ app.get("/api/catalog/image", async (req, res) => {
       return res.status(upstream.status).send("upstream image fetch failed");
     }
 
-    const ct = upstream.headers.get("content-type") || "image/jpeg";
-    const cc = upstream.headers.get("cache-control") || "public, max-age=3600";
-
-    res.setHeader("Content-Type", ct);
-    res.setHeader("Cache-Control", cc);
+    const upstreamCt = String(upstream.headers.get("content-type") || "image/jpeg").toLowerCase();
+    const upstreamCc = upstream.headers.get("cache-control") || "public, max-age=3600";
+    const cacheControl = requestedWidth > 0
+      ? "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800"
+      : upstreamCc;
 
     const ab = await upstream.arrayBuffer();
-    return res.send(Buffer.from(ab));
+    const input = Buffer.from(ab);
+
+    const shouldBypassTransform =
+      requestedWidth <= 0 ||
+      upstreamCt.includes("svg") ||
+      upstreamCt.includes("gif");
+
+    if (shouldBypassTransform) {
+      res.setHeader("Content-Type", upstreamCt || "image/jpeg");
+      res.setHeader("Cache-Control", cacheControl);
+      return res.send(input);
+    }
+
+    try {
+      const output = await sharp(input, { failOnError: false })
+        .rotate()
+        .resize({
+          width: requestedWidth,
+          height: requestedWidth,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 76 })
+        .toBuffer();
+
+      res.setHeader("Content-Type", "image/webp");
+      res.setHeader("Cache-Control", cacheControl);
+      return res.send(output);
+    } catch (transformErr) {
+      console.warn("[toptry] /api/catalog/image thumbnail fallback:", transformErr?.message || transformErr);
+      res.setHeader("Content-Type", upstreamCt || "image/jpeg");
+      res.setHeader("Cache-Control", cacheControl);
+      return res.send(input);
+    }
   } catch (e) {
     console.error("[toptry] /api/catalog/image error", e);
     return res.status(500).json({ error: e?.message || String(e) });
