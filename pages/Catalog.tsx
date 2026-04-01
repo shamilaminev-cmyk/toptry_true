@@ -43,6 +43,7 @@ const Catalog = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [discountOnly, setDiscountOnly] = useState(false);
   const [brand, setBrand] = useState('');
+  const [brandOptions, setBrandOptions] = useState<string[]>([]);
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [sort, setSort] = useState('');
@@ -84,6 +85,39 @@ const Catalog = () => {
 
     return () => clearTimeout(timer);
   }, [search]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (gender) params.set('gender', gender);
+        if (displayCategory) params.set('displayCategory', displayCategory);
+        if (debouncedSearch) params.set('q', debouncedSearch);
+        if (discountOnly) params.set('discountOnly', '1');
+
+        const url = withApiOrigin(`/api/catalog/brands?${params.toString()}`);
+        const resp = await fetch(url, { credentials: 'include' });
+        const data = await resp.json().catch(() => ({}));
+
+        if (cancelled) return;
+        if (!resp.ok) throw new Error(data?.error || `Catalog brands fetch failed (${resp.status})`);
+
+        setBrandOptions(Array.isArray(data?.brands) ? data.brands : []);
+      } catch (e) {
+        if (!cancelled) {
+          console.error('[catalog] brands fetch error', e);
+          setBrandOptions([]);
+        }
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [gender, displayCategory, debouncedSearch, discountOnly]);
 
   const fetchCatalog = async (nextOffset: number, append: boolean) => {
     const params = new URLSearchParams();
@@ -232,12 +266,18 @@ const Catalog = () => {
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          <input
-            placeholder="Бренд"
+          <select
             value={brand}
             onChange={(e) => setBrand(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-xs"
-          />
+            className="px-3 py-2 border rounded-lg text-xs bg-white"
+          >
+            <option value="">Бренд</option>
+            {brandOptions.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
 
           <input
             placeholder="Цена от"

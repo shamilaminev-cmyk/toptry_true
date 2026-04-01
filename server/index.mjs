@@ -2336,6 +2336,99 @@ app.get("/api/catalog/image", async (req, res) => {
 });
 
 
+app.get("/api/catalog/brands", async (req, res) => {
+  try {
+    const merchant =
+      typeof req.query.merchant === "string" && req.query.merchant.trim()
+        ? req.query.merchant.trim().toLowerCase()
+        : "";
+    const gender =
+      typeof req.query.gender === "string" && req.query.gender.trim()
+        ? req.query.gender.trim().toUpperCase()
+        : "";
+    const category =
+      typeof req.query.category === "string" && req.query.category.trim()
+        ? req.query.category.trim().toUpperCase()
+        : "";
+    const displayCategory =
+      typeof req.query.displayCategory === "string" && req.query.displayCategory.trim()
+        ? req.query.displayCategory.trim().toUpperCase()
+        : "";
+    const q =
+      typeof req.query.q === "string" && req.query.q.trim()
+        ? req.query.q.trim()
+        : "";
+    const discountOnly =
+      String(req.query.discountOnly || "").trim() === "1";
+
+    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous"];
+
+    const baseWhere = {
+      isActive: true,
+      ...(gender ? { gender } : {}),
+      ...(category ? { category } : {}),
+      ...(merchant && allowedMerchants.includes(merchant) ? { merchant } : {}),
+    };
+
+    const rows = await prisma.catalogProduct.findMany({
+      where: baseWhere,
+      orderBy: { brand: "asc" },
+    });
+
+    const brands = Array.from(
+      new Set(
+        rows
+          .map((p) => {
+            const normalizedDisplayCategory = normalizeCatalogDisplayCategory([
+              p.category,
+              p.title,
+              p.brand,
+            ].filter(Boolean).join(" "));
+            const price = Number(p.price || 0);
+            const oldPrice = Number(p.oldPrice || 0);
+            const discountPercent =
+              oldPrice > price && price > 0
+                ? Math.max(1, Math.round(((oldPrice - price) / oldPrice) * 100))
+                : 0;
+
+            return {
+              brand: String(p.brand || "").trim(),
+              title: p.title,
+              category: p.category,
+              displayCategory: normalizedDisplayCategory,
+              price,
+              oldPrice,
+              discountPercent,
+              storeName:
+                p.merchant === "sportmaster"
+                  ? "Спортмастер"
+                  : p.merchant === "rendezvous"
+                    ? "Rendez-Vous"
+                    : "Sportcourt",
+            };
+          })
+          .filter((p) => p.brand)
+          .filter((p) =>
+            matchesCatalogRequestFilters(p, {
+              q,
+              displayCategory,
+              discountOnly,
+              brand: "",
+              priceMin: "",
+              priceMax: "",
+            })
+          )
+          .map((p) => p.brand)
+      )
+    );
+
+    return res.json({ brands });
+  } catch (e) {
+    console.error("[toptry] /api/catalog/brands error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
 app.get("/api/catalog/products", async (req, res) => {
   try {
     const limit = Math.min(
