@@ -260,7 +260,7 @@ const Catalog = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-8 px-4 mt-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8 px-4 mt-6">
             {items.map((p: any) => {
               const added = isInWardrobe(p.id);
               return (
