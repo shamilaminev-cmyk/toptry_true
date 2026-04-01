@@ -65,9 +65,17 @@ const Catalog = () => {
     const genderParam = (params.get('gender') || '').toUpperCase();
     const categoryParam = (params.get('displayCategory') || params.get('category') || '').toUpperCase();
     const discountOnlyParam = params.get('discountOnly') === '1';
+    const brandParam = params.get('brand') || '';
+    const priceMinParam = params.get('priceMin') || '';
+    const priceMaxParam = params.get('priceMax') || '';
+    const sortParam = params.get('sort') || '';
 
     if (q) setSearch(q);
     if (discountOnlyParam) setDiscountOnly(true);
+    if (brandParam) setBrand(brandParam);
+    if (priceMinParam) setPriceMin(priceMinParam);
+    if (priceMaxParam) setPriceMax(priceMaxParam);
+    if (sortParam) setSort(sortParam);
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
@@ -104,7 +112,12 @@ const Catalog = () => {
         if (cancelled) return;
         if (!resp.ok) throw new Error(data?.error || `Catalog brands fetch failed (${resp.status})`);
 
-        setBrandOptions(Array.isArray(data?.brands) ? data.brands : []);
+        const nextBrands = Array.isArray(data?.brands) ? data.brands : [];
+        setBrandOptions(nextBrands);
+
+        if (brand && !nextBrands.includes(brand)) {
+          setBrand('');
+        }
       } catch (e) {
         if (!cancelled) {
           console.error('[catalog] brands fetch error', e);
@@ -117,7 +130,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, debouncedSearch, discountOnly]);
+  }, [gender, displayCategory, debouncedSearch, discountOnly, brand]);
 
   const fetchCatalog = async (nextOffset: number, append: boolean) => {
     const params = new URLSearchParams();
@@ -199,6 +212,36 @@ const Catalog = () => {
     };
   }, [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort]);
 
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    if (debouncedSearch) params.set('q', debouncedSearch);
+    if (gender) params.set('gender', gender);
+    if (displayCategory) params.set('displayCategory', displayCategory);
+    if (discountOnly) params.set('discountOnly', '1');
+    if (brand) params.set('brand', brand);
+    if (priceMin) params.set('priceMin', priceMin);
+    if (priceMax) params.set('priceMax', priceMax);
+    if (sort) params.set('sort', sort);
+
+    const base = (window.location.hash || '#/catalog').split('?')[0] || '#/catalog';
+    const qs = params.toString();
+    const nextHash = qs ? `${base}?${qs}` : base;
+
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, '', nextHash);
+    }
+  }, [
+    debouncedSearch,
+    gender,
+    displayCategory,
+    discountOnly,
+    brand,
+    priceMin,
+    priceMax,
+    sort,
+  ]);
+
   const isInWardrobe = (productId: string) => {
     return wardrobe.some(item => item.id === productId);
   };
@@ -212,6 +255,7 @@ const Catalog = () => {
     setPriceMin('');
     setPriceMax('');
     setSort('');
+    window.history.replaceState(null, '', '#/catalog');
   };
 
   const handleLoadMore = async () => {
@@ -335,7 +379,7 @@ const Catalog = () => {
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           Найдено: {filteredCountLabel}
         </p>
-        {(gender || displayCategory || search || discountOnly) && (
+        {(gender || displayCategory || search || discountOnly || brand || priceMin || priceMax || sort) && (
           <button
             onClick={clearFilters}
             className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 underline underline-offset-4"
