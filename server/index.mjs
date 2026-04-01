@@ -1652,17 +1652,7 @@ function matchesCatalogRequestFilters(product, { q, displayCategory, discountOnl
     return false;
   }
 
-  if (brand) {
-      where.brand = { contains: brand, mode: 'insensitive' };
-    }
-
-    if (priceMin || priceMax) {
-      where.price = {};
-      if (priceMin) where.price.gte = Number(priceMin);
-      if (priceMax) where.price.lte = Number(priceMax);
-    }
-
-    if (discountOnly) {
+  if (discountOnly) {
     const price = Number(product?.price || 0);
     const oldPrice = Number(product?.oldPrice || 0);
     if (!(oldPrice > price && price > 0)) {
