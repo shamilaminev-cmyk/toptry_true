@@ -1644,7 +1644,7 @@ function buildCatalogFeedSimilarityKey(product) {
   return [displayCategory, brand, title].join("|");
 }
 
-function matchesCatalogRequestFilters(product, { q, displayCategory, discountOnly }) {
+function matchesCatalogRequestFilters(product, { q, displayCategory, discountOnly, brand, priceMin, priceMax }) {
   const normalizedDisplayCategory = String(displayCategory || "").trim().toUpperCase();
   const productDisplayCategory = String(product?.displayCategory || "").trim().toUpperCase();
 
@@ -1666,6 +1666,30 @@ function matchesCatalogRequestFilters(product, { q, displayCategory, discountOnl
     const price = Number(product?.price || 0);
     const oldPrice = Number(product?.oldPrice || 0);
     if (!(oldPrice > price && price > 0)) {
+      return false;
+    }
+  }
+
+  const brandNeedle = String(brand || "").trim().toLowerCase();
+  if (brandNeedle) {
+    const productBrand = String(product?.brand || "").trim().toLowerCase();
+    if (!productBrand || !productBrand.includes(brandNeedle)) {
+      return false;
+    }
+  }
+
+  const minPrice = Number(priceMin || 0);
+  if (Number.isFinite(minPrice) && minPrice > 0) {
+    const productPrice = Number(product?.price || 0);
+    if (!(productPrice >= minPrice)) {
+      return false;
+    }
+  }
+
+  const maxPrice = Number(priceMax || 0);
+  if (Number.isFinite(maxPrice) && maxPrice > 0) {
+    const productPrice = Number(product?.price || 0);
+    if (!(productPrice <= maxPrice)) {
       return false;
     }
   }
@@ -2342,6 +2366,22 @@ app.get("/api/catalog/products", async (req, res) => {
         : "";
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
+    const brand =
+      typeof req.query.brand === "string" && req.query.brand.trim()
+        ? req.query.brand.trim()
+        : "";
+    const priceMin =
+      typeof req.query.priceMin === "string" && req.query.priceMin.trim()
+        ? req.query.priceMin.trim()
+        : "";
+    const priceMax =
+      typeof req.query.priceMax === "string" && req.query.priceMax.trim()
+        ? req.query.priceMax.trim()
+        : "";
+    const sort =
+      typeof req.query.sort === "string" && req.query.sort.trim()
+        ? req.query.sort.trim()
+        : "";
 
     const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous"];
 
@@ -2400,7 +2440,15 @@ app.get("/api/catalog/products", async (req, res) => {
 
       const allProducts = rows
         .map(mapProduct)
-        .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory, discountOnly }));
+        .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory, discountOnly, brand, priceMin, priceMax }));
+
+      if (sort === "price_asc") {
+        allProducts.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+      } else if (sort === "price_desc") {
+        allProducts.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+      } else if (sort === "discount_desc") {
+        allProducts.sort((a, b) => Number(b.discountPercent || 0) - Number(a.discountPercent || 0));
+      }
 
       const products = allProducts.slice(offset, offset + limit);
 
@@ -2463,7 +2511,15 @@ app.get("/api/catalog/products", async (req, res) => {
 
     const allProducts = rankedRows
       .map(mapProduct)
-      .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory, discountOnly }));
+      .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory, discountOnly, brand, priceMin, priceMax }));
+
+    if (sort === "price_asc") {
+      allProducts.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sort === "price_desc") {
+      allProducts.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sort === "discount_desc") {
+      allProducts.sort((a, b) => Number(b.discountPercent || 0) - Number(a.discountPercent || 0));
+    }
 
     const products = allProducts.slice(offset, offset + limit);
 

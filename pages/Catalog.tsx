@@ -163,7 +163,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, debouncedSearch, discountOnly]);
+  }, [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort]);
 
   const isInWardrobe = (productId: string) => {
     return wardrobe.some(item => item.id === productId);
@@ -174,6 +174,10 @@ const Catalog = () => {
     setDisplayCategory('');
     setSearch('');
     setDiscountOnly(false);
+    setBrand('');
+    setPriceMin('');
+    setPriceMax('');
+    setSort('');
   };
 
   const handleLoadMore = async () => {
@@ -209,39 +213,6 @@ const Catalog = () => {
           </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
-          <input
-            placeholder="Бренд"
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-xs"
-          />
-
-          <input
-            placeholder="Цена от"
-            value={priceMin}
-            onChange={(e) => setPriceMin(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-xs w-24"
-          />
-
-          <input
-            placeholder="Цена до"
-            value={priceMax}
-            onChange={(e) => setPriceMax(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-xs w-24"
-          />
-
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-xs"
-          >
-            <option value="">Сортировка</option>
-            <option value="price_asc">Цена ↑</option>
-            <option value="price_desc">Цена ↓</option>
-            <option value="discount_desc">Скидка ↓</option>
-          </select>
-        </div>
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
           {GENDER_TABS.map((tab) => {
