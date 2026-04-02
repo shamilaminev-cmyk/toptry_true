@@ -2301,7 +2301,22 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
     }
 
     const csv = await resp.text();
-    const rows = parseCsv(csv);
+
+    const normalizedCsv = String(csv || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
+
+    const firstNl = normalizedCsv.indexOf("\n");
+    const headerLine = firstNl === -1 ? normalizedCsv : normalizedCsv.slice(0, firstNl);
+    const body = firstNl === -1 ? "" : normalizedCsv.slice(firstNl + 1);
+
+    const recordChunks = body
+      .split(/\n(?=(?:true|false);)/i)
+      .map((chunk) => chunk.replace(/\n+/g, " ").trim())
+      .filter(Boolean);
+
+    const remingtonCsv = [headerLine, ...recordChunks].join("\n");
+    const rows = parseCsv(remingtonCsv);
 
     let created = 0;
     let updated = 0;
