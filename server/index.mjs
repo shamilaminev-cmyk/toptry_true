@@ -2183,7 +2183,7 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
         pickFirst(r, ["param"]),
       ].join(" ");
 
-      const remingtonDisplayCategory = normalizeCatalogDisplayCategory(remingtonSignals);
+      const remingtonSignalsLc = remingtonSignals.toLowerCase();
 
       const gender =
         /(\b|[|/:;(),\-\s])(мужск|мужской|male|men|man)(\b|[|/:;(),\-\s])/i.test(remingtonSignals)
@@ -2193,15 +2193,17 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
             : normalizeCatalogGender(remingtonSignals);
 
       const category =
-        remingtonDisplayCategory === "TOPS"
-          ? "TOPS"
-          : remingtonDisplayCategory === "BOTTOMS"
-            ? "BOTTOMS"
-            : remingtonDisplayCategory === "OUTERWEAR"
-              ? "JACKETS"
-              : remingtonDisplayCategory === "SHOES"
-                ? "SHOES"
-                : "ACCESSORIES";
+        /(кроссов|ботин|сапог|туф|кед|сланц|шлеп|угг|обув)/i.test(remingtonSignalsLc)
+          ? "SHOES"
+          : /(жилет|куртк|пухов|парка|ветров|бомбер|верхняя одежда)/i.test(remingtonSignalsLc)
+            ? "JACKETS"
+            : /(брюк|штаны|шорт|леггин|лосин|джинс)/i.test(remingtonSignalsLc)
+              ? "BOTTOMS"
+              : /(лонгслив|худи|свитшот|толстов|рубаш|футбол|майк|поло|джемпер|свитер|кардиган|кофта)/i.test(remingtonSignalsLc)
+                ? "TOPS"
+                : /(шапк|кепк|бейсболк|ремень|рюкзак|сумк|перчат|шарф)/i.test(remingtonSignalsLc)
+                  ? "ACCESSORIES"
+                  : normalizeCatalogCategory(remingtonSignals);
 
       const data = {
         id: `cat-remington-${externalId}`,
