@@ -2771,7 +2771,7 @@ app.get("/api/catalog/brands", async (req, res) => {
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
 
-    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt"];
+    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington"];
 
     const baseWhere = {
       isActive: true,
@@ -2890,7 +2890,7 @@ app.get("/api/catalog/products", async (req, res) => {
         ? req.query.sort.trim()
         : "";
 
-    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt"];
+    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington"];
 
     const baseWhere = {
       isActive: true,
@@ -2929,7 +2929,11 @@ app.get("/api/catalog/products", async (req, res) => {
             ? "Спортмастер"
             : p.merchant === "rendezvous"
               ? "Rendez-Vous"
-              : "Sportcourt",
+              : p.merchant === "thecultt"
+                ? "The Cultt"
+                : p.merchant === "remington"
+                  ? "Remington"
+                  : "Sportcourt",
         availability: p.isActive,
         isCatalog: true,
         brand: p.brand || undefined,
