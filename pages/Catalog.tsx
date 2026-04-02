@@ -334,7 +334,7 @@ const Catalog = () => {
             placeholder="Цена до"
             value={priceMax}
             onChange={(e) => setPriceMax(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-xs w-24"
+            className="h-10 px-4 rounded-full bg-zinc-100 text-xs uppercase tracking-wide border-none focus:ring-2 focus:ring-zinc-900 outline-none w-28"
           />
 
           <select
