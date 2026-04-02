@@ -2326,6 +2326,257 @@ app.get("/api/catalog/image", async (req, res) => {
 });
 
 
+app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
+  try {
+    const FEED_URL = process.env.ADMITAD_THECULTT_FEED_URL || "";
+    if (!FEED_URL) {
+      return res.status(500).json({ error: "ADMITAD_THECULTT_FEED_URL is not set" });
+    }
+
+    const resp = await fetch(FEED_URL);
+    if (!resp.ok) {
+      return res.status(502).json({ error: `Feed fetch failed: ${resp.status}` });
+    }
+
+    const csv = await resp.text();
+    const rows = parseCsv(csv);
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const seen = new Set();
+
+    await prisma.catalogProduct.updateMany({
+      where: { merchant: "thecultt" },
+      data: { isActive: false },
+    });
+
+    for (const r of rows) {
+      const title = pickFirst(r, ["name", "title", "product_name", "model"]);
+      const brand = pickFirst(r, ["brand", "vendor", "manufacturer"]);
+      const imageUrl = pickFirst(r, ["image", "imageurl", "picture", "img"]);
+      const productUrl = pickFirst(r, ["url", "product_url", "link"]);
+      const affiliateUrl = pickFirst(r, ["deeplink", "affiliate_url", "url", "product_url", "link"]);
+      const price = toPrice(pickFirst(r, ["price", "current_price", "price_value"]));
+      const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
+
+      const rawCategory = [
+        pickFirst(r, ["categoryId"]),
+        pickFirst(r, ["market_category"]),
+        pickFirst(r, ["typePrefix"]),
+        pickFirst(r, ["param"]),
+        title,
+        brand,
+      ].join(" ").toLowerCase();
+
+      const allowKeywords = [
+        "обув", "кроссов", "ботин", "кед", "туф", "сапог", "босонож", "лофер", "мокас", "сандал", "сланц",
+        "сумк", "рюкзак", "портфел", "клатч", "тоут", "шоппер",
+        "курт", "пальто", "пуховик", "плащ", "ветровк",
+        "футболк", "майк", "поло", "рубаш", "лонгслив",
+        "толстовк", "худи", "свитшот", "свитер", "джемпер", "кардиган",
+        "джинс", "брюк", "штаны", "леггин", "лосин",
+        "шорт", "юбк", "плать"
+      ];
+
+      const blockKeywords = [
+        "крем", "спрей", "уход", "стельк", "шнурк", "космет", "чист",
+        "салфет", "пропитк", "ложк", "щетк", "дезодорант", "средств"
+      ];
+
+      const isAllowed = allowKeywords.some(k => rawCategory.includes(k));
+      const isBlocked = blockKeywords.some(k => rawCategory.includes(k));
+
+      if (!title || !imageUrl || !affiliateUrl || price === null || !isAllowed || isBlocked) {
+        skipped++;
+        continue;
+      }
+
+      const hasUsableImage =
+        String(imageUrl).includes("www.rendez-vous.ru/")
+          ? true
+          : await isUsableCatalogImageUrl(imageUrl);
+
+      if (!hasUsableImage) {
+        skipped++;
+        continue;
+      }
+
+      const haystack = [
+        title,
+        brand,
+        pickFirst(r, ["category", "category_name", "google_product_category"]),
+        pickFirst(r, ["categoryId"]),
+        pickFirst(r, ["market_category"]),
+        pickFirst(r, ["gender", "sex"]),
+        pickFirst(r, ["param"]),
+      ].join(" ");
+
+      if (!isTryOnRelevantCatalogItem([rawCategory, haystack].join(" "))) {
+        skipped++;
+        continue;
+      }
+
+      const externalId = buildCatalogExternalId(r);
+      if (seen.has(externalId)) {
+        skipped++;
+        continue;
+      }
+      seen.add(externalId);
+
+      const gender = normalizeCatalogGender(haystack);
+      const category = normalizeCatalogCategory(haystack);
+
+      const data = {
+        id: `cat-thecultt-${externalId}`,
+        merchant: "thecultt",
+        externalId,
+        title,
+        brand: brand || null,
+        category,
+        gender,
+        price,
+        oldPrice,
+        currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
+        imageUrl,
+        productUrl: productUrl || affiliateUrl,
+        affiliateUrl,
+        isActive: true,
+        rawPayload: r,
+      };
+
+      const existing = await prisma.catalogProduct.findUnique({
+        where: {
+          merchant_externalId: {
+            merchant: "thecultt",
+            externalId,
+          },
+        },
+      });
+
+      if (existing) {
+        await prisma.catalogProduct.update({
+          where: { id: existing.id },
+          data,
+        });
+        updated++;
+      } else {
+        await prisma.catalogProduct.create({ data });
+        created++;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      merchant: "thecultt",
+      total: rows.length,
+      created,
+      updated,
+      skipped,
+      active: created + updated,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/import/thecultt error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
+
+app.get("/api/catalog/image", async (req, res) => {
+  try {
+    const rawUrl = String(req.query.url || "").trim();
+    if (!rawUrl) {
+      return res.status(400).json({ error: "url is required" });
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ error: "invalid url" });
+    }
+
+    if (!/^https?:$/i.test(parsed.protocol)) {
+      return res.status(400).json({ error: "unsupported protocol" });
+    }
+
+    const requestedWidth = Math.min(
+      Math.max(parseInt(String(req.query.w || "0"), 10) || 0, 0),
+      1600
+    );
+
+    const allowedHosts = new Set([
+      "sportcourt.ru",
+      "www.sportcourt.ru",
+      "cdn.sportmaster.ru",
+      "www.rendez-vous.ru",
+    ]);
+
+    if (!allowedHosts.has(parsed.hostname)) {
+      return res.status(403).json({ error: "host is not allowed" });
+    }
+
+    const upstream = await fetch(parsed.toString(), {
+      headers: {
+        "user-agent": "Mozilla/5.0 TopTryCatalogProxy",
+        "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "referer": "https://toptry.ru/",
+      },
+    });
+
+    if (!upstream.ok) {
+      return res.status(upstream.status).send("upstream image fetch failed");
+    }
+
+    const upstreamCt = String(upstream.headers.get("content-type") || "image/jpeg").toLowerCase();
+    const upstreamCc = upstream.headers.get("cache-control") || "public, max-age=3600";
+    const cacheControl = requestedWidth > 0
+      ? "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800"
+      : upstreamCc;
+
+    const ab = await upstream.arrayBuffer();
+    const input = Buffer.from(ab);
+
+    const shouldBypassTransform =
+      requestedWidth <= 0 ||
+      upstreamCt.includes("svg") ||
+      upstreamCt.includes("gif");
+
+    if (shouldBypassTransform) {
+      res.setHeader("Content-Type", upstreamCt || "image/jpeg");
+      res.setHeader("Cache-Control", cacheControl);
+      return res.send(input);
+    }
+
+    try {
+      const output = await sharp(input, { failOnError: false })
+        .rotate()
+        .resize({
+          width: requestedWidth,
+          height: requestedWidth,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 76 })
+        .toBuffer();
+
+      res.setHeader("Content-Type", "image/webp");
+      res.setHeader("Cache-Control", cacheControl);
+      return res.send(output);
+    } catch (transformErr) {
+      console.warn("[toptry] /api/catalog/image thumbnail fallback:", transformErr?.message || transformErr);
+      res.setHeader("Content-Type", upstreamCt || "image/jpeg");
+      res.setHeader("Cache-Control", cacheControl);
+      return res.send(input);
+    }
+  } catch (e) {
+    console.error("[toptry] /api/catalog/image error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
 app.get("/api/catalog/brands", async (req, res) => {
   try {
     const merchant =
