@@ -2082,6 +2082,162 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
   }
 });
 
+app.post("/api/admin/catalog/import/remington", async (_req, res) => {
+  try {
+    const FEED_URL = process.env.ADMITAD_REMINGTON_FEED_URL || "";
+    if (!FEED_URL) {
+      return res.status(500).json({ error: "ADMITAD_REMINGTON_FEED_URL is not set" });
+    }
+
+    const resp = await fetch(FEED_URL);
+    if (!resp.ok) {
+      return res.status(502).json({ error: `Feed fetch failed: ${resp.status}` });
+    }
+
+    const csv = await resp.text();
+    const rows = parseCsv(csv);
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const seen = new Set();
+
+    await prisma.catalogProduct.updateMany({
+      where: { merchant: "remington" },
+      data: { isActive: false },
+    });
+
+    for (const r of rows) {
+      const title = pickFirst(r, ["name", "title", "product_name"]);
+      const brand = pickFirst(r, ["brand", "vendor", "manufacturer"]);
+      const imageUrl = pickFirst(r, ["image", "imageurl", "picture", "img"]);
+      const productUrl = pickFirst(r, ["url", "product_url", "link"]);
+      const affiliateUrl = pickFirst(r, ["deeplink", "affiliate_url", "url", "product_url", "link"]);
+      const price = toPrice(pickFirst(r, ["price", "current_price", "price_value"]));
+      const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
+
+      const rawCategory = [
+        pickFirst(r, ["categoryId"]),
+        pickFirst(r, ["typePrefix"]),
+        pickFirst(r, ["param"]),
+        title,
+        brand,
+      ].join(" ").toLowerCase();
+
+      const allowKeywords = [
+        "курт", "пальто", "пуховик", "ветровк",
+        "футболк", "майк", "поло", "рубаш", "лонгслив",
+        "толстовк", "худи", "свитшот", "свитер", "джемпер", "кардиган",
+        "джинс", "брюк", "штаны", "леггин", "лосин",
+        "кроссовк", "ботин", "кед", "обув", "сапог", "туфл", "лофер", "сланц", "шлеп",
+        "шорт", "юбк", "плать"
+      ];
+
+      const blockKeywords = [
+        "инвентарь", "мяч", "шлем", "клюш", "ракет", "велосип", "самокат",
+        "ролик", "коньк", "лыж", "сноуборд", "тренаж", "гантел", "штанг",
+        "турник", "палат", "спальник", "рюкзак", "бутыл", "фляг", "коврик",
+        "защит", "маск", "очки", "час", "аксессуар", "перчатки хоккейные"
+      ];
+
+      const isAllowed = allowKeywords.some(k => rawCategory.includes(k));
+      const isBlocked = blockKeywords.some(k => rawCategory.includes(k));
+
+      if (!isAllowed || isBlocked) {
+        skipped++;
+        continue;
+      }
+
+      if (!title || !imageUrl || !affiliateUrl || price === null) {
+        skipped++;
+        continue;
+      }
+
+      const hasUsableImage =
+        false
+          ? true
+          : await isUsableCatalogImageUrl(imageUrl);
+
+      if (!hasUsableImage) {
+        skipped++;
+        continue;
+      }
+
+      const haystack = [
+        title,
+        brand,
+        pickFirst(r, ["category", "category_name", "google_product_category"]),
+        pickFirst(r, ["gender", "sex"]),
+      ].join(" ");
+
+      if (!isTryOnRelevantCatalogItem([rawCategory, haystack].join(" "))) {
+        skipped++;
+        continue;
+      }
+
+      const externalId = buildCatalogExternalId(r);
+      if (seen.has(externalId)) {
+        skipped++;
+        continue;
+      }
+      seen.add(externalId);
+
+      const gender = normalizeCatalogGender(haystack);
+      const category = normalizeCatalogCategory(haystack);
+
+      const data = {
+        id: `cat-remington-${externalId}`,
+        merchant: "remington",
+        externalId,
+        title,
+        brand: brand || null,
+        category,
+        gender,
+        price,
+        oldPrice,
+        currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
+        imageUrl,
+        productUrl: productUrl || affiliateUrl,
+        affiliateUrl,
+        isActive: true,
+        rawPayload: r,
+      };
+
+      const existing = await prisma.catalogProduct.findUnique({
+        where: {
+          merchant_externalId: {
+            merchant: "remington",
+            externalId,
+          },
+        },
+      });
+
+      if (existing) {
+        await prisma.catalogProduct.update({
+          where: { id: existing.id },
+          data,
+        });
+        updated++;
+      } else {
+        await prisma.catalogProduct.create({ data });
+        created++;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      merchant: "remington",
+      total: rows.length,
+      created,
+      updated,
+      skipped,
+      active: created + updated,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/import/remington error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
 
 app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
   try {
@@ -2271,6 +2427,8 @@ app.get("/api/catalog/image", async (req, res) => {
       "goods.thecultt.com",
       "thecultt.com",
       "www.thecultt.com",
+      "remington.fashion",
+      "www.remington.fashion",
     ]);
 
     if (!allowedHosts.has(parsed.hostname)) {
@@ -2656,7 +2814,11 @@ app.get("/api/catalog/brands", async (req, res) => {
                   ? "Спортмастер"
                   : p.merchant === "rendezvous"
                     ? "Rendez-Vous"
-                    : "Sportcourt",
+                    : p.merchant === "thecultt"
+                      ? "The Cultt"
+                      : p.merchant === "remington"
+                        ? "Remington"
+                        : "Sportcourt",
             };
           })
           .filter((p) => p.brand)
