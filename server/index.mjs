@@ -1480,18 +1480,32 @@ function parseCsvTable(text) {
 
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
+    const next = s[i + 1] || "";
 
     if (ch === '"') {
-      if (q && s[i + 1] === '"') {
+      if (q) {
+        if (next === '"') {
+          cell += '"';
+          i++;
+          continue;
+        }
+
+        const nextIsBoundary = next === ";" || next === "\n" || next === "";
+        if (nextIsBoundary) {
+          q = false;
+          continue;
+        }
+
+        // tolerate dirty quotes inside quoted fields
         cell += '"';
-        i++;
-      } else {
-        q = !q;
+        continue;
+      } else if (cell === "") {
+        q = true;
+        continue;
       }
-      continue;
     }
 
-    if (ch === ';' && !q) {
+    if (ch === ";" && !q) {
       row.push(cell.trim());
       cell = "";
       continue;
