@@ -1470,17 +1470,23 @@ app.get("/api/wardrobe/list", requireAuth, async (req, res) => {
 
 // ---------- CATALOG (Admitad / Sportcourt) ----------
 
-function parseCsvLine(line) {
-  const out = [];
-  let cur = "";
+function parseCsvTable(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
   let q = false;
 
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+  const s = String(text || "").replace(/
+/g, "
+").replace(//g, "
+");
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
 
     if (ch === '"') {
-      if (q && line[i + 1] === '"') {
-        cur += '"';
+      if (q && s[i + 1] === '"') {
+        cell += '"';
         i++;
       } else {
         q = !q;
@@ -1489,34 +1495,44 @@ function parseCsvLine(line) {
     }
 
     if (ch === ';' && !q) {
-      out.push(cur);
-      cur = "";
+      row.push(cell.trim());
+      cell = "";
       continue;
     }
 
-    cur += ch;
+    if (ch === "
+" && !q) {
+      row.push(cell.trim());
+      cell = "";
+
+      if (row.some((v) => String(v || "").trim() !== "")) {
+        rows.push(row);
+      }
+      row = [];
+      continue;
+    }
+
+    cell += ch;
   }
 
-  out.push(cur);
-  return out.map((v) => String(v || "").trim());
+  row.push(cell.trim());
+  if (row.some((v) => String(v || "").trim() !== "")) {
+    rows.push(row);
+  }
+
+  return rows;
 }
 
 function parseCsv(text) {
-  const lines = String(text || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .filter((line) => line.trim());
+  const table = parseCsvTable(text);
+  if (!table.length) return [];
 
-  if (!lines.length) return [];
+  const header = table[0].map((h) => String(h || "").trim());
 
-  const header = parseCsvLine(lines[0]);
-
-  return lines.slice(1).map((line) => {
-    const cols = parseCsvLine(line);
+  return table.slice(1).map((cols) => {
     const row = {};
     header.forEach((h, i) => {
-      row[String(h || "").trim()] = cols[i] ?? "";
+      row[h] = cols[i] ?? "";
     });
     return row;
   });
