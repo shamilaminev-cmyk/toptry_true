@@ -1847,10 +1847,15 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
         pickFirst(r, ["gender", "sex"]),
       ].join(" ");
 
-      if (!isTryOnRelevantCatalogItem(haystack)) {
-        skipped++;
-        continue;
-      }
+      
+if (
+  merchant !== "thecultt" &&
+  !isTryOnRelevantCatalogItem(haystack)
+) {
+  skipped++;
+  continue;
+}
+
 
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
