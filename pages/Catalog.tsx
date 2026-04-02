@@ -299,7 +299,7 @@ const Catalog = () => {
               <button
                 key={String(tab.id || 'all')}
                 onClick={() => setGender(tab.id)}
-                className={`flex-shrink-0 px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                className={`flex-shrink-0 h-12 px-6 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
                   active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-400'
                 }`}
               >
@@ -352,7 +352,7 @@ const Catalog = () => {
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
           <button
             onClick={() => setDiscountOnly((v) => !v)}
-            className={`flex-shrink-0 px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+            className={`flex-shrink-0 h-12 px-6 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
               discountOnly ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-400'
             }`}
           >
@@ -364,7 +364,7 @@ const Catalog = () => {
               <button
                 key={String(tab.id || 'all')}
                 onClick={() => setDisplayCategory(tab.id)}
-                className={`flex-shrink-0 px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                className={`flex-shrink-0 h-12 px-6 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
                   active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-400'
                 }`}
               >
