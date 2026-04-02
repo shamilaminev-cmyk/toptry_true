@@ -17,7 +17,7 @@ export function getAuthConfig() {
       sameSite: secure ? 'none' : 'lax',
       secure,
       path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 14 days
+      maxAge: 1000 * 60 * 60 * 24 * 30, // 14 days
     },
   };
 }
