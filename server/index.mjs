@@ -2177,8 +2177,31 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
       }
       seen.add(externalId);
 
-      const gender = normalizeCatalogGender(haystack);
-      const category = normalizeCatalogCategory(haystack);
+      const remingtonSignals = [
+        title,
+        pickFirst(r, ["categoryId"]),
+        pickFirst(r, ["param"]),
+      ].join(" ");
+
+      const remingtonDisplayCategory = normalizeCatalogDisplayCategory(remingtonSignals);
+
+      const gender =
+        /(\b|[|/:;(),\-\s])(мужск|мужской|male|men|man)(\b|[|/:;(),\-\s])/i.test(remingtonSignals)
+          ? "MALE"
+          : /(\b|[|/:;(),\-\s])(женск|женский|female|women|woman)(\b|[|/:;(),\-\s])/i.test(remingtonSignals)
+            ? "FEMALE"
+            : normalizeCatalogGender(remingtonSignals);
+
+      const category =
+        remingtonDisplayCategory === "TOPS"
+          ? "TOPS"
+          : remingtonDisplayCategory === "BOTTOMS"
+            ? "BOTTOMS"
+            : remingtonDisplayCategory === "OUTERWEAR"
+              ? "JACKETS"
+              : remingtonDisplayCategory === "SHOES"
+                ? "SHOES"
+                : "ACCESSORIES";
 
       const data = {
         id: `cat-remington-${externalId}`,
