@@ -1476,10 +1476,7 @@ function parseCsvTable(text) {
   let cell = "";
   let q = false;
 
-  const s = String(text || "").replace(/
-/g, "
-").replace(//g, "
-");
+  const s = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
@@ -1500,8 +1497,7 @@ function parseCsvTable(text) {
       continue;
     }
 
-    if (ch === "
-" && !q) {
+    if (ch === "\n" && !q) {
       row.push(cell.trim());
       cell = "";
 
@@ -1868,14 +1864,11 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
         pickFirst(r, ["gender", "sex"]),
       ].join(" ");
 
-      
-if (
-  merchant !== "thecultt" &&
-  !isTryOnRelevantCatalogItem(haystack)
-) {
-  skipped++;
-  continue;
-}
+
+      if (!isTryOnRelevantCatalogItem(haystack)) {
+        skipped++;
+        continue;
+      }
 
 
       const externalId = buildCatalogExternalId(r);
