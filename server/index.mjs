@@ -2126,26 +2126,16 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
         brand,
       ].join(" ").toLowerCase();
 
-      const allowKeywords = [
-        "курт", "пальто", "пуховик", "ветровк",
-        "футболк", "майк", "поло", "рубаш", "лонгслив",
-        "толстовк", "худи", "свитшот", "свитер", "джемпер", "кардиган",
-        "джинс", "брюк", "штаны", "леггин", "лосин",
-        "кроссовк", "ботин", "кед", "обув", "сапог", "туфл", "лофер", "сланц", "шлеп",
-        "шорт", "юбк", "плать"
-      ];
-
       const blockKeywords = [
         "инвентарь", "мяч", "шлем", "клюш", "ракет", "велосип", "самокат",
         "ролик", "коньк", "лыж", "сноуборд", "тренаж", "гантел", "штанг",
-        "турник", "палат", "спальник", "рюкзак", "бутыл", "фляг", "коврик",
-        "защит", "маск", "очки", "час", "аксессуар", "перчатки хоккейные"
+        "турник", "палат", "спальник", "бутыл", "фляг", "коврик",
+        "защит", "маск", "очки для плав"
       ];
 
-      const isAllowed = allowKeywords.some(k => rawCategory.includes(k));
       const isBlocked = blockKeywords.some(k => rawCategory.includes(k));
 
-      if (!isAllowed || isBlocked) {
+      if (isBlocked) {
         skipped++;
         continue;
       }
@@ -2155,10 +2145,7 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
         continue;
       }
 
-      const hasUsableImage =
-        false
-          ? true
-          : await isUsableCatalogImageUrl(imageUrl);
+      const hasUsableImage = await isUsableCatalogImageUrl(imageUrl);
 
       if (!hasUsableImage) {
         skipped++;
@@ -2170,12 +2157,9 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
         brand,
         pickFirst(r, ["category", "category_name", "google_product_category"]),
         pickFirst(r, ["gender", "sex"]),
+        pickFirst(r, ["categoryId"]),
+        pickFirst(r, ["param"]),
       ].join(" ");
-
-      if (!isTryOnRelevantCatalogItem([rawCategory, haystack].join(" "))) {
-        skipped++;
-        continue;
-      }
 
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
