@@ -1774,6 +1774,8 @@ async function isUsableCatalogImageUrl(url) {
   "goods.thecultt.com",
   "thecultt.com",
   "www.thecultt.com",
+  "remington.fashion",
+  "www.remington.fashion",
 ].includes(parsed.hostname)) return false;
 
   try {
