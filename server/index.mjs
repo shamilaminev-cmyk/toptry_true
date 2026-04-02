@@ -1548,6 +1548,25 @@ function parseCsv(text) {
   });
 }
 
+function parseFeedByRecordStart(text) {
+  const normalized = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+
+  const firstNl = normalized.indexOf("\n");
+  if (firstNl === -1) return parseCsv(normalized);
+
+  const headerLine = normalized.slice(0, firstNl);
+  const body = normalized.slice(firstNl + 1);
+
+  const chunks = body
+    .split(/\n(?=(?:true|false);)/i)
+    .map((chunk) => chunk.replace(/\n+/g, " ").trim())
+    .filter(Boolean);
+
+  return parseCsv([headerLine, ...chunks].join("\n"));
+}
+
 function pickFirst(row, keys) {
   for (const key of keys) {
     const val = row?.[key];
@@ -1839,22 +1858,7 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
     }
 
     const csv = await resp.text();
-
-    const normalizedCsv = String(csv || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n");
-
-    const firstNl = normalizedCsv.indexOf("\n");
-    const headerLine = firstNl === -1 ? normalizedCsv : normalizedCsv.slice(0, firstNl);
-    const body = firstNl === -1 ? "" : normalizedCsv.slice(firstNl + 1);
-
-    const recordChunks = body
-      .split(/\n(?=(?:true|false);)/i)
-      .map((chunk) => chunk.replace(/\n+/g, " ").trim())
-      .filter(Boolean);
-
-    const remingtonCsvForParse = [headerLine, ...recordChunks].join("\n");
-    const rows = parseCsv(remingtonCsvForParse);
+    const rows = parseCsv(csv);
 
     let created = 0;
     let updated = 0;
@@ -2135,7 +2139,7 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
     }
 
     const csv = await resp.text();
-    const rows = parseCsv(csv);
+    const rows = parseFeedByRecordStart(csv);
 
     let created = 0;
     let updated = 0;
@@ -2301,22 +2305,7 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
     }
 
     const csv = await resp.text();
-
-    const normalizedCsv = String(csv || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n");
-
-    const firstNl = normalizedCsv.indexOf("\n");
-    const headerLine = firstNl === -1 ? normalizedCsv : normalizedCsv.slice(0, firstNl);
-    const body = firstNl === -1 ? "" : normalizedCsv.slice(firstNl + 1);
-
-    const recordChunks = body
-      .split(/\n(?=(?:true|false);)/i)
-      .map((chunk) => chunk.replace(/\n+/g, " ").trim())
-      .filter(Boolean);
-
-    const remingtonCsv = [headerLine, ...recordChunks].join("\n");
-    const rows = parseCsv(remingtonCsv);
+    const rows = parseCsv(csv);
 
     let created = 0;
     let updated = 0;
