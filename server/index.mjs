@@ -1771,6 +1771,9 @@ async function isUsableCatalogImageUrl(url) {
   "www.sportcourt.ru",
   "cdn.sportmaster.ru",
   "www.rendez-vous.ru",
+  "goods.thecultt.com",
+  "thecultt.com",
+  "www.thecultt.com",
 ].includes(parsed.hostname)) return false;
 
   try {
@@ -2265,6 +2268,9 @@ app.get("/api/catalog/image", async (req, res) => {
       "www.sportcourt.ru",
       "cdn.sportmaster.ru",
       "www.rendez-vous.ru",
+      "goods.thecultt.com",
+      "thecultt.com",
+      "www.thecultt.com",
     ]);
 
     if (!allowedHosts.has(parsed.hostname)) {
@@ -2607,7 +2613,7 @@ app.get("/api/catalog/brands", async (req, res) => {
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
 
-    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous"];
+    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt"];
 
     const baseWhere = {
       isActive: true,
@@ -2722,7 +2728,7 @@ app.get("/api/catalog/products", async (req, res) => {
         ? req.query.sort.trim()
         : "";
 
-    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous"];
+    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt"];
 
     const baseWhere = {
       isActive: true,
