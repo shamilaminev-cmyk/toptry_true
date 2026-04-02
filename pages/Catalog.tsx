@@ -313,7 +313,7 @@ const Catalog = () => {
           <select
             value={brand}
             onChange={(e) => setBrand(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-xs bg-white"
+            className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 min-w-[128px]"
           >
             <option value="">Бренд</option>
             {brandOptions.map((b) => (
@@ -327,7 +327,7 @@ const Catalog = () => {
             placeholder="Цена от"
             value={priceMin}
             onChange={(e) => setPriceMin(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-xs w-24"
+            className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 w-[150px] placeholder:normal-case placeholder:tracking-normal placeholder:font-medium placeholder:text-zinc-400"
           />
 
           <input
@@ -340,7 +340,7 @@ const Catalog = () => {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-xs"
+            className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 min-w-[180px]"
           >
             <option value="">Сортировка</option>
             <option value="price_asc">Цена ↑</option>
