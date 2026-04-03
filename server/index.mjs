@@ -1561,7 +1561,7 @@ function parseFeedByRecordStart(text) {
 
   const chunks = body
     .split(/\n(?=[^\n;]+;)/)
-    .map((chunk) => chunk.replace(/\n+/g, " ").trim())
+    .map((chunk) => chunk.trim())
     .filter(Boolean);
 
   return parseCsv([headerLine, ...chunks].join("\n"));
