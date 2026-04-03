@@ -1560,7 +1560,7 @@ function parseFeedByRecordStart(text) {
   const body = normalized.slice(firstNl + 1);
 
   const chunks = body
-    .split(/\n(?=(?:true|false);)/i)
+    .split(/\n(?=[^\n;]+;)/)
     .map((chunk) => chunk.replace(/\n+/g, " ").trim())
     .filter(Boolean);
 
