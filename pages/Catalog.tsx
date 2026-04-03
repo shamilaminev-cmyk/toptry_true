@@ -47,6 +47,7 @@ const Catalog = () => {
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [sort, setSort] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [items, setItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -250,6 +251,7 @@ const Catalog = () => {
     setGender('');
     setDisplayCategory('');
     setSearch('');
+    setDebouncedSearch('');
     setDiscountOnly(false);
     setBrand('');
     setPriceMin('');
@@ -272,6 +274,11 @@ const Catalog = () => {
   };
 
   const filteredCountLabel = useMemo(() => total, [total]);
+  const activeFiltersCount = useMemo(
+    () =>
+      [gender, displayCategory, debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort].filter(Boolean).length,
+    [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort]
+  );
 
   return (
     <div className="pb-12">
@@ -309,45 +316,15 @@ const Catalog = () => {
           })}
         </div>
 
-        <div className="flex gap-2 flex-wrap">
-          <select
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
-            className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 min-w-[128px]"
-          >
-            <option value="">Бренд</option>
-            {brandOptions.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
-
-          <input
-            placeholder="Цена от"
-            value={priceMin}
-            onChange={(e) => setPriceMin(e.target.value)}
-            className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 w-[150px] placeholder:normal-case placeholder:tracking-normal placeholder:font-medium placeholder:text-zinc-400"
-          />
-
-          <input
-            placeholder="Цена до"
-            value={priceMax}
-            onChange={(e) => setPriceMax(e.target.value)}
-            className="h-10 px-4 rounded-full bg-zinc-100 text-xs uppercase tracking-wide border-none focus:ring-2 focus:ring-zinc-900 outline-none w-28"
-          />
-
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 min-w-[180px]"
-          >
-            <option value="">Сортировка</option>
-            <option value="price_asc">Цена ↑</option>
-            <option value="price_desc">Цена ↓</option>
-            <option value="discount_desc">Скидка ↓</option>
-          </select>
-        </div>
+        <button
+          onClick={() => setFiltersOpen(true)}
+          className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 flex items-center justify-between"
+        >
+          <span>Фильтры{activeFiltersCount ? ` (${activeFiltersCount})` : ''}</span>
+          <svg className="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
           <button
@@ -388,6 +365,102 @@ const Catalog = () => {
           </button>
         )}
       </div>
+
+      {filtersOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-end"
+          onClick={() => setFiltersOpen(false)}
+        >
+          <div
+            className="w-full bg-white rounded-t-[28px] p-5 space-y-4 animate-slide-up max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-1.5 rounded-full bg-zinc-200 mx-auto" />
+
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-900">
+                Фильтры
+              </p>
+              <button
+                onClick={() => setFiltersOpen(false)}
+                className="w-10 h-10 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-700"
+                aria-label="Закрыть фильтры"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
+            <select
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
+            >
+              <option value="">Бренд</option>
+              {brandOptions.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                inputMode="numeric"
+                placeholder="Цена от"
+                value={priceMin}
+                onChange={(e) => setPriceMin(e.target.value)}
+                className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 placeholder:normal-case placeholder:tracking-normal placeholder:font-medium placeholder:text-zinc-400"
+              />
+
+              <input
+                inputMode="numeric"
+                placeholder="Цена до"
+                value={priceMax}
+                onChange={(e) => setPriceMax(e.target.value)}
+                className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 placeholder:normal-case placeholder:tracking-normal placeholder:font-medium placeholder:text-zinc-400"
+              />
+            </div>
+
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
+            >
+              <option value="">Сортировка</option>
+              <option value="price_asc">Цена ↑</option>
+              <option value="price_desc">Цена ↓</option>
+              <option value="discount_desc">Скидка ↓</option>
+            </select>
+
+            <button
+              onClick={() => setDiscountOnly((v) => !v)}
+              className={`w-full h-12 inline-flex items-center justify-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                discountOnly ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+              }`}
+            >
+              Со скидкой
+            </button>
+
+            <div className="sticky bottom-0 bg-white pt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={clearFilters}
+                className="h-12 rounded-full border border-zinc-300 text-[10px] font-bold uppercase tracking-widest bg-white text-zinc-900"
+              >
+                Сбросить
+              </button>
+
+              <button
+                onClick={() => setFiltersOpen(false)}
+                className="h-12 rounded-full bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest shadow-md"
+              >
+                Применить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading && items.length === 0 ? (
         <div className="py-24 text-center">
