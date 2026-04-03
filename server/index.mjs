@@ -2141,6 +2141,14 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
     const csv = await resp.text();
     const rows = parseFeedByRecordStart(csv);
 
+    const parsedRows = rows.map((r) => {
+      try {
+        return parseCsv(r)[0];
+      } catch (e) {
+        return null;
+      }
+    }).filter(Boolean);
+
     let created = 0;
     let updated = 0;
     let skipped = 0;
