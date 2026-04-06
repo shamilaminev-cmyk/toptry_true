@@ -48,6 +48,11 @@ const Catalog = () => {
   const [priceMax, setPriceMax] = useState('');
   const [sort, setSort] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftDiscountOnly, setDraftDiscountOnly] = useState(false);
+  const [draftBrand, setDraftBrand] = useState('');
+  const [draftPriceMin, setDraftPriceMin] = useState('');
+  const [draftPriceMax, setDraftPriceMax] = useState('');
+  const [draftSort, setDraftSort] = useState('');
 
   const [items, setItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -72,11 +77,26 @@ const Catalog = () => {
     const sortParam = params.get('sort') || '';
 
     if (q) setSearch(q);
-    if (discountOnlyParam) setDiscountOnly(true);
-    if (brandParam) setBrand(brandParam);
-    if (priceMinParam) setPriceMin(priceMinParam);
-    if (priceMaxParam) setPriceMax(priceMaxParam);
-    if (sortParam) setSort(sortParam);
+    if (discountOnlyParam) {
+      setDiscountOnly(true);
+      setDraftDiscountOnly(true);
+    }
+    if (brandParam) {
+      setBrand(brandParam);
+      setDraftBrand(brandParam);
+    }
+    if (priceMinParam) {
+      setPriceMin(priceMinParam);
+      setDraftPriceMin(priceMinParam);
+    }
+    if (priceMaxParam) {
+      setPriceMax(priceMaxParam);
+      setDraftPriceMax(priceMaxParam);
+    }
+    if (sortParam) {
+      setSort(sortParam);
+      setDraftSort(sortParam);
+    }
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
@@ -94,6 +114,15 @@ const Catalog = () => {
 
     return () => clearTimeout(timer);
   }, [search]);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    setDraftDiscountOnly(discountOnly);
+    setDraftBrand(brand);
+    setDraftPriceMin(priceMin);
+    setDraftPriceMax(priceMax);
+    setDraftSort(sort);
+  }, [filtersOpen, discountOnly, brand, priceMin, priceMax, sort]);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +147,9 @@ const Catalog = () => {
 
         if (brand && !nextBrands.includes(brand)) {
           setBrand('');
+        }
+        if (draftBrand && !nextBrands.includes(draftBrand)) {
+          setDraftBrand('');
         }
       } catch (e) {
         if (!cancelled) {
@@ -257,7 +289,29 @@ const Catalog = () => {
     setPriceMin('');
     setPriceMax('');
     setSort('');
+    setDraftDiscountOnly(false);
+    setDraftBrand('');
+    setDraftPriceMin('');
+    setDraftPriceMax('');
+    setDraftSort('');
     window.history.replaceState(null, '', '#/catalog');
+  };
+
+  const clearDraftFilters = () => {
+    setDraftDiscountOnly(false);
+    setDraftBrand('');
+    setDraftPriceMin('');
+    setDraftPriceMax('');
+    setDraftSort('');
+  };
+
+  const applyDrawerFilters = () => {
+    setDiscountOnly(draftDiscountOnly);
+    setBrand(draftBrand);
+    setPriceMin(draftPriceMin);
+    setPriceMax(draftPriceMax);
+    setSort(draftSort);
+    setFiltersOpen(false);
   };
 
   const handleLoadMore = async () => {
@@ -279,6 +333,23 @@ const Catalog = () => {
       [gender, displayCategory, debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort].filter(Boolean).length,
     [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort]
   );
+  const draftActiveFiltersCount = useMemo(
+    () =>
+      [gender, displayCategory, debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSort].filter(Boolean).length,
+    [gender, displayCategory, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSort]
+  );
+  const applyButtonLabel = useMemo(() => {
+    if (loading) return 'Загружаем...';
+    const mod10 = filteredCountLabel % 10;
+    const mod100 = filteredCountLabel % 100;
+    const noun =
+      mod10 === 1 && mod100 !== 11
+        ? 'товар'
+        : mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)
+          ? 'товара'
+          : 'товаров';
+    return `Показать ${filteredCountLabel} ${noun}`;
+  }, [filteredCountLabel, loading]);
 
   return (
     <div className="pb-12">
@@ -317,7 +388,14 @@ const Catalog = () => {
         </div>
 
         <button
-          onClick={() => setFiltersOpen(true)}
+          onClick={() => {
+            setDraftDiscountOnly(discountOnly);
+            setDraftBrand(brand);
+            setDraftPriceMin(priceMin);
+            setDraftPriceMax(priceMax);
+            setDraftSort(sort);
+            setFiltersOpen(true);
+          }}
           className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 flex items-center justify-between"
         >
           <span>Фильтры{activeFiltersCount ? ` (${activeFiltersCount})` : ''}</span>
@@ -379,7 +457,7 @@ const Catalog = () => {
 
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-900">
-                Фильтры
+                Фильтры{draftActiveFiltersCount ? ` (${draftActiveFiltersCount})` : ''}
               </p>
               <button
                 onClick={() => setFiltersOpen(false)}
@@ -393,8 +471,8 @@ const Catalog = () => {
             </div>
 
             <select
-              value={brand}
-              onChange={(e) => setBrand(e.target.value)}
+              value={draftBrand}
+              onChange={(e) => setDraftBrand(e.target.value)}
               className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
             >
               <option value="">Бренд</option>
@@ -409,23 +487,23 @@ const Catalog = () => {
               <input
                 inputMode="numeric"
                 placeholder="Цена от"
-                value={priceMin}
-                onChange={(e) => setPriceMin(e.target.value)}
+                value={draftPriceMin}
+                onChange={(e) => setDraftPriceMin(e.target.value)}
                 className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 placeholder:normal-case placeholder:tracking-normal placeholder:font-medium placeholder:text-zinc-400"
               />
 
               <input
                 inputMode="numeric"
                 placeholder="Цена до"
-                value={priceMax}
-                onChange={(e) => setPriceMax(e.target.value)}
+                value={draftPriceMax}
+                onChange={(e) => setDraftPriceMax(e.target.value)}
                 className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 placeholder:normal-case placeholder:tracking-normal placeholder:font-medium placeholder:text-zinc-400"
               />
             </div>
 
             <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
+              value={draftSort}
+              onChange={(e) => setDraftSort(e.target.value)}
               className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
             >
               <option value="">Сортировка</option>
@@ -435,9 +513,9 @@ const Catalog = () => {
             </select>
 
             <button
-              onClick={() => setDiscountOnly((v) => !v)}
+              onClick={() => setDraftDiscountOnly((v) => !v)}
               className={`w-full h-12 inline-flex items-center justify-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
-                discountOnly ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                draftDiscountOnly ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
               }`}
             >
               Со скидкой
@@ -445,17 +523,17 @@ const Catalog = () => {
 
             <div className="sticky bottom-0 bg-white pt-2 grid grid-cols-2 gap-2">
               <button
-                onClick={clearFilters}
+                onClick={clearDraftFilters}
                 className="h-12 rounded-full border border-zinc-300 text-[10px] font-bold uppercase tracking-widest bg-white text-zinc-900"
               >
                 Сбросить
               </button>
 
               <button
-                onClick={() => setFiltersOpen(false)}
-                className="h-12 rounded-full bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest shadow-md"
+                onClick={applyDrawerFilters}
+                className="h-12 rounded-full bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest shadow-md disabled:opacity-60"
               >
-                Применить
+                {applyButtonLabel}
               </button>
             </div>
           </div>
