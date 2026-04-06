@@ -404,30 +404,6 @@ const Catalog = () => {
           </svg>
         </button>
 
-        <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-          <button
-            onClick={() => setDiscountOnly((v) => !v)}
-            className={`flex-shrink-0 h-12 px-6 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
-              discountOnly ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-400'
-            }`}
-          >
-            Со скидкой
-          </button>
-          {CATEGORY_TABS.map((tab) => {
-            const active = displayCategory === tab.id;
-            return (
-              <button
-                key={String(tab.id || 'all')}
-                onClick={() => setDisplayCategory(tab.id)}
-                className={`flex-shrink-0 h-12 px-6 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
-                  active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-400'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       <div className="px-4 mt-4 flex items-center justify-between">
@@ -450,7 +426,7 @@ const Catalog = () => {
           onClick={() => setFiltersOpen(false)}
         >
           <div
-            className="w-full bg-white rounded-t-[28px] p-5 space-y-4 animate-slide-up max-h-[85vh] overflow-y-auto"
+            className="w-full bg-white rounded-t-[28px] p-5 space-y-4 animate-slide-up max-h-[calc(85vh-64px)] overflow-y-auto pb-[88px]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-12 h-1.5 rounded-full bg-zinc-200 mx-auto" />
@@ -468,6 +444,23 @@ const Catalog = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
               </button>
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
+              {CATEGORY_TABS.map((tab) => {
+                const active = displayCategory === tab.id;
+                return (
+                  <button
+                    key={String(tab.id || 'all')}
+                    onClick={() => setDisplayCategory(tab.id)}
+                    className={`flex-shrink-0 h-11 px-5 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                      active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
 
             <select
@@ -521,10 +514,10 @@ const Catalog = () => {
               Со скидкой
             </button>
 
-            <div className="sticky bottom-0 bg-white pt-2 grid grid-cols-2 gap-2">
+            <div className="sticky bottom-0 -mx-5 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] bg-white border-t border-zinc-100 grid grid-cols-2 gap-2">
               <button
                 onClick={clearDraftFilters}
-                className="h-12 rounded-full border border-zinc-300 text-[10px] font-bold uppercase tracking-widest bg-white text-zinc-900"
+                className="h-12 rounded-full border border-zinc-300 text-[10px] font-bold uppercase tracking-widest bg-white text-zinc-600"
               >
                 Сбросить
               </button>
