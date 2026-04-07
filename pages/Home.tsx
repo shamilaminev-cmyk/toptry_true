@@ -494,7 +494,7 @@ const Feed = () => {
   };
 
   // Demo public feed (used when public endpoints are empty/unavailable)
-  const USE_MOCK_PUBLIC_FEED = true;
+  const USE_MOCK_PUBLIC_FEED = false;
   const mockPublicLooks: any[] = [
     {
       id: "mock-feed-001",
