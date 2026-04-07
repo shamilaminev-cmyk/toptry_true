@@ -504,15 +504,26 @@ register: async (email: string, username: string, password: string) => {
     },
     createLook: async (selectedItems: WardrobeItem[]) => {
       const selfieUrl = user?.selfieUrl || user?.avatarUrl;
-      if (!user || !selfieUrl) return;
-      if (!selectedItems?.length) return;
+      if (!user || !selfieUrl) {
+        throw new Error('CREATE_LOOK_PRECHECK: missing user or selfie');
+      }
+      if (!selectedItems?.length) {
+        throw new Error('CREATE_LOOK_PRECHECK: no selected items');
+      }
 
       setAiError(null);
       setAiBusy(true);
+
       try {
+        console.log('[createLook] start', {
+          userId: user.id,
+          selfieUrl,
+          selectedCount: selectedItems.length,
+          selectedIds: selectedItems.map((i) => i.id),
+        });
+
         const rawItemImageUrls = selectedItems
           .map((i) => {
-            // 1) user-upload (обычно есть cutoutUrl/originalUrl)
             const maybe =
               (i as any).cutoutUrl ||
               (i as any).originalUrl ||
@@ -523,13 +534,28 @@ register: async (email: string, username: string, password: string) => {
           })
           .filter(Boolean) as string[];
 
+        console.log('[createLook] rawItemImageUrls', rawItemImageUrls);
+
         if (!rawItemImageUrls.length) {
-          throw new Error('Не найдены изображения выбранных вещей (ожидаются cutoutUrl/originalUrl или images[0])');
+          throw new Error('CREATE_LOOK_IMAGES: no usable image urls');
         }
 
-        // IMPORTANT: convert /mock/* images into data URLs so backend does not fetch protected staging assets (BasicAuth -> 401)
-        const itemImageUrls = await Promise.all(rawItemImageUrls.map(urlToDataUrlIfMock));
-
+        const itemImageUrls = await Promise.all(
+          rawItemImageUrls.map(async (url, idx) => {
+            try {
+              const prepared = await urlToDataUrlIfMock(url);
+              console.log('[createLook] prepared item image', {
+                idx,
+                originalPrefix: String(url).slice(0, 80),
+                preparedPrefix: String(prepared).slice(0, 80),
+              });
+              return prepared;
+            } catch (err: any) {
+              console.error('[createLook] prepare item image failed', idx, url, err);
+              throw new Error(`CREATE_LOOK_PREPARE_IMAGE_${idx}: ${err?.message || err}`);
+            }
+          })
+        );
 
         const itemIds = selectedItems.map((i) => i.id);
         const sourceItems = selectedItems.map((i) => ({
@@ -547,34 +573,76 @@ register: async (email: string, username: string, password: string) => {
           affiliateUrl: (i as any).affiliateUrl || undefined,
           productUrl: (i as any).productUrl || undefined,
         }));
-        const priceBuyNowRUB = selectedItems.filter((i) => i.isCatalog).reduce((s, i) => s + (i.price || 0), 0);
-        const resp = await fetch('/api/looks/create', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            selfieDataUrl: withApiOrigin(selfieUrl),
-            itemImageUrls,
-            itemIds,
-            sourceItems,
-            aspectRatio: '3:4',
-            priceBuyNowRUB,
-          }),
+
+        const priceBuyNowRUB = selectedItems
+          .filter((i) => i.isCatalog)
+          .reduce((s, i) => s + (i.price || 0), 0);
+
+        const payload = {
+          selfieDataUrl: withApiOrigin(selfieUrl),
+          itemImageUrls,
+          itemIds,
+          sourceItems,
+          aspectRatio: '3:4',
+          priceBuyNowRUB,
+        };
+
+        console.log('[createLook] before fetch', {
+          selfiePrefix: String(payload.selfieDataUrl).slice(0, 80),
+          itemCount: payload.itemImageUrls.length,
+          firstItemPrefix: payload.itemImageUrls[0] ? String(payload.itemImageUrls[0]).slice(0, 80) : null,
         });
-        const data = await resp.json().catch(() => ({}));
+
+        let resp: Response;
+        try {
+          resp = await fetch('/api/looks/create', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        } catch (err: any) {
+          console.error('[createLook] fetch failed before response', err);
+          throw new Error(`CREATE_LOOK_FETCH: ${err?.message || err}`);
+        }
+
+        const raw = await resp.text();
+        console.log('[createLook] response status', resp.status, raw.slice(0, 300));
+
+        let data: any = {};
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch {
+          data = {};
+        }
+
         if (!resp.ok) {
           if (resp.status === 401) {
             throw new Error('AUTH_REQUIRED');
           }
-          throw new Error(data?.error || `AI server error (${resp.status})`);
+          throw new Error(data?.error || raw || `AI server error (${resp.status})`);
         }
+
         const look = data?.look;
-        if (!look) throw new Error('Server did not return look');
+        if (!look) throw new Error('CREATE_LOOK_RESPONSE: server did not return look');
+
         const newLook: Look = { ...look, createdAt: new Date(look.createdAt) };
         setLooks((prev) => [newLook, ...prev]);
-        setUser((u) => (u ? { ...u, limits: { ...u.limits, looksRemaining: Math.max(0, u.limits.looksRemaining - 1), hdTryOnRemaining: Math.max(0, u.limits.hdTryOnRemaining - 1) } } : null));
+        setUser((u) =>
+          u
+            ? {
+                ...u,
+                limits: {
+                  ...u.limits,
+                  looksRemaining: Math.max(0, u.limits.looksRemaining - 1),
+                  hdTryOnRemaining: Math.max(0, u.limits.hdTryOnRemaining - 1),
+                },
+              }
+            : null
+        );
         return newLook.id;
       } catch (e: any) {
+        console.error('[createLook] final error', e);
         setAiError(e?.message || 'Ошибка генерации образа');
         throw e;
       } finally {
