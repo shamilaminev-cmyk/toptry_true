@@ -3204,38 +3204,53 @@ app.get("/api/catalog/products", async (req, res) => {
 
 
 
-app.get("/api/looks/my", requireAuth, async (req, res) => {
-/**
- * GET /api/looks/public
- * Публичная лента (MVP)
- */
 app.get("/api/looks/public", async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit || "50", 10), 100);
-    const offset = parseInt(req.query.offset || "0", 10);
+    const limit = Math.min(
+      Math.max(parseInt(String(req.query.limit || "50"), 10) || 50, 1),
+      100
+    );
+    const offset = Math.max(parseInt(String(req.query.offset || "0"), 10) || 0, 0);
 
-    const looks = await prisma.look.findMany({
+    const rows = await prisma.look.findMany({
+      where: { isPublic: true },
       orderBy: { createdAt: "desc" },
       take: limit,
       skip: offset,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            avatarUrl: true,
-          },
-        },
-      },
     });
 
-    res.json(looks);
-  } catch (e) {
-    console.error("[looks/public] error", e);
-    res.status(500).json({ error: "Failed to load public looks" });
+    const looks = await Promise.all(
+      rows.map(async (r) => {
+        const author = await getPublicUserById(r.userId).catch(() => null);
+        return {
+          id: r.id,
+          userId: r.userId,
+          title: r.title,
+          items: r.itemIds || [],
+          sourceItems: r.sourceItems || [],
+          resultImageUrl: r.resultImageKey ? `/media/${r.resultImageKey}` : "",
+          isPublic: !!r.isPublic,
+          likes: r.likesCount || 0,
+          comments: r.commentsCount || 0,
+          createdAt: r.createdAt.toISOString(),
+          priceBuyNowRUB: r.priceBuyNowRUB || 0,
+          buyLinks: r.buyLinks || [],
+          aiDescription: r.aiDescription || null,
+          userDescription: r.userDescription || null,
+          authorName: author?.username || author?.name || "toptry",
+          authorAvatar: author?.avatarUrl || "",
+        };
+      })
+    );
+
+    return res.json({ looks });
+  } catch (err) {
+    console.error("[toptry] /api/looks/public error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
   }
 });
-, async (req, res) => {
+
+app.get("/api/looks/my", requireAuth, async (req, res) => {
   try {
     const userId = req.auth.userId;
     const p = getPrisma();
