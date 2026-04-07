@@ -6,6 +6,13 @@ import { ICONS } from '../constants';
 import { Category, WardrobeItem } from '../types';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 
+const STAGES = [
+  "Анализируем ваш аватар...",
+  "Подбираем сочетание вещей...",
+  "Создаем образ...",
+  "Финализируем результат..."
+];
+
 const CreateLook = () => {
   const { wardrobe, user, actions, aiError } = useAppState();
   const navigate = useNavigate();
@@ -16,6 +23,7 @@ const CreateLook = () => {
   const [genStep, setGenStep] = useState(0);
   const [progress, setProgress] = useState(0);
   const selfie = user?.selfieUrl || user?.avatarUrl;
+  const selectedItems = wardrobe.filter((i) => selectedIds.has(i.id));
 
   const filteredItems = activeCategory === 'all' 
     ? wardrobe 
@@ -60,7 +68,13 @@ const CreateLook = () => {
       return;
     }
 
+    if (selectedItems.length < 1) {
+      alert("Выберите хотя бы одну вещь.");
+      return;
+    }
+
     setIsGenerating(true);
+    setGenStep(0);
     setProgress(5);
 
     const progressInterval = window.setInterval(() => {
@@ -68,34 +82,42 @@ const CreateLook = () => {
     }, 900);
 
     const interval = window.setInterval(() => {
-      setStage((prev) => (prev < STAGES.length - 1 ? prev + 1 : prev));
+      setGenStep((prev) => (prev < STAGES.length - 1 ? prev + 1 : prev));
     }, 2200);
 
     try {
       const lookId = await actions.createLook(selectedItems);
       clearInterval(interval);
       clearInterval(progressInterval);
+      setGenStep(STAGES.length - 1);
       setProgress(100);
       setTimeout(() => {
         setIsGenerating(false);
+        setGenStep(0);
         setProgress(0);
-        navigate(`/look/${lookId}`);
+        if (lookId) {
+          navigate(`/look/${lookId}`);
+        } else {
+          alert("Сервер не вернул идентификатор образа.");
+        }
       }, 350);
     } catch (err: any) {
       clearInterval(interval);
       clearInterval(progressInterval);
-      console.error(err);
+      console.error("[CreateLook] handleGenerate error:", err);
 
       if (err?.message === "AUTH_REQUIRED") {
         alert("Сессия истекла. Пожалуйста, войдите снова");
         setIsGenerating(false);
+        setGenStep(0);
         setProgress(0);
         window.location.hash = "#/auth";
         return;
       }
 
-      alert(aiError || "Не удалось сгенерировать образ. Проверьте соединение и настройки сервера.");
+      alert(err?.message || aiError || "Не удалось сгенерировать образ. Проверьте соединение и настройки сервера.");
       setIsGenerating(false);
+      setGenStep(0);
       setProgress(0);
     }
   };
@@ -214,12 +236,7 @@ const CreateLook = () => {
               ))}
             </div>
             <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-[0.2em] mt-6 animate-pulse">
-              {[
-                "Анализируем ваш аватар...",
-                "Подбираем сочетание вещей...",
-                "Создаем образ...",
-                "Финализируем результат..."
-              ][genStep]}
+              {STAGES[genStep]}
             </p>
           </div>
         </div>
