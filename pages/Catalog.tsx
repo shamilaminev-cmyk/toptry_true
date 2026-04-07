@@ -55,6 +55,7 @@ const Catalog = () => {
   const [draftPriceMin, setDraftPriceMin] = useState('');
   const [draftPriceMax, setDraftPriceMax] = useState('');
 
+  const [draftTotal, setDraftTotal] = useState<number | null>(null)
   const [items, setItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -311,6 +312,59 @@ const Catalog = () => {
     setDraftPriceMax('');
   };
 
+  
+
+  useEffect(() => {
+    if (!filtersOpen) return
+
+    const controller = new AbortController()
+
+    const run = async () => {
+      try {
+        const params = new URLSearchParams()
+
+        if (draftGender) params.set('gender', draftGender)
+        if (draftDisplayCategory) params.set('category', draftDisplayCategory)
+        if (draftBrand) params.set('brand', draftBrand)
+        if (draftDiscountOnly) params.set('discount', '1')
+        if (draftPriceMin) params.set('priceMin', draftPriceMin)
+        if (draftPriceMax) params.set('priceMax', draftPriceMax)
+
+        params.set('limit', '1') // только ради total
+
+        const res = await fetch(`/api/catalog/products?${params.toString()}`, {
+          signal: controller.signal
+        })
+
+        const json = await res.json()
+
+        if (!controller.signal.aborted) {
+          setDraftTotal(json.total ?? 0)
+        }
+      } catch (e) {
+        if (!controller.signal.aborted) {
+          setDraftTotal(null)
+        }
+      }
+    }
+
+    const t = setTimeout(run, 300)
+
+    return () => {
+      clearTimeout(t)
+      controller.abort()
+    }
+  }, [
+    filtersOpen,
+    draftGender,
+    draftDisplayCategory,
+    draftBrand,
+    draftDiscountOnly,
+    draftPriceMin,
+    draftPriceMax
+  ])
+
+
   const applyDrawerFilters = () => {
     setGender(draftGender);
     setDisplayCategory(draftDisplayCategory);
@@ -377,7 +431,7 @@ const Catalog = () => {
         </div>
 
 
-        <div className="grid grid-cols-[1fr_auto] gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => {
               setDraftGender(gender);
@@ -535,7 +589,7 @@ const Catalog = () => {
                 onClick={applyDrawerFilters}
                 className="h-12 rounded-full bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest shadow-md disabled:opacity-60"
               >
-                {applyButtonLabel}
+                {draftTotal !== null ? `Показать ${draftTotal} товаров` : applyButtonLabel}
               </button>
             </div>
           </div>
