@@ -38,6 +38,7 @@ const Catalog = () => {
   const { wardrobe, actions } = useAppState();
 
   const [gender, setGender] = useState<'' | Gender>('');
+  const [draftGender, setDraftGender] = useState<'' | Gender>('');
   const [displayCategory, setDisplayCategory] = useState<'' | DisplayCategory>('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -48,11 +49,11 @@ const Catalog = () => {
   const [priceMax, setPriceMax] = useState('');
   const [sort, setSort] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftDisplayCategory, setDraftDisplayCategory] = useState<'' | DisplayCategory>('');
   const [draftDiscountOnly, setDraftDiscountOnly] = useState(false);
   const [draftBrand, setDraftBrand] = useState('');
   const [draftPriceMin, setDraftPriceMin] = useState('');
   const [draftPriceMax, setDraftPriceMax] = useState('');
-  const [draftSort, setDraftSort] = useState('');
 
   const [items, setItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -100,10 +101,12 @@ const Catalog = () => {
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
+      setDraftGender(genderParam as Gender);
     }
 
     if (categoryParam && CATEGORY_TABS.some((x) => x.id === categoryParam)) {
       setDisplayCategory(categoryParam as DisplayCategory);
+      setDraftDisplayCategory(categoryParam as DisplayCategory);
     }
   }, []);
 
@@ -117,12 +120,13 @@ const Catalog = () => {
 
   useEffect(() => {
     if (!filtersOpen) return;
+    setDraftGender(gender);
+    setDraftDisplayCategory(displayCategory);
     setDraftDiscountOnly(discountOnly);
     setDraftBrand(brand);
     setDraftPriceMin(priceMin);
     setDraftPriceMax(priceMax);
-    setDraftSort(sort);
-  }, [filtersOpen, discountOnly, brand, priceMin, priceMax, sort]);
+  }, [filtersOpen, gender, displayCategory, discountOnly, brand, priceMin, priceMax]);
 
   useEffect(() => {
     let cancelled = false;
@@ -281,7 +285,9 @@ const Catalog = () => {
 
   const clearFilters = () => {
     setGender('');
+    setDraftGender('');
     setDisplayCategory('');
+    setDraftDisplayCategory('');
     setSearch('');
     setDebouncedSearch('');
     setDiscountOnly(false);
@@ -293,24 +299,25 @@ const Catalog = () => {
     setDraftBrand('');
     setDraftPriceMin('');
     setDraftPriceMax('');
-    setDraftSort('');
     window.history.replaceState(null, '', '#/catalog');
   };
 
   const clearDraftFilters = () => {
+    setDraftGender('');
+    setDraftDisplayCategory('');
     setDraftDiscountOnly(false);
     setDraftBrand('');
     setDraftPriceMin('');
     setDraftPriceMax('');
-    setDraftSort('');
   };
 
   const applyDrawerFilters = () => {
+    setGender(draftGender);
+    setDisplayCategory(draftDisplayCategory);
     setDiscountOnly(draftDiscountOnly);
     setBrand(draftBrand);
     setPriceMin(draftPriceMin);
     setPriceMax(draftPriceMax);
-    setSort(draftSort);
     setFiltersOpen(false);
   };
 
@@ -335,8 +342,8 @@ const Catalog = () => {
   );
   const draftActiveFiltersCount = useMemo(
     () =>
-      [gender, displayCategory, debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSort].filter(Boolean).length,
-    [gender, displayCategory, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSort]
+      [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax].filter(Boolean).length,
+    [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax]
   );
   const applyButtonLabel = useMemo(() => {
     if (loading) return 'Загружаем...';
@@ -370,39 +377,35 @@ const Catalog = () => {
         </div>
 
 
-        <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-          {GENDER_TABS.map((tab) => {
-            const active = gender === tab.id;
-            return (
-              <button
-                key={String(tab.id || 'all')}
-                onClick={() => setGender(tab.id)}
-                className={`flex-shrink-0 h-12 px-6 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
-                  active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-400'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <button
+            onClick={() => {
+              setDraftGender(gender);
+              setDraftDiscountOnly(discountOnly);
+              setDraftBrand(brand);
+              setDraftPriceMin(priceMin);
+              setDraftPriceMax(priceMax);
+              setFiltersOpen(true);
+            }}
+            className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 flex items-center justify-between"
+          >
+            <span>Фильтры{activeFiltersCount ? ` (${activeFiltersCount})` : ''}</span>
+            <svg className="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
 
-        <button
-          onClick={() => {
-            setDraftDiscountOnly(discountOnly);
-            setDraftBrand(brand);
-            setDraftPriceMin(priceMin);
-            setDraftPriceMax(priceMax);
-            setDraftSort(sort);
-            setFiltersOpen(true);
-          }}
-          className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 flex items-center justify-between"
-        >
-          <span>Фильтры{activeFiltersCount ? ` (${activeFiltersCount})` : ''}</span>
-          <svg className="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-          </svg>
-        </button>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="h-12 min-w-[150px] px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
+          >
+            <option value="">Сортировка</option>
+            <option value="price_asc">Цена ↑</option>
+            <option value="price_desc">Цена ↓</option>
+            <option value="discount_desc">Скидка ↓</option>
+          </select>
+        </div>
 
       </div>
 
@@ -447,12 +450,29 @@ const Catalog = () => {
             </div>
 
             <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
-              {CATEGORY_TABS.map((tab) => {
-                const active = displayCategory === tab.id;
+              {GENDER_TABS.map((tab) => {
+                const active = draftGender === tab.id;
                 return (
                   <button
                     key={String(tab.id || 'all')}
-                    onClick={() => setDisplayCategory(tab.id)}
+                    onClick={() => setDraftGender(tab.id)}
+                    className={`flex-shrink-0 h-11 px-5 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                      active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
+              {CATEGORY_TABS.map((tab) => {
+                const active = draftDisplayCategory === tab.id;
+                return (
+                  <button
+                    key={String(tab.id || 'all')}
+                    onClick={() => setDraftDisplayCategory(tab.id)}
                     className={`flex-shrink-0 h-11 px-5 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
                       active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
                     }`}
@@ -493,17 +513,6 @@ const Catalog = () => {
                 className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 placeholder:normal-case placeholder:tracking-normal placeholder:font-medium placeholder:text-zinc-400"
               />
             </div>
-
-            <select
-              value={draftSort}
-              onChange={(e) => setDraftSort(e.target.value)}
-              className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
-            >
-              <option value="">Сортировка</option>
-              <option value="price_asc">Цена ↑</option>
-              <option value="price_desc">Цена ↓</option>
-              <option value="discount_desc">Скидка ↓</option>
-            </select>
 
             <button
               onClick={() => setDraftDiscountOnly((v) => !v)}
