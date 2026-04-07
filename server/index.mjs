@@ -735,6 +735,16 @@ app.get("/media/:key(*)", async (req, res) => {
  */
 app.post("/api/looks/create", requireAuth, async (req, res) => {
   try {
+    console.log("[debug looks/create] hit", {
+      userId: req.auth?.userId,
+      hasBody: !!req.body,
+      selfieType: typeof req.body?.selfieDataUrl,
+      selfiePrefix: typeof req.body?.selfieDataUrl === "string" ? String(req.body.selfieDataUrl).slice(0, 32) : null,
+      itemCount: Array.isArray(req.body?.itemImageUrls) ? req.body.itemImageUrls.length : null,
+      firstItemPrefix: Array.isArray(req.body?.itemImageUrls) && req.body.itemImageUrls[0]
+        ? String(req.body.itemImageUrls[0]).slice(0, 32)
+        : null,
+    });
     if (!GEMINI_API_KEY) {
       return res
         .status(500)
@@ -763,13 +773,38 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
+    console.log("[debug looks/create] before imageToBase64", {
+      selfieAbsPrefix: typeof selfieAbs === "string" ? selfieAbs.slice(0, 64) : null,
+      itemsAbsCount: Array.isArray(itemsAbs) ? itemsAbs.length : null,
+      firstItemAbsPrefix: Array.isArray(itemsAbs) && itemsAbs[0] ? String(itemsAbs[0]).slice(0, 64) : null,
+    });
+
     const selfie = await imageToBase64(selfieAbs);
+
+    console.log("[debug looks/create] selfie prepared", {
+      mimeType: selfie?.mimeType || null,
+      base64Len: selfie?.base64 ? String(selfie.base64).length : null,
+    });
+
     const itemParts = await Promise.all(
-      itemsAbs.map(async (url) => {
+      itemsAbs.map(async (url, idx) => {
+        console.log("[debug looks/create] preparing item", {
+          idx,
+          prefix: typeof url === "string" ? url.slice(0, 64) : null,
+        });
         const img = await imageToBase64(url);
+        console.log("[debug looks/create] item prepared", {
+          idx,
+          mimeType: img?.mimeType || null,
+          base64Len: img?.base64 ? String(img.base64).length : null,
+        });
         return { inlineData: { data: img.base64, mimeType: img.mimeType } };
       })
     );
+
+    console.log("[debug looks/create] before Gemini", {
+      itemParts: itemParts.length,
+    });
 
     const prompt = `Act as a professional fashion photographer and AI stylist.
 I am providing a selfie of a person and images of ${itemsAbs.length} clothing items.
@@ -796,6 +831,12 @@ Avoid brand logos and text.`;
       },
     });
 
+    console.log("[debug looks/create] Gemini response meta", {
+      candidates: Array.isArray(response?.candidates) ? response.candidates.length : null,
+      parts: Array.isArray(response?.candidates?.[0]?.content?.parts) ? response.candidates[0].content.parts.length : null,
+      finishReason: response?.candidates?.[0]?.finishReason || null,
+    });
+
     let imageDataUrl = "";
     const parts = (response && response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) || [];
     for (const part of parts) {
@@ -807,6 +848,7 @@ Avoid brand logos and text.`;
     }
 
     if (!imageDataUrl) {
+      console.error("[debug looks/create] Gemini returned no image", JSON.stringify(response, null, 2));
       return res.status(502).json({ error: "Gemini did not return an image" });
     }
 
@@ -861,7 +903,7 @@ Avoid brand logos and text.`;
 
     return res.json({ look });
   } catch (e) {
-    console.error("[toptry] /api/looks/create error", e);
+    console.error("[toptry] /api/looks/create error", e?.stack || e);
     return res.status(500).json({ error: (e && e.message) ? e.message : String(e) });
   }
 });
