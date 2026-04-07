@@ -43,10 +43,67 @@ const Profile = () => {
 
   const bigSrc = withApiOrigin(user.avatarUrl || user.selfieUrl || "");
 
+  const preprocessAvatarFile = async (file: File): Promise<string> => {
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("Не удалось прочитать изображение"));
+        el.src = objectUrl;
+      });
+
+      const width = img.naturalWidth || img.width;
+      const height = img.naturalHeight || img.height;
+
+      if (!width || !height) {
+        throw new Error("Некорректный размер изображения");
+      }
+
+      const maxSide = 1600;
+      const scale = Math.min(1, maxSide / Math.max(width, height));
+      const targetWidth = Math.max(1, Math.round(width * scale));
+      const targetHeight = Math.max(1, Math.round(height * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        throw new Error("Canvas недоступен");
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, targetWidth, targetHeight);
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+      let quality = 0.86;
+      let dataUrl = canvas.toDataURL("image/jpeg", quality);
+
+      const maxBytes = 2.5 * 1024 * 1024;
+      const estimateBytes = (url: string) => {
+        const base64 = url.split(",")[1] || "";
+        return Math.ceil((base64.length * 3) / 4);
+      };
+
+      while (estimateBytes(dataUrl) > maxBytes && quality > 0.6) {
+        quality = Math.max(0.6, Number((quality - 0.08).toFixed(2)));
+        dataUrl = canvas.toDataURL("image/jpeg", quality);
+      }
+
+      return dataUrl;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
   const processAvatar = async (photoDataUrl: string) => {
-    setBusy(true);
     setErr(null);
     try {
+      setBusy(true);
+
       const res = await fetch("/api/avatar/process", {
         method: "POST",
         credentials: "include",
@@ -81,16 +138,22 @@ const Profile = () => {
     }
   };
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.currentTarget.value = "";
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const dataUrl = reader.result as string;
-      processAvatar(dataUrl);
-    };
-    reader.readAsDataURL(file);
+
+    setErr(null);
+    setBusy(true);
+
+    try {
+      const dataUrl = await preprocessAvatarFile(file);
+      await processAvatar(dataUrl);
+    } catch (e: any) {
+      console.error("[profile avatar/preprocess] error:", e);
+      setErr(e?.message || "Не удалось подготовить фото");
+      setBusy(false);
+    }
   };
 
   return (
