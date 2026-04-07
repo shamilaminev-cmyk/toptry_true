@@ -3204,8 +3204,7 @@ app.get("/api/catalog/products", async (req, res) => {
 
 
 
-app.get("/api/looks/my", requireAuth
-
+app.get("/api/looks/my", requireAuth, async (req, res) => {
 /**
  * GET /api/looks/public
  * Публичная лента (MVP)
