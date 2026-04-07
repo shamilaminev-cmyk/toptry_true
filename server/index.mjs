@@ -1286,10 +1286,60 @@ app.post("/api/wardrobe/save-catalog", requireAuth, async (req, res) => {
     }
 
     const p = getPrisma();
-    const id = `w-cat-${externalId || Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const mapCatalogWardrobeRow = (row) => ({
+      id: row.id,
+      title: row.title,
+      price: Number(row.price || 0),
+      currency: row.currency || "RUB",
+      gender: row.gender,
+      category: row.category,
+      sizes: ["ONE"],
+      images: row.imageUrl ? [row.imageUrl] : [],
+      storeId: row.storeId || "catalog",
+      storeName: row.storeName || undefined,
+      brand: row.brand || undefined,
+      productUrl: row.productUrl || undefined,
+      affiliateUrl: row.affiliateUrl || undefined,
+      availability: true,
+      isCatalog: true,
+      userId: row.userId,
+      addedAt: row.createdAt.toISOString(),
+      sourceType: "catalog",
+    });
 
     if (p) {
-      await p.wardrobeItem.create({
+      const orClauses = [
+        affiliateUrl ? { affiliateUrl: String(affiliateUrl) } : null,
+        productUrl ? { productUrl: String(productUrl) } : null,
+        imageUrl ? { imageUrl } : null,
+      ].filter(Boolean);
+
+      const existing = await p.wardrobeItem.findFirst({
+        where: orClauses.length
+          ? {
+              userId,
+              sourceType: "catalog",
+              OR: orClauses,
+            }
+          : {
+              userId,
+              sourceType: "catalog",
+              title: String(title),
+              category: String(category),
+              gender: String(gender),
+              imageUrl,
+            },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (existing) {
+        return res.json({ item: mapCatalogWardrobeRow(existing), deduped: true });
+      }
+
+      const id = `w-cat-${externalId || Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+      const created = await p.wardrobeItem.create({
         data: {
           id,
           userId,
@@ -1313,10 +1363,12 @@ app.post("/api/wardrobe/save-catalog", requireAuth, async (req, res) => {
           cutoutKey: null,
         },
       });
+
+      return res.json({ item: mapCatalogWardrobeRow(created), deduped: false });
     }
 
     const item = {
-      id,
+      id: `w-cat-${externalId || Date.now()}-${Math.random().toString(16).slice(2)}`,
       title,
       price: Number(price || 0),
       currency: currency || "RUB",
@@ -1336,7 +1388,7 @@ app.post("/api/wardrobe/save-catalog", requireAuth, async (req, res) => {
       sourceType: "catalog",
     };
 
-    return res.json({ item });
+    return res.json({ item, deduped: false });
   } catch (err) {
     console.error("[toptry] /api/wardrobe/save-catalog error", err);
     return res.status(500).json({ error: err?.message || "Unknown server error" });

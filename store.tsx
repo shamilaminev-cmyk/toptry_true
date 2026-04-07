@@ -453,10 +453,25 @@ register: async (email: string, username: string, password: string) => {
           const data = await resp.json().catch(() => ({}));
           if (resp.ok && data?.item) {
             const saved = data.item;
-            setWardrobe(prev => [
-              { ...saved, addedAt: saved?.addedAt ? new Date(saved.addedAt) : new Date() },
-              ...prev.filter(i => i.id !== saved.id)
-            ]);
+            setWardrobe(prev => {
+              const withoutSameSavedId = prev.filter(i => i.id !== saved.id);
+              const alreadyPresent = withoutSameSavedId.some((i: any) => {
+                if (!(i?.isCatalog || i?.sourceType === 'catalog')) return false;
+                if (saved?.affiliateUrl && i?.affiliateUrl === saved.affiliateUrl) return true;
+                if (saved?.productUrl && i?.productUrl === saved.productUrl) return true;
+                if (saved?.images?.[0] && i?.images?.[0] === saved.images[0]) return true;
+                return false;
+              });
+
+              if (alreadyPresent) {
+                return withoutSameSavedId;
+              }
+
+              return [
+                { ...saved, addedAt: saved?.addedAt ? new Date(saved.addedAt) : new Date() },
+                ...withoutSameSavedId
+              ];
+            });
             return;
           }
         } catch {}

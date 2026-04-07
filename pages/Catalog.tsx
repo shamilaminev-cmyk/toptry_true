@@ -327,8 +327,20 @@ const Catalog = () => {
     sort,
   ]);
 
-  const isInWardrobe = (productId: string) => {
-    return wardrobe.some(item => item.id === productId);
+  const isInWardrobe = (product: any) => {
+    return wardrobe.some((item: any) => {
+      if (!(item?.isCatalog || item?.sourceType === "catalog")) return false;
+
+      if (product?.affiliateUrl && item?.affiliateUrl && item.affiliateUrl === product.affiliateUrl) return true;
+      if (product?.productUrl && item?.productUrl && item.productUrl === product.productUrl) return true;
+      if (product?.images?.[0] && item?.images?.[0] && item.images[0] === product.images[0]) return true;
+
+      return (
+        String(item?.title || "").trim().toLowerCase() === String(product?.title || "").trim().toLowerCase() &&
+        String(item?.category || "").trim().toUpperCase() === String(product?.category || "").trim().toUpperCase() &&
+        String(item?.gender || "").trim().toUpperCase() === String(product?.gender || "").trim().toUpperCase()
+      );
+    });
   };
 
   const clearFilters = () => {
@@ -654,7 +666,7 @@ const Catalog = () => {
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8 px-4 mt-6">
             {items.map((p: any) => {
-              const added = isInWardrobe(p.id);
+              const added = isInWardrobe(p);
               return (
                 <div key={p.id} className="group">
                   <div className="relative aspect-[3/4] rounded-[24px] overflow-hidden bg-zinc-50 p-6 border border-zinc-100 transition-all hover:shadow-xl hover:border-zinc-200">
@@ -681,6 +693,7 @@ const Catalog = () => {
                     <button
                       onClick={(e) => {
                         e.preventDefault();
+                        if (added) return;
                         actions.addToWardrobe(p);
                       }}
                       className={`absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${
