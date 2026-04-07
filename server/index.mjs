@@ -3204,7 +3204,39 @@ app.get("/api/catalog/products", async (req, res) => {
 
 
 
-app.get("/api/looks/my", requireAuth, async (req, res) => {
+app.get("/api/looks/my", requireAuth
+
+/**
+ * GET /api/looks/public
+ * Публичная лента (MVP)
+ */
+app.get("/api/looks/public", async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || "50", 10), 100);
+    const offset = parseInt(req.query.offset || "0", 10);
+
+    const looks = await prisma.look.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    res.json(looks);
+  } catch (e) {
+    console.error("[looks/public] error", e);
+    res.status(500).json({ error: "Failed to load public looks" });
+  }
+});
+, async (req, res) => {
   try {
     const userId = req.auth.userId;
     const p = getPrisma();
