@@ -1762,6 +1762,115 @@ function normalizeCatalogDisplayCategory(raw) {
   return "ACCESSORIES";
 }
 
+function getCatalogDisplayCategoryPredicates(displayCategory) {
+  const dc = String(displayCategory || "").trim().toUpperCase();
+  if (!dc) return null;
+
+  if (dc === "TOPS") {
+    return [{ category: "TOPS" }];
+  }
+  if (dc === "BOTTOMS") {
+    return [{ category: "BOTTOMS" }];
+  }
+  if (dc === "OUTERWEAR") {
+    return [{ category: "JACKETS" }];
+  }
+  if (dc === "DRESSES") {
+    return [{ category: "DRESS" }];
+  }
+  if (dc === "SHOES") {
+    return [{ category: "SHOES" }];
+  }
+  if (dc === "ACCESSORIES") {
+    return [{ category: "ACCESSORIES" }];
+  }
+  if (dc === "BAGS") {
+    return [
+      { title: { contains: "сум", mode: "insensitive" } },
+      { title: { contains: "bag", mode: "insensitive" } },
+      { title: { contains: "рюкзак", mode: "insensitive" } },
+      { title: { contains: "backpack", mode: "insensitive" } },
+      { title: { contains: "клатч", mode: "insensitive" } },
+      { title: { contains: "clutch", mode: "insensitive" } },
+      { title: { contains: "wallet", mode: "insensitive" } },
+      { title: { contains: "кошелек", mode: "insensitive" } },
+    ];
+  }
+
+  return null;
+}
+
+function buildCatalogDbWhere({
+  merchant,
+  gender,
+  category,
+  displayCategory,
+  q,
+  discountOnly,
+  brand,
+  priceMin,
+  priceMax,
+}) {
+  const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington"];
+
+  const and = [{ isActive: true }];
+
+  if (merchant && allowedMerchants.includes(merchant)) {
+    and.push({ merchant });
+  }
+  if (gender) {
+    and.push({ gender });
+  }
+  if (category) {
+    and.push({ category });
+  }
+
+  const displayPredicates = getCatalogDisplayCategoryPredicates(displayCategory);
+  if (displayPredicates?.length) {
+    and.push({ OR: displayPredicates });
+  }
+
+  const brandNeedle = String(brand || "").trim();
+  if (brandNeedle) {
+    and.push({ brand: { contains: brandNeedle, mode: "insensitive" } });
+  }
+
+  const minPrice = Number(priceMin || 0);
+  if (Number.isFinite(minPrice) && minPrice > 0) {
+    and.push({ price: { gte: minPrice } });
+  }
+
+  const maxPrice = Number(priceMax || 0);
+  if (Number.isFinite(maxPrice) && maxPrice > 0) {
+    and.push({ price: { lte: maxPrice } });
+  }
+
+  if (discountOnly) {
+    and.push({ oldPrice: { not: null } });
+  }
+
+  const needle = String(q || "").trim();
+  if (needle) {
+    and.push({
+      OR: [
+        { title: { contains: needle, mode: "insensitive" } },
+        { brand: { contains: needle, mode: "insensitive" } },
+        { category: { contains: needle, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  return { AND: and };
+}
+
+function getCatalogOrderBy(sort) {
+  const s = String(sort || "").trim();
+  if (s === "price_asc") return [{ price: "asc" }, { updatedAt: "desc" }];
+  if (s === "price_desc") return [{ price: "desc" }, { updatedAt: "desc" }];
+  if (s === "discount_desc") return [{ oldPrice: "desc" }, { updatedAt: "desc" }];
+  return [{ updatedAt: "desc" }];
+}
+
 function normalizeCatalogTitleForFeed(title) {
   return String(title || "")
     .toLowerCase()
@@ -2901,6 +3010,7 @@ app.get("/api/catalog/image", async (req, res) => {
 });
 
 
+
 app.get("/api/catalog/brands", async (req, res) => {
   try {
     const merchant =
@@ -2926,70 +3036,29 @@ app.get("/api/catalog/brands", async (req, res) => {
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
 
-    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington"];
-
-    const baseWhere = {
-      isActive: true,
-      ...(gender ? { gender } : {}),
-      ...(category ? { category } : {}),
-      ...(merchant && allowedMerchants.includes(merchant) ? { merchant } : {}),
-    };
-
-    const rows = await prisma.catalogProduct.findMany({
-      where: baseWhere,
-      orderBy: { brand: "asc" },
+    const where = buildCatalogDbWhere({
+      merchant,
+      gender,
+      category,
+      displayCategory,
+      q,
+      discountOnly,
+      brand: "",
+      priceMin: "",
+      priceMax: "",
     });
 
-    const brands = Array.from(
-      new Set(
-        rows
-          .map((p) => {
-            const normalizedDisplayCategory = normalizeCatalogDisplayCategory([
-              p.category,
-              p.title,
-              p.brand,
-            ].filter(Boolean).join(" "));
-            const price = Number(p.price || 0);
-            const oldPrice = Number(p.oldPrice || 0);
-            const discountPercent =
-              oldPrice > price && price > 0
-                ? Math.max(1, Math.round(((oldPrice - price) / oldPrice) * 100))
-                : 0;
+    const rows = await prisma.catalogProduct.findMany({
+      where,
+      select: { brand: true },
+      distinct: ["brand"],
+      orderBy: { brand: "asc" },
+      take: 500,
+    });
 
-            return {
-              brand: String(p.brand || "").trim(),
-              title: p.title,
-              category: p.category,
-              displayCategory: normalizedDisplayCategory,
-              price,
-              oldPrice,
-              discountPercent,
-              storeName:
-                p.merchant === "sportmaster"
-                  ? "Спортмастер"
-                  : p.merchant === "rendezvous"
-                    ? "Rendez-Vous"
-                    : p.merchant === "thecultt"
-                      ? "The Cultt"
-                      : p.merchant === "remington"
-                        ? "Remington"
-                        : "Sportcourt",
-            };
-          })
-          .filter((p) => p.brand)
-          .filter((p) =>
-            matchesCatalogRequestFilters(p, {
-              q,
-              displayCategory,
-              discountOnly,
-              brand: "",
-              priceMin: "",
-              priceMax: "",
-            })
-          )
-          .map((p) => p.brand)
-      )
-    );
+    const brands = rows
+      .map((r) => String(r.brand || "").trim())
+      .filter(Boolean);
 
     return res.json({ brands });
   } catch (e) {
@@ -3001,10 +3070,10 @@ app.get("/api/catalog/brands", async (req, res) => {
 app.get("/api/catalog/products", async (req, res) => {
   try {
     const limit = Math.min(
-      Math.max(parseInt(req.query.limit || "40", 10), 1),
-      100
+      Math.max(parseInt(String(req.query.limit || "24"), 10) || 24, 1),
+      48
     );
-    const offset = Math.max(parseInt(req.query.offset || "0", 10), 0);
+    const offset = Math.max(parseInt(String(req.query.offset || "0"), 10) || 0, 0);
 
     const merchant =
       typeof req.query.merchant === "string" && req.query.merchant.trim()
@@ -3045,13 +3114,19 @@ app.get("/api/catalog/products", async (req, res) => {
         ? req.query.sort.trim()
         : "";
 
-    const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington"];
+    const where = buildCatalogDbWhere({
+      merchant,
+      gender,
+      category,
+      displayCategory,
+      q,
+      discountOnly,
+      brand,
+      priceMin,
+      priceMax,
+    });
 
-    const baseWhere = {
-      isActive: true,
-      ...(gender ? { gender } : {}),
-      ...(category ? { category } : {}),
-    };
+    const orderBy = getCatalogOrderBy(sort);
 
     const mapProduct = (p) => {
       const normalizedDisplayCategory = normalizeCatalogDisplayCategory([
@@ -3097,112 +3172,30 @@ app.get("/api/catalog/products", async (req, res) => {
       };
     };
 
-    if (merchant && allowedMerchants.includes(merchant)) {
-      const where = { ...baseWhere, merchant };
-      const rows = await prisma.catalogProduct.findMany({
+    const [rows, total] = await Promise.all([
+      prisma.catalogProduct.findMany({
         where,
-        orderBy: { updatedAt: "desc" },
-      });
+        orderBy,
+        skip: offset,
+        take: limit,
+      }),
+      prisma.catalogProduct.count({ where }),
+    ]);
 
-      const allProducts = rows
-        .map(mapProduct)
-        .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory, discountOnly, brand, priceMin, priceMax }));
-
-      if (sort === "price_asc") {
-        allProducts.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
-      } else if (sort === "price_desc") {
-        allProducts.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
-      } else if (sort === "discount_desc") {
-        allProducts.sort((a, b) => Number(b.discountPercent || 0) - Number(a.discountPercent || 0));
-      }
-
-      const products = allProducts.slice(offset, offset + limit);
-
-      return res.json({
-        products,
-        total: allProducts.length,
-        limit,
-        offset,
-        hasMore: offset + products.length < allProducts.length,
-      });
-    }
-
-    const groups = await Promise.all(
-      allowedMerchants.map((m) =>
-        prisma.catalogProduct.findMany({
-          where: { ...baseWhere, merchant: m },
-          orderBy: { updatedAt: "desc" },
-        })
-      )
-    );
-
-    const merged = [];
-    const maxGroupLen = Math.max(0, ...groups.map((g) => g.length));
-
-    for (let i = 0; i < maxGroupLen; i++) {
-      for (const group of groups) {
-        if (group[i]) merged.push(group[i]);
-      }
-    }
-
-    const seenKeys = new Set();
-    const brandCategoryCounts = new Map();
-    const primary = [];
-    const overflow = [];
-
-    for (const item of merged) {
-      const similarityKey = buildCatalogFeedSimilarityKey(item);
-      const normalizedDisplayCategory = normalizeCatalogDisplayCategory([
-        item?.category,
-        item?.title,
-        item?.brand,
-      ].filter(Boolean).join(" "));
-      const brandCategoryKey = [
-        String(item?.brand || "").toLowerCase().trim(),
-        normalizedDisplayCategory,
-      ].join("|");
-
-      const currentCount = brandCategoryCounts.get(brandCategoryKey) || 0;
-
-      if (!seenKeys.has(similarityKey) && currentCount < 2) {
-        seenKeys.add(similarityKey);
-        brandCategoryCounts.set(brandCategoryKey, currentCount + 1);
-        primary.push(item);
-      } else {
-        overflow.push(item);
-      }
-    }
-
-    const rankedRows = primary.concat(overflow);
-
-    const allProducts = rankedRows
-      .map(mapProduct)
-      .filter((p) => matchesCatalogRequestFilters(p, { q, displayCategory, discountOnly, brand, priceMin, priceMax }));
-
-    if (sort === "price_asc") {
-      allProducts.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
-    } else if (sort === "price_desc") {
-      allProducts.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
-    } else if (sort === "discount_desc") {
-      allProducts.sort((a, b) => Number(b.discountPercent || 0) - Number(a.discountPercent || 0));
-    }
-
-    const products = allProducts.slice(offset, offset + limit);
+    const products = rows.map(mapProduct);
 
     return res.json({
       products,
-      total: allProducts.length,
+      total,
       limit,
       offset,
-      hasMore: offset + products.length < allProducts.length,
+      hasMore: offset + products.length < total,
     });
   } catch (e) {
     console.error("[toptry] /api/catalog/products error", e);
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
-
-
 
 app.get("/api/looks/public", async (req, res) => {
   try {
