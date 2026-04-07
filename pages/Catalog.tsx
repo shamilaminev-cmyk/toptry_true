@@ -33,6 +33,7 @@ const CATEGORY_TABS: Array<{ id: '' | DisplayCategory; label: string }> = [
 
 const IMG_FALLBACK = "https://i.pravatar.cc/150?u=toptry-demo";
 const PAGE_SIZE = 24;
+const CATALOG_FILTERS_STORAGE_KEY = 'toptry.catalog.filters.v1';
 
 const Catalog = () => {
   const { wardrobe, actions } = useAppState();
@@ -67,47 +68,77 @@ const Catalog = () => {
   useEffect(() => {
     const rawHash = window.location.hash || '';
     const query = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : '';
-    const params = new URLSearchParams(query);
+    const hashParams = new URLSearchParams(query);
+    const hasHashFilters = Array.from(hashParams.keys()).length > 0;
 
-    const q = params.get('q') || '';
-    const genderParam = (params.get('gender') || '').toUpperCase();
-    const categoryParam = (params.get('displayCategory') || params.get('category') || '').toUpperCase();
-    const discountOnlyParam = params.get('discountOnly') === '1';
-    const brandParam = params.get('brand') || '';
-    const priceMinParam = params.get('priceMin') || '';
-    const priceMaxParam = params.get('priceMax') || '';
-    const sortParam = params.get('sort') || '';
+    let saved: null | {
+      q?: string;
+      gender?: string;
+      displayCategory?: string;
+      discountOnly?: boolean;
+      brand?: string;
+      priceMin?: string;
+      priceMax?: string;
+      sort?: string;
+    } = null;
 
-    if (q) setSearch(q);
-    if (discountOnlyParam) {
-      setDiscountOnly(true);
-      setDraftDiscountOnly(true);
+    if (!hasHashFilters) {
+      try {
+        const raw = window.sessionStorage.getItem(CATALOG_FILTERS_STORAGE_KEY);
+        saved = raw ? JSON.parse(raw) : null;
+      } catch {
+        saved = null;
+      }
     }
-    if (brandParam) {
-      setBrand(brandParam);
-      setDraftBrand(brandParam);
-    }
-    if (priceMinParam) {
-      setPriceMin(priceMinParam);
-      setDraftPriceMin(priceMinParam);
-    }
-    if (priceMaxParam) {
-      setPriceMax(priceMaxParam);
-      setDraftPriceMax(priceMaxParam);
-    }
-    if (sortParam) {
-      setSort(sortParam);
-      setDraftSort(sortParam);
-    }
+
+    const q = hasHashFilters ? (hashParams.get('q') || '') : (saved?.q || '');
+    const genderParam = String(
+      hasHashFilters ? (hashParams.get('gender') || '') : (saved?.gender || '')
+    ).toUpperCase();
+    const categoryParam = String(
+      hasHashFilters
+        ? (hashParams.get('displayCategory') || hashParams.get('category') || '')
+        : (saved?.displayCategory || '')
+    ).toUpperCase();
+    const discountOnlyParam = hasHashFilters
+      ? hashParams.get('discountOnly') === '1'
+      : Boolean(saved?.discountOnly);
+    const brandParam = hasHashFilters ? (hashParams.get('brand') || '') : (saved?.brand || '');
+    const priceMinParam = hasHashFilters ? (hashParams.get('priceMin') || '') : (saved?.priceMin || '');
+    const priceMaxParam = hasHashFilters ? (hashParams.get('priceMax') || '') : (saved?.priceMax || '');
+    const sortParam = hasHashFilters ? (hashParams.get('sort') || '') : (saved?.sort || '');
+
+    setSearch(q);
+    setDebouncedSearch(q);
+
+    setDiscountOnly(discountOnlyParam);
+    setDraftDiscountOnly(discountOnlyParam);
+
+    setBrand(brandParam);
+    setDraftBrand(brandParam);
+
+    setPriceMin(priceMinParam);
+    setDraftPriceMin(priceMinParam);
+
+    setPriceMax(priceMaxParam);
+    setDraftPriceMax(priceMaxParam);
+
+    setSort(sortParam);
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
       setDraftGender(genderParam as Gender);
+    } else {
+      setGender('');
+      setDraftGender('');
     }
 
     if (categoryParam && CATEGORY_TABS.some((x) => x.id === categoryParam)) {
       setDisplayCategory(categoryParam as DisplayCategory);
       setDraftDisplayCategory(categoryParam as DisplayCategory);
+    } else {
+      setDisplayCategory('');
+      setDraftDisplayCategory('');
     }
   }, []);
 
@@ -251,6 +282,22 @@ const Catalog = () => {
   }, [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort]);
 
   useEffect(() => {
+    try {
+      const payload = {
+        q: debouncedSearch,
+        gender,
+        displayCategory,
+        discountOnly,
+        brand,
+        priceMin,
+        priceMax,
+        sort,
+      };
+      window.sessionStorage.setItem(CATALOG_FILTERS_STORAGE_KEY, JSON.stringify(payload));
+    } catch {}
+  }, [debouncedSearch, gender, displayCategory, discountOnly, brand, priceMin, priceMax, sort]);
+
+  useEffect(() => {
     const params = new URLSearchParams();
 
     if (debouncedSearch) params.set('q', debouncedSearch);
@@ -300,6 +347,9 @@ const Catalog = () => {
     setDraftBrand('');
     setDraftPriceMin('');
     setDraftPriceMax('');
+    try {
+      window.sessionStorage.removeItem(CATALOG_FILTERS_STORAGE_KEY);
+    } catch {}
     window.history.replaceState(null, '', '#/catalog');
   };
 
