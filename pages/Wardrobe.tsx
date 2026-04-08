@@ -864,14 +864,14 @@ const Wardrobe = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             {filteredItems.map((item) => {
               const isCatalogItem = item.sourceType === 'catalog' || item.isCatalog;
 
               return (
                 <div
                   key={item.id}
-                  className={`relative group aspect-square rounded-[24px] bg-zinc-50 border border-zinc-100 transition-all overflow-hidden p-3 hover:border-zinc-300 hover:shadow-md`}
+                  className={`relative group aspect-[3/4] rounded-[24px] bg-zinc-50 border border-zinc-100 transition-all overflow-hidden p-2.5 md:p-3 hover:border-zinc-300 hover:shadow-md`}
                 >
                   <img
                     src={withApiOrigin(item.images?.[0])}
@@ -880,22 +880,22 @@ const Wardrobe = () => {
                   />
 
                   {!isCatalogItem && (
-                    <div className="absolute top-2 left-2 bg-white/90 backdrop-blur px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest text-zinc-900 shadow-sm">
+                    <div className="absolute top-2 left-2 bg-white/85 backdrop-blur px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-[0.18em] text-zinc-900 shadow-sm">
                       Ваше
                     </div>
                   )}
 
-                  <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-white via-white/95 to-transparent">
-                    <div className="text-[10px] font-bold uppercase tracking-tight text-zinc-900 truncate">
+                  <div className="absolute inset-x-0 bottom-0 p-2.5 md:p-3 bg-gradient-to-t from-white via-white/95 to-transparent">
+                    <div className="text-[11px] md:text-[10px] font-bold uppercase tracking-tight text-zinc-900 line-clamp-2 pr-7">
                       {item.title || 'Без названия'}
                     </div>
 
                     {isCatalogItem ? (
                       <>
-                        <div className="mt-1 text-[9px] uppercase tracking-widest text-zinc-400 truncate">
+                        <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-zinc-400 truncate">
                           {item.storeName || item.storeId || 'Каталог'}
                         </div>
-                        <div className="mt-1 text-[10px] font-bold text-zinc-900">
+                        <div className="mt-1 text-[11px] font-medium text-zinc-500">
                           {item.price ? `${item.price} ₽` : ''}
                         </div>
                       </>
@@ -910,7 +910,7 @@ const Wardrobe = () => {
 
                           navigate(`/catalog?${params.toString()}`);
                         }}
-                        className="mt-2 text-[9px] font-bold uppercase tracking-widest text-zinc-900 underline"
+                        className="mt-1 text-[10px] font-medium text-zinc-500 underline underline-offset-2"
                       >
                         Найти похожее
                       </button>
@@ -919,7 +919,8 @@ const Wardrobe = () => {
 
                   <button
                     onClick={() => actions.removeFromWardrobe(item.id)}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-lg text-zinc-400 hover:text-red-500 shadow-sm"
+                    className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-black/70 md:bg-white/90 p-1.5 rounded-lg text-white md:text-zinc-400 hover:text-red-500 shadow-sm z-10"
+                    aria-label="Удалить вещь"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
