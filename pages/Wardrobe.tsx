@@ -50,6 +50,8 @@ const Wardrobe = () => {
   const [pendingExtracted, setPendingExtracted] = useState<Array<{ original: string; cutout: string; attrs: any }>>([]);
   const [hoveredCandidateId, setHoveredCandidateId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<WardrobeItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -546,6 +548,27 @@ const Wardrobe = () => {
     }
   };
 
+  const requestDeleteItem = (item: WardrobeItem) => {
+    setPendingDeleteItem(item);
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!pendingDeleteItem || isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      await actions.removeFromWardrobe(pendingDeleteItem.id);
+      setPendingDeleteItem(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const cancelDeleteItem = () => {
+    if (isDeleting) return;
+    setPendingDeleteItem(null);
+  };
+
   return (
     <div className="pb-24">
       <div className="p-4 space-y-6">
@@ -918,7 +941,7 @@ const Wardrobe = () => {
                   </div>
 
                   <button
-                    onClick={() => actions.removeFromWardrobe(item.id)}
+                    onClick={() => requestDeleteItem(item)}
                     className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-black/70 md:bg-white/90 p-1.5 rounded-lg text-white md:text-zinc-400 hover:text-red-500 shadow-sm z-10"
                     aria-label="Удалить вещь"
                   >
@@ -955,6 +978,59 @@ const Wardrobe = () => {
           </div>
         </div>
       </div>
+
+      {pendingDeleteItem && (
+        <div className="fixed inset-0 z-[110] bg-zinc-950/70 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-[32px] bg-white p-6 md:p-7 shadow-2xl space-y-5 animate-in zoom-in">
+            <div className="space-y-2">
+              <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-zinc-400">
+                Подтвердите удаление
+              </div>
+              <h3 className="text-lg font-bold uppercase tracking-tight text-zinc-900">
+                Удалить вещь из шкафа?
+              </h3>
+              <p className="text-sm text-zinc-500 leading-relaxed">
+                {pendingDeleteItem.title || 'Эта вещь'} будет удалена из вашего шкафа.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 rounded-2xl bg-zinc-50 border border-zinc-100 p-3">
+              <div className="w-16 h-16 rounded-2xl bg-white border border-zinc-100 p-2 flex items-center justify-center shrink-0 overflow-hidden">
+                <img
+                  src={withApiOrigin(pendingDeleteItem.images?.[0])}
+                  alt=""
+                  className="w-full h-full object-contain mix-blend-multiply"
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-tight text-zinc-900 line-clamp-2">
+                  {pendingDeleteItem.title || 'Без названия'}
+                </div>
+                <div className="mt-1 text-[9px] uppercase tracking-[0.18em] text-zinc-400">
+                  {pendingDeleteItem.sourceType === 'catalog' || pendingDeleteItem.isCatalog ? 'Каталог' : 'Ваше'}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={cancelDeleteItem}
+                disabled={isDeleting}
+                className="h-12 rounded-full border border-zinc-200 text-zinc-700 text-[10px] font-bold uppercase tracking-[0.18em] bg-white disabled:opacity-60"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={confirmDeleteItem}
+                disabled={isDeleting}
+                className="h-12 rounded-full bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-[0.18em] disabled:opacity-60"
+              >
+                {isDeleting ? 'Удаляем...' : 'Удалить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
