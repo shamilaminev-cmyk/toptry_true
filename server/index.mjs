@@ -1493,34 +1493,6 @@ app.get("/api/wardrobe/list", requireAuth, async (req, res) => {
     const p = getPrisma();
     if (!p) return res.json({ items: [] });
 
-// DELETE wardrobe item
-app.delete("/api/wardrobe/item/:id", async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
-    const id = String(req.params.id || "");
-
-    const existing = await prisma.wardrobeItem.findFirst({
-      where: { id, userId },
-    });
-
-    if (!existing) {
-      return res.status(404).json({ error: "Item not found" });
-    }
-
-    await prisma.wardrobeItem.delete({
-      where: { id },
-    });
-
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error("[toptry] delete wardrobe item error", e);
-    return res.status(500).json({ error: e?.message || String(e) });
-  }
-});
-
-
     const rows = await p.wardrobeItem.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
@@ -1582,6 +1554,33 @@ app.delete("/api/wardrobe/item/:id", async (req, res) => {
   } catch (err) {
     console.error("[toptry] /api/wardrobe/list error", err);
     res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.delete("/api/wardrobe/item/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const id = String(req.params.id || "");
+    const p = getPrisma();
+    if (!p) return res.status(500).json({ error: "Database is not configured" });
+
+    const existing = await p.wardrobeItem.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+
+    await p.wardrobeItem.delete({
+      where: { id: existing.id },
+    });
+
+    return res.json({ ok: true, id });
+  } catch (err) {
+    console.error("[toptry] /api/wardrobe/item/:id delete error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
   }
 });
 
