@@ -1493,6 +1493,34 @@ app.get("/api/wardrobe/list", requireAuth, async (req, res) => {
     const p = getPrisma();
     if (!p) return res.json({ items: [] });
 
+// DELETE wardrobe item
+app.delete("/api/wardrobe/item/:id", async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const id = String(req.params.id || "");
+
+    const existing = await prisma.wardrobeItem.findFirst({
+      where: { id, userId },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+
+    await prisma.wardrobeItem.delete({
+      where: { id },
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[toptry] delete wardrobe item error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
     const rows = await p.wardrobeItem.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
