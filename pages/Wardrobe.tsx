@@ -52,6 +52,8 @@ const Wardrobe = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<WardrobeItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [menuItem, setMenuItem] = useState<WardrobeItem | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -569,6 +571,44 @@ const Wardrobe = () => {
     setPendingDeleteItem(null);
   };
 
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const startLongPress = (item: WardrobeItem) => {
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      setMenuItem(item);
+      longPressTimerRef.current = null;
+    }, 420);
+  };
+
+  const closeItemMenu = () => {
+    clearLongPressTimer();
+    setMenuItem(null);
+  };
+
+  const openSimilarFromMenu = () => {
+    if (!menuItem) return;
+    const params = new URLSearchParams();
+
+    if (menuItem.category) {
+      params.set('category', String(menuItem.category));
+    }
+
+    setMenuItem(null);
+    navigate(`/catalog?${params.toString()}`);
+  };
+
+  const requestDeleteFromMenu = () => {
+    if (!menuItem) return;
+    setPendingDeleteItem(menuItem);
+    setMenuItem(null);
+  };
+
   return (
     <div className="pb-24">
       <div className="p-4 space-y-6">
@@ -894,6 +934,10 @@ const Wardrobe = () => {
               return (
                 <div
                   key={item.id}
+                  onTouchStart={() => startLongPress(item)}
+                  onTouchEnd={clearLongPressTimer}
+                  onTouchMove={clearLongPressTimer}
+                  onTouchCancel={clearLongPressTimer}
                   className={`relative group aspect-[3/4] rounded-[24px] bg-zinc-50 border border-zinc-100 transition-all overflow-hidden p-2.5 md:p-3 hover:border-zinc-300 hover:shadow-md`}
                 >
                   <img
@@ -978,6 +1022,47 @@ const Wardrobe = () => {
           </div>
         </div>
       </div>
+
+      {menuItem && (
+        <div className="fixed inset-0 z-[109] bg-zinc-950/40 backdrop-blur-[2px] flex items-end justify-center p-3 md:hidden" onClick={closeItemMenu}>
+          <div
+            className="w-full max-w-md rounded-[28px] bg-white shadow-2xl border border-zinc-100 overflow-hidden animate-in slide-in-from-bottom-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 pt-4 pb-3 border-b border-zinc-100">
+              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400">
+                Действия с вещью
+              </div>
+              <div className="mt-2 text-sm font-bold text-zinc-900 line-clamp-2">
+                {menuItem.title || 'Без названия'}
+              </div>
+            </div>
+
+            <div className="p-2">
+              <button
+                onClick={openSimilarFromMenu}
+                className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 transition"
+              >
+                Найти похожее
+              </button>
+
+              <button
+                onClick={requestDeleteFromMenu}
+                className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-red-600 hover:bg-red-50 transition"
+              >
+                Удалить
+              </button>
+
+              <button
+                onClick={closeItemMenu}
+                className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-zinc-500 hover:bg-zinc-50 transition"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDeleteItem && (
         <div className="fixed inset-0 z-[110] bg-zinc-950/70 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
