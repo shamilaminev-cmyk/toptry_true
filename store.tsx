@@ -524,8 +524,23 @@ register: async (email: string, username: string, password: string) => {
         ];
       });
     },
-    removeFromWardrobe: (id: string) => {
-      setWardrobe(prev => prev.filter(i => i.id !== id));
+    removeFromWardrobe: async (id: string) => {
+      try {
+        const resp = await fetch(`/api/wardrobe/item/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+          throw new Error(data?.error || 'Delete failed');
+        }
+
+        setWardrobe(prev => prev.filter(i => i.id !== id));
+      } catch (e) {
+        console.error('[wardrobe] delete failed', e);
+      }
     },
     createLook: async (selectedItems: WardrobeItem[]) => {
       const selfieUrl = user?.selfieUrl || user?.avatarUrl;
