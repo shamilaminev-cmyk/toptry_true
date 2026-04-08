@@ -53,7 +53,10 @@ const Wardrobe = () => {
   const [pendingDeleteItem, setPendingDeleteItem] = useState<WardrobeItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [menuItem, setMenuItem] = useState<WardrobeItem | null>(null);
+  const [swipedItemId, setSwipedItemId] = useState<string | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchCurrentXRef = useRef<number | null>(null);
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -609,6 +612,45 @@ const Wardrobe = () => {
     setMenuItem(null);
   };
 
+  const handleCardTouchStart = (e: React.TouchEvent<HTMLDivElement>, item: WardrobeItem) => {
+    startLongPress(item);
+    touchStartXRef.current = e.touches[0]?.clientX ?? null;
+    touchCurrentXRef.current = touchStartXRef.current;
+  };
+
+  const handleCardTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    clearLongPressTimer();
+    touchCurrentXRef.current = e.touches[0]?.clientX ?? null;
+  };
+
+  const handleCardTouchEnd = (item: WardrobeItem) => {
+    clearLongPressTimer();
+
+    const startX = touchStartXRef.current;
+    const endX = touchCurrentXRef.current;
+
+    touchStartXRef.current = null;
+    touchCurrentXRef.current = null;
+
+    if (startX == null || endX == null) return;
+
+    const deltaX = endX - startX;
+
+    if (deltaX <= -42) {
+      setSwipedItemId(item.id);
+      return;
+    }
+
+    if (deltaX >= 24 && swipedItemId === item.id) {
+      setSwipedItemId(null);
+      return;
+    }
+  };
+
+  const closeSwipedItem = () => {
+    setSwipedItemId(null);
+  };
+
   return (
     <div className="pb-24">
       <div className="p-4 space-y-6">
@@ -934,70 +976,93 @@ const Wardrobe = () => {
               return (
                 <div
                   key={item.id}
-                  onTouchStart={() => startLongPress(item)}
-                  onTouchEnd={clearLongPressTimer}
-                  onTouchMove={clearLongPressTimer}
-                  onTouchCancel={clearLongPressTimer}
-                  className={`relative group aspect-[3/4] rounded-[24px] bg-zinc-50 border border-zinc-100 transition-all overflow-hidden p-2.5 md:p-3 hover:border-zinc-300 hover:shadow-md`}
+                  onTouchStart={(e) => handleCardTouchStart(e, item)}
+                  onTouchMove={handleCardTouchMove}
+                  onTouchEnd={() => handleCardTouchEnd(item)}
+                  onTouchCancel={closeSwipedItem}
+                  className="relative aspect-[3/4] rounded-[24px] overflow-hidden md:group"
                 >
-                  <img
-                    src={withApiOrigin(item.images?.[0])}
-                    alt=""
-                    className="w-full h-full object-contain mix-blend-multiply transition-all duration-500"
-                  />
-
-                  {!isCatalogItem && (
-                    <div className="absolute top-2 left-2 bg-white/85 backdrop-blur px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-[0.18em] text-zinc-900 shadow-sm">
-                      Ваше
-                    </div>
-                  )}
-
-                  <div className="absolute inset-x-0 bottom-0 p-2.5 md:p-3 bg-gradient-to-t from-white via-white/95 to-transparent">
-                    <div className="text-[11px] md:text-[10px] font-bold uppercase tracking-tight text-zinc-900 line-clamp-2 pr-7">
-                      {item.title || 'Без названия'}
-                    </div>
-
-                    {isCatalogItem ? (
-                      <>
-                        <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-zinc-400 truncate">
-                          {item.storeName || item.storeId || 'Каталог'}
-                        </div>
-                        <div className="mt-1 text-[11px] font-medium text-zinc-500">
-                          {item.price ? `${item.price} ₽` : ''}
-                        </div>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          const params = new URLSearchParams();
-
-                          if (item.category) {
-                            params.set('category', String(item.category));
-                          }
-
-                          navigate(`/catalog?${params.toString()}`);
-                        }}
-                        className="mt-1 text-[10px] font-medium text-zinc-500 underline underline-offset-2"
-                      >
-                        Найти похожее
-                      </button>
-                    )}
+                  <div className="absolute inset-y-0 right-0 w-16 flex items-center justify-center bg-red-500/90 md:hidden">
+                    <button
+                      onClick={() => requestDeleteItem(item)}
+                      className="w-full h-full flex items-center justify-center text-white"
+                      aria-label="Удалить вещь"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        ></path>
+                      </svg>
+                    </button>
                   </div>
 
-                  <button
-                    onClick={() => requestDeleteItem(item)}
-                    className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-black/70 md:bg-white/90 p-1.5 rounded-lg text-white md:text-zinc-400 hover:text-red-500 shadow-sm z-10"
-                    aria-label="Удалить вещь"
+                  <div
+                    className={`relative h-full rounded-[24px] bg-zinc-50 border border-zinc-100 transition-transform duration-200 overflow-hidden p-2.5 md:p-3 hover:border-zinc-300 hover:shadow-md ${
+                      swipedItemId === item.id ? '-translate-x-16' : 'translate-x-0'
+                    }`}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      ></path>
-                    </svg>
-                  </button>
+                    <img
+                      src={withApiOrigin(item.images?.[0])}
+                      alt=""
+                      className="w-full h-full object-contain mix-blend-multiply transition-all duration-500"
+                    />
+
+                    {!isCatalogItem && (
+                      <div className="absolute top-2 left-2 bg-white/85 backdrop-blur px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-[0.18em] text-zinc-900 shadow-sm">
+                        Ваше
+                      </div>
+                    )}
+
+                    <div className="absolute inset-x-0 bottom-0 p-2.5 md:p-3 bg-gradient-to-t from-white via-white/95 to-transparent">
+                      <div className="text-[11px] md:text-[10px] font-bold uppercase tracking-tight text-zinc-900 line-clamp-2 pr-7">
+                        {item.title || 'Без названия'}
+                      </div>
+
+                      {isCatalogItem ? (
+                        <>
+                          <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-zinc-400 truncate">
+                            {item.storeName || item.storeId || 'Каталог'}
+                          </div>
+                          <div className="mt-1 text-[11px] font-medium text-zinc-500">
+                            {item.price ? `${item.price} ₽` : ''}
+                          </div>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            const params = new URLSearchParams();
+
+                            if (item.category) {
+                              params.set('category', String(item.category));
+                            }
+
+                            navigate(`/catalog?${params.toString()}`);
+                          }}
+                          className="mt-1 text-[10px] font-medium text-zinc-500 underline underline-offset-2"
+                        >
+                          Найти похожее
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => requestDeleteItem(item)}
+                      className="absolute top-2 right-2 hidden md:block opacity-0 md:group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-lg text-zinc-400 hover:text-red-500 shadow-sm z-10"
+                      aria-label="Удалить вещь"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        ></path>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               );
             })}
