@@ -273,12 +273,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const actions = useMemo(() => ({
     startPhoneAuth: async (phone: string) => {
-      const resp = await fetch('/api/auth/phone/start', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
+      let resp: Response;
+      try {
+        const body = new URLSearchParams({ phone });
+        resp = await fetch('/api/auth/phone/start', {
+          method: 'POST',
+          credentials: 'include',
+          body,
+        });
+      } catch (e: any) {
+        throw new Error('Не удалось связаться с сервером. Попробуйте обновить страницу или открыть сайт в новой вкладке.');
+      }
 
       const data = await resp.json().catch(() => ({}));
 
@@ -288,12 +293,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
 
     verifyPhoneAuth: async (phone: string, code: string) => {
-      const resp = await fetch('/api/auth/phone/verify', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code }),
-      });
+      let resp: Response;
+      try {
+        const body = new URLSearchParams({ phone, code });
+        resp = await fetch('/api/auth/phone/verify', {
+          method: 'POST',
+          credentials: 'include',
+          body,
+        });
+      } catch (e: any) {
+        throw new Error('Не удалось связаться с сервером. Попробуйте обновить страницу или открыть сайт в новой вкладке.');
+      }
 
       const data = await resp.json().catch(() => ({}));
 

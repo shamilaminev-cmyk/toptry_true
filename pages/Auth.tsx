@@ -24,7 +24,12 @@ const Auth = () => {
         navigate('/');
       }
     } catch (e: any) {
-      setError(e?.message || 'Ошибка');
+      const msg = e?.message || 'Ошибка';
+      if (msg === 'Failed to fetch') {
+        setError('Не удалось связаться с сервером. Попробуйте обновить страницу или открыть сайт в новой вкладке.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setBusy(false);
     }
