@@ -55,6 +55,8 @@ const Catalog = () => {
   const [draftBrand, setDraftBrand] = useState('');
   const [draftPriceMin, setDraftPriceMin] = useState('');
   const [draftPriceMax, setDraftPriceMax] = useState('');
+  const [size, setSize] = useState('');
+  const [draftSize, setDraftSize] = useState('');
 
   const [draftTotal, setDraftTotal] = useState<number | null>(null)
   const [items, setItems] = useState<any[]>([]);
@@ -80,6 +82,7 @@ const Catalog = () => {
       priceMin?: string;
       priceMax?: string;
       sort?: string;
+      size?: string;
     } = null;
 
     if (!hasHashFilters) {
@@ -107,6 +110,7 @@ const Catalog = () => {
     const priceMinParam = hasHashFilters ? (hashParams.get('priceMin') || '') : (saved?.priceMin || '');
     const priceMaxParam = hasHashFilters ? (hashParams.get('priceMax') || '') : (saved?.priceMax || '');
     const sortParam = hasHashFilters ? (hashParams.get('sort') || '') : (saved?.sort || '');
+    const sizeParam = hasHashFilters ? (hashParams.get('size') || '') : (saved?.size || '');
 
     setSearch(q);
     setDebouncedSearch(q);
@@ -124,6 +128,8 @@ const Catalog = () => {
     setDraftPriceMax(priceMaxParam);
 
     setSort(sortParam);
+    setSize(sizeParam);
+    setDraftSize(sizeParam);
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
@@ -158,7 +164,8 @@ const Catalog = () => {
     setDraftBrand(brand);
     setDraftPriceMin(priceMin);
     setDraftPriceMax(priceMax);
-  }, [filtersOpen, gender, displayCategory, discountOnly, brand, priceMin, priceMax]);
+    setDraftSize(size);
+  }, [filtersOpen, gender, displayCategory, discountOnly, brand, priceMin, priceMax, size]);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,6 +221,7 @@ const Catalog = () => {
     if (priceMin) params.set('priceMin', priceMin);
     if (priceMax) params.set('priceMax', priceMax);
     if (sort) params.set('sort', sort);
+    if (size) params.set('size', size);
 
     const url = withApiOrigin(`/api/catalog/products?${params.toString()}`);
     const resp = await fetch(url, { credentials: 'include' });
@@ -292,10 +300,11 @@ const Catalog = () => {
         priceMin,
         priceMax,
         sort,
+        size,
       };
       window.sessionStorage.setItem(CATALOG_FILTERS_STORAGE_KEY, JSON.stringify(payload));
     } catch {}
-  }, [debouncedSearch, gender, displayCategory, discountOnly, brand, priceMin, priceMax, sort]);
+  }, [debouncedSearch, gender, displayCategory, discountOnly, brand, priceMin, priceMax, sort, size]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -325,6 +334,7 @@ const Catalog = () => {
     priceMin,
     priceMax,
     sort,
+    size,
   ]);
 
   const isInWardrobe = (product: any) => {
@@ -355,10 +365,12 @@ const Catalog = () => {
     setPriceMin('');
     setPriceMax('');
     setSort('');
+    setSize('');
     setDraftDiscountOnly(false);
     setDraftBrand('');
     setDraftPriceMin('');
     setDraftPriceMax('');
+    setDraftSize('');
     try {
       window.sessionStorage.removeItem(CATALOG_FILTERS_STORAGE_KEY);
     } catch {}
@@ -372,6 +384,7 @@ const Catalog = () => {
     setDraftBrand('');
     setDraftPriceMin('');
     setDraftPriceMax('');
+    setDraftSize('');
   };
 
   
@@ -434,6 +447,7 @@ const Catalog = () => {
     setBrand(draftBrand);
     setPriceMin(draftPriceMin);
     setPriceMax(draftPriceMax);
+    setSize(draftSize);
     setFiltersOpen(false);
   };
 
@@ -453,13 +467,13 @@ const Catalog = () => {
   const filteredCountLabel = useMemo(() => total, [total]);
   const activeFiltersCount = useMemo(
     () =>
-      [gender, displayCategory, debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort].filter(Boolean).length,
-    [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort]
+      [gender, displayCategory, debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size].filter(Boolean).length,
+    [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size]
   );
   const draftActiveFiltersCount = useMemo(
     () =>
-      [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax].filter(Boolean).length,
-    [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax]
+      [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSize].filter(Boolean).length,
+    [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSize]
   );
   const applyButtonLabel = useMemo(() => {
     if (loading) return 'Загружаем...';
@@ -501,6 +515,7 @@ const Catalog = () => {
               setDraftBrand(brand);
               setDraftPriceMin(priceMin);
               setDraftPriceMax(priceMax);
+              setDraftSize(size);
               setFiltersOpen(true);
             }}
             className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 flex items-center justify-between"
@@ -529,7 +544,7 @@ const Catalog = () => {
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           Найдено: {filteredCountLabel}
         </p>
-        {(gender || displayCategory || search || discountOnly || brand || priceMin || priceMax || sort) && (
+        {(gender || displayCategory || search || discountOnly || brand || priceMin || priceMax || sort || size) && (
           <button
             onClick={clearFilters}
             className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 underline underline-offset-4"
@@ -609,6 +624,17 @@ const Catalog = () => {
                 <option key={b} value={b}>
                   {b}
                 </option>
+              ))}
+            </select>
+
+            <select
+              value={draftSize}
+              onChange={(e) => setDraftSize(e.target.value)}
+              className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
+            >
+              <option value="">Размер</option>
+              {['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((s) => (
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
 

@@ -12,6 +12,8 @@ const Profile = () => {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [sizeTop, setSizeTop] = useState(user?.sizeTop || '');
+  const [sizeBottom, setSizeBottom] = useState(user?.sizeBottom || '');
   useEffect(() => {
     if (!avatarOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -20,6 +22,11 @@ const Profile = () => {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [avatarOpen, busy]);
+
+  useEffect(() => {
+    setSizeTop(user?.sizeTop || '');
+    setSizeBottom(user?.sizeBottom || '');
+  }, [user?.sizeTop, user?.sizeBottom]);
 
 
   if (!user) {
@@ -211,6 +218,50 @@ const Profile = () => {
               <p className="text-lg font-bold">{user.limits.looksRemaining} <span className="text-zinc-300 text-sm">/ 100</span></p>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white rounded-[32px] p-6 space-y-4 border border-zinc-100">
+          <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
+            Ваши размеры
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <select
+              value={sizeTop}
+              onChange={(e) => setSizeTop(e.target.value)}
+              className="h-12 px-4 rounded-full border border-zinc-200 bg-white text-[10px] font-bold uppercase tracking-widest text-zinc-900"
+            >
+              <option value="">Верх</option>
+              {['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            <select
+              value={sizeBottom}
+              onChange={(e) => setSizeBottom(e.target.value)}
+              className="h-12 px-4 rounded-full border border-zinc-200 bg-white text-[10px] font-bold uppercase tracking-widest text-zinc-900"
+            >
+              <option value="">Низ</option>
+              {['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={async () => {
+              setErr(null);
+              try {
+                await actions.updateProfileSizes(sizeTop, sizeBottom);
+              } catch (e: any) {
+                setErr(e?.message || 'Не удалось сохранить размеры');
+              }
+            }}
+            className="w-full h-12 rounded-full bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-[0.18em]"
+          >
+            Сохранить размеры
+          </button>
         </div>
 
         <div className="space-y-2">

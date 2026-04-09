@@ -20,6 +20,7 @@ interface AppState {
     register: (email: string, username: string, password: string) => Promise<void>;
     startPhoneAuth: (phone: string) => Promise<void>;
     verifyPhoneAuth: (phone: string, code: string) => Promise<any>;
+    updateProfileSizes: (sizeTop: string, sizeBottom: string) => Promise<void>;
     logout: () => Promise<void>;
     toggleHomeLayout: () => void;
     addToWardrobe: (product: Product) => void;
@@ -189,6 +190,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             phone: prev?.phone || '',
             avatarUrl: u.avatarUrl || prev?.avatarUrl,
             selfieUrl: prev?.selfieUrl,
+            sizeTop: u.sizeTop || prev?.sizeTop,
+            sizeBottom: u.sizeBottom || prev?.sizeBottom,
             tier: prev?.tier || SubscriptionTier.FREE,
             limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
             isPublic: !!u.isPublic,
@@ -322,6 +325,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         phone: u.phone || phone,
         avatarUrl: u.avatarUrl || undefined,
         selfieUrl: undefined,
+        sizeTop: u.sizeTop || undefined,
+        sizeBottom: u.sizeBottom || undefined,
         tier: SubscriptionTier.FREE,
         limits: { hdTryOnRemaining: 5, looksRemaining: 10 },
         isPublic: u.isPublic ?? false,
@@ -370,6 +375,8 @@ login: async (emailOrUsername: string, password: string) => {
     phone: prev?.phone || '',
     avatarUrl: u.avatarUrl || prev?.avatarUrl,
     selfieUrl: prev?.selfieUrl,
+    sizeTop: u.sizeTop || prev?.sizeTop,
+    sizeBottom: u.sizeBottom || prev?.sizeBottom,
     tier: prev?.tier || SubscriptionTier.FREE,
     limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
     isPublic: u.isPublic ?? true,
@@ -419,6 +426,8 @@ register: async (email: string, username: string, password: string) => {
     phone: prev?.phone || '',
     avatarUrl: u.avatarUrl || prev?.avatarUrl,
     selfieUrl: prev?.selfieUrl,
+    sizeTop: u.sizeTop || prev?.sizeTop,
+    sizeBottom: u.sizeBottom || prev?.sizeBottom,
     tier: prev?.tier || SubscriptionTier.FREE,
     limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
     isPublic: u.isPublic ?? true,
@@ -426,6 +435,31 @@ register: async (email: string, username: string, password: string) => {
 
   console.log('[auth] register done');
 },
+
+    updateProfileSizes: async (sizeTop: string, sizeBottom: string) => {
+      const resp = await fetch('/api/profile/update', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sizeTop, sizeBottom }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Profile update failed');
+      }
+
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              sizeTop: data?.user?.sizeTop || undefined,
+              sizeBottom: data?.user?.sizeBottom || undefined,
+            }
+          : prev
+      );
+    },
 
     logout: async () => {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
@@ -441,7 +475,16 @@ register: async (email: string, username: string, password: string) => {
         const data = await resp.json().catch(() => null);
         if (!data?.user) return;
         const u = data.user;
-        setUser((prev) => (prev ? { ...prev, avatarUrl: u.avatarUrl || prev.avatarUrl } : prev));
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                avatarUrl: u.avatarUrl || prev.avatarUrl,
+                sizeTop: u.sizeTop || prev.sizeTop,
+                sizeBottom: u.sizeBottom || prev.sizeBottom,
+              }
+            : prev
+        );
       } catch {
         // ignore
       }
@@ -699,6 +742,8 @@ register: async (email: string, username: string, password: string) => {
           phone: '+7 (000) 000-00-00',
           avatarUrl: 'https://i.pravatar.cc/150?u=guest',
           selfieUrl: url,
+          sizeTop: undefined,
+          sizeBottom: undefined,
           tier: SubscriptionTier.FREE,
           limits: { hdTryOnRemaining: 5, looksRemaining: 10 },
           isPublic: false,
