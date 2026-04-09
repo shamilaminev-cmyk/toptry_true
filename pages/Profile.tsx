@@ -14,6 +14,7 @@ const Profile = () => {
   const [err, setErr] = useState<string | null>(null);
   const [sizeTop, setSizeTop] = useState(user?.sizeTop || '');
   const [sizeBottom, setSizeBottom] = useState(user?.sizeBottom || '');
+  const [sizeShoes, setSizeShoes] = useState(user?.sizeShoes || '');
   useEffect(() => {
     if (!avatarOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -26,7 +27,8 @@ const Profile = () => {
   useEffect(() => {
     setSizeTop(user?.sizeTop || '');
     setSizeBottom(user?.sizeBottom || '');
-  }, [user?.sizeTop, user?.sizeBottom]);
+    setSizeShoes(user?.sizeShoes || '');
+  }, [user?.sizeTop, user?.sizeBottom, user?.sizeShoes]);
 
 
   if (!user) {
@@ -249,11 +251,22 @@ const Profile = () => {
             </select>
           </div>
 
+          <select
+            value={sizeShoes}
+            onChange={(e) => setSizeShoes(e.target.value)}
+            className="w-full h-12 px-4 rounded-full border border-zinc-200 bg-white text-[10px] font-bold uppercase tracking-widest text-zinc-900"
+          >
+            <option value="">Обувь</option>
+            {['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'].map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+
           <button
             onClick={async () => {
               setErr(null);
               try {
-                await actions.updateProfileSizes(sizeTop, sizeBottom);
+                await actions.updateProfileSizes(sizeTop, sizeBottom, sizeShoes);
               } catch (e: any) {
                 setErr(e?.message || 'Не удалось сохранить размеры');
               }

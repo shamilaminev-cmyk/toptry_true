@@ -20,7 +20,7 @@ interface AppState {
     register: (email: string, username: string, password: string) => Promise<void>;
     startPhoneAuth: (phone: string) => Promise<void>;
     verifyPhoneAuth: (phone: string, code: string) => Promise<any>;
-    updateProfileSizes: (sizeTop: string, sizeBottom: string) => Promise<void>;
+    updateProfileSizes: (sizeTop: string, sizeBottom: string, sizeShoes: string) => Promise<void>;
     logout: () => Promise<void>;
     toggleHomeLayout: () => void;
     addToWardrobe: (product: Product) => void;
@@ -192,6 +192,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             selfieUrl: prev?.selfieUrl,
             sizeTop: u.sizeTop || prev?.sizeTop,
             sizeBottom: u.sizeBottom || prev?.sizeBottom,
+            sizeShoes: u.sizeShoes || prev?.sizeShoes,
             tier: prev?.tier || SubscriptionTier.FREE,
             limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
             isPublic: !!u.isPublic,
@@ -327,6 +328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selfieUrl: undefined,
         sizeTop: u.sizeTop || undefined,
         sizeBottom: u.sizeBottom || undefined,
+        sizeShoes: u.sizeShoes || undefined,
         tier: SubscriptionTier.FREE,
         limits: { hdTryOnRemaining: 5, looksRemaining: 10 },
         isPublic: u.isPublic ?? false,
@@ -377,6 +379,7 @@ login: async (emailOrUsername: string, password: string) => {
     selfieUrl: prev?.selfieUrl,
     sizeTop: u.sizeTop || prev?.sizeTop,
     sizeBottom: u.sizeBottom || prev?.sizeBottom,
+    sizeShoes: u.sizeShoes || prev?.sizeShoes,
     tier: prev?.tier || SubscriptionTier.FREE,
     limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
     isPublic: u.isPublic ?? true,
@@ -428,6 +431,7 @@ register: async (email: string, username: string, password: string) => {
     selfieUrl: prev?.selfieUrl,
     sizeTop: u.sizeTop || prev?.sizeTop,
     sizeBottom: u.sizeBottom || prev?.sizeBottom,
+    sizeShoes: u.sizeShoes || prev?.sizeShoes,
     tier: prev?.tier || SubscriptionTier.FREE,
     limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
     isPublic: u.isPublic ?? true,
@@ -436,12 +440,12 @@ register: async (email: string, username: string, password: string) => {
   console.log('[auth] register done');
 },
 
-    updateProfileSizes: async (sizeTop: string, sizeBottom: string) => {
+    updateProfileSizes: async (sizeTop: string, sizeBottom: string, sizeShoes: string) => {
       const resp = await fetch('/api/profile/update', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sizeTop, sizeBottom }),
+        body: JSON.stringify({ sizeTop, sizeBottom, sizeShoes }),
       });
 
       const data = await resp.json().catch(() => ({}));
@@ -456,6 +460,7 @@ register: async (email: string, username: string, password: string) => {
               ...prev,
               sizeTop: data?.user?.sizeTop || undefined,
               sizeBottom: data?.user?.sizeBottom || undefined,
+              sizeShoes: data?.user?.sizeShoes || undefined,
             }
           : prev
       );
@@ -482,6 +487,7 @@ register: async (email: string, username: string, password: string) => {
                 avatarUrl: u.avatarUrl || prev.avatarUrl,
                 sizeTop: u.sizeTop || prev.sizeTop,
                 sizeBottom: u.sizeBottom || prev.sizeBottom,
+                sizeShoes: u.sizeShoes || prev.sizeShoes,
               }
             : prev
         );
@@ -744,6 +750,7 @@ register: async (email: string, username: string, password: string) => {
           selfieUrl: url,
           sizeTop: undefined,
           sizeBottom: undefined,
+          sizeShoes: undefined,
           tier: SubscriptionTier.FREE,
           limits: { hdTryOnRemaining: 5, looksRemaining: 10 },
           isPublic: false,

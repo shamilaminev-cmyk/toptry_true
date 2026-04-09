@@ -559,6 +559,51 @@ app.get("/api/auth/me", async (req, res) => {
   }
 });
 
+
+app.post("/api/profile/update", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { sizeTop, sizeBottom, sizeShoes } = req.body || {};
+
+    const p = getPrisma();
+    if (!p) return res.status(500).json({ error: "Database is not configured" });
+
+    const normalizeSize = (v) => {
+      const s = String(v || "").trim().toUpperCase();
+      if (!s) return null;
+      const allowed = new Set(["XS", "S", "M", "L", "XL", "XXL"]);
+      return allowed.has(s) ? s : null;
+    };
+
+    const normalizeShoeSize = (v) => {
+      const s = String(v || "").trim().replace(",", ".");
+      if (!s) return null;
+      const allowed = new Set(["35","36","37","38","39","40","41","42","43","44","45","46"]);
+      return allowed.has(s) ? s : null;
+    };
+
+    const user = await p.user.update({
+      where: { id: userId },
+      data: {
+        sizeTop: normalizeSize(sizeTop),
+        sizeBottom: normalizeSize(sizeBottom),
+        sizeShoes: normalizeShoeSize(sizeShoes),
+      },
+      select: {
+        id: true,
+        sizeTop: true,
+        sizeBottom: true,
+        sizeShoes: true,
+      },
+    });
+
+    return res.json({ ok: true, user });
+  } catch (err) {
+    console.error("[toptry] /api/profile/update error", err);
+    return res.status(500).json({ error: err?.message || "Failed to update profile" });
+  }
+});
+
 /**
  * POST /api/avatar/process
  * Mandatory selfie postprocess (AUTH ONLY):

@@ -74,6 +74,9 @@ export interface User {
   phone: string;
   avatarUrl?: string;
   selfieUrl?: string;
+  sizeTop?: string;
+  sizeBottom?: string;
+  sizeShoes?: string;
   tier: SubscriptionTier;
   limits: {
     hdTryOnRemaining: number;
