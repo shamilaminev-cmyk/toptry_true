@@ -842,7 +842,8 @@ async function generateImageWithRetry(ai, payload, { primaryModel, fallbackModel
   throw lastError || new Error("Gemini image generation failed");
 }
 
-\napp.post("/api/looks/create", requireAuth, async (req, res) => {
+
+app.post("/api/looks/create", requireAuth, async (req, res) => {
   try {
     console.log("[debug looks/create] hit", {
       userId: req.auth?.userId,
