@@ -785,7 +785,64 @@ app.get("/media/:key(*)", async (req, res) => {
  * POST /api/looks/create
  * Server-first create: saves look in DB/MinIO and returns persistent URLs
  */
-app.post("/api/looks/create", requireAuth, async (req, res) => {
+
+async function generateImageWithRetry(ai, payload, { primaryModel, fallbackModel, retries = 1 }) {
+  let lastError;
+
+  const tryModel = async (modelName) => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const t0 = Date.now();
+      try {
+        const resp = await ai.models.generateContent({
+          model: modelName,
+          ...payload,
+        });
+        console.log("[toptry] Gemini image OK", {
+          model: modelName,
+          attempt: attempt + 1,
+          ms: Date.now() - t0,
+        });
+        return resp;
+      } catch (e) {
+        lastError = e;
+        const msg = String(e?.message || e);
+        const retryable =
+          msg.includes("503") ||
+          msg.includes("Deadline expired") ||
+          msg.includes("UNAVAILABLE") ||
+          msg.includes("timed out");
+
+        console.warn("[toptry] Gemini image error", {
+          model: modelName,
+          attempt: attempt + 1,
+          ms: Date.now() - t0,
+          message: msg.slice(0, 300),
+          retryable,
+        });
+
+        if (!retryable || attempt == retries) break;
+        await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+      }
+    }
+    return null;
+  };
+
+  const primary = await tryModel(primaryModel);
+  if (primary) return primary;
+
+  if (fallbackModel && fallbackModel !== primaryModel) {
+    console.warn("[toptry] Gemini fallback model", {
+      from: primaryModel,
+      to: fallbackModel,
+    });
+    const fallback = await tryModel(fallbackModel);
+    if (fallback) return fallback;
+  }
+
+  throw lastError || new Error("Gemini image generation failed");
+}
+
+\napp.post("/api/looks/create", requireAuth, async (req, res) => {
   try {
     console.log("[debug looks/create] hit", {
       userId: req.auth?.userId,
@@ -866,22 +923,29 @@ Style: premium e-commerce, professional lighting, consistent with luxury fashion
 Result should be front view, clean neutral background.
 Avoid brand logos and text.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
-      contents: {
-        parts: [
-          { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
-          ...itemParts,
-          { text: prompt },
-        ],
-      },
-      config: {
-        imageConfig: {
-          aspectRatio: aspectRatio || "3:4",
-          imageSize: "1K",
+    const response = await generateImageWithRetry(
+      ai,
+      {
+        contents: {
+          parts: [
+            { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
+            ...itemParts,
+            { text: prompt },
+          ],
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: aspectRatio || "3:4",
+            imageSize: "1K",
+          },
         },
       },
-    });
+      {
+        primaryModel: process.env.GEMINI_MODEL_IMAGE || "gemini-3-pro-image-preview",
+        fallbackModel: process.env.GEMINI_MODEL_IMAGE_FALLBACK || "gemini-2.5-flash-image",
+        retries: Number(process.env.GEMINI_IMAGE_RETRIES || 1),
+      }
+    );
 
     console.log("[debug looks/create] Gemini response meta", {
       candidates: Array.isArray(response?.candidates) ? response.candidates.length : null,
