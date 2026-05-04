@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  const { addCatalogItemToLook } = useApp(); useEffect, useMemo, useState } from
+import { useApp } from '../store'; 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
 import { catalogImageSrc } from "../utils/catalogImageSrc";
 import { useAppState } from '../store';

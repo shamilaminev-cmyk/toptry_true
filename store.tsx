@@ -154,7 +154,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Simulate small loading skeleton
     const t = setTimeout(() => setLoading(false), 450);
-    return () => clearTimeout(t);
+    
+  const addCatalogItemToLook = (item: any) => {
+    const id = item.id || item.externalId || String(Date.now());
+
+    const candidate = {
+      id,
+      imageUrl: item.imageUrl,
+      title: item.title,
+      brand: item.brand,
+      price: item.price,
+      source: 'catalog',
+    };
+
+    setCandidates((prev: any[]) => {
+      const exists = prev.find((x) => x.id === id);
+      if (exists) return prev;
+      return [...prev, candidate];
+    });
+
+    setSelectedIds((prev: Set<string>) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
+return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -837,8 +863,35 @@ register: async (email: string, username: string, password: string) => {
     },
   }), [user, looks, wardrobe, homeLayout]);
 
-  return (
-      <AppContext.Provider value={{ user, products, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
+  
+  const addCatalogItemToLook = (item: any) => {
+    const id = item.id || item.externalId || String(Date.now());
+
+    const candidate = {
+      id,
+      imageUrl: item.imageUrl,
+      title: item.title,
+      brand: item.brand,
+      price: item.price,
+      source: 'catalog',
+    };
+
+    setCandidates((prev: any[]) => {
+      const exists = prev.find((x) => x.id === id);
+      if (exists) return prev;
+      return [...prev, candidate];
+    });
+
+    setSelectedIds((prev: Set<string>) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
+return (
+      <AppContext.Provider value={{
+      addCatalogItemToLook, user, products, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
       {children}
     </AppContext.Provider>
   );
