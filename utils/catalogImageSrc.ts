@@ -4,6 +4,15 @@ export function catalogImageSrc(
 ): string {
   if (!rawUrl) return "";
 
+  // remington.fashion недоступен с DO/VPS, поэтому backend proxy не может скачать эти картинки.
+  // Для <img> CORS не нужен, отдаём прямой URL в браузер.
+  try {
+    const u = new URL(String(rawUrl));
+    if (u.hostname === "remington.fashion" || u.hostname === "www.remington.fashion") {
+      return String(rawUrl);
+    }
+  } catch {}
+
   const params = new URLSearchParams();
   params.set("url", String(rawUrl));
 

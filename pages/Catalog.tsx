@@ -32,7 +32,7 @@ const CATEGORY_TABS: Array<{ id: '' | DisplayCategory; label: string }> = [
   { id: 'ACCESSORIES', label: 'Аксессуары' },
 ];
 
-const IMG_FALLBACK = "https://i.pravatar.cc/150?u=toptry-demo";
+const IMG_FALLBACK = "";
 const PAGE_SIZE = 24;
 const CATALOG_FILTERS_STORAGE_KEY = 'toptry.catalog.filters.v1';
 
@@ -712,7 +712,7 @@ const Catalog = () => {
                       decoding="async"
                       onError={(e) => {
                         const el = e.currentTarget as HTMLImageElement;
-                        el.src = IMG_FALLBACK;
+                        el.style.display = "none";
                       }}
                       className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-all duration-700"
                     />
@@ -762,15 +762,26 @@ const Catalog = () => {
                         {(p.storeName || p.brand || "Store")}
                       </span>
                     </div>
-                    <button
-                      onClick={() => {
-                        const url = p.affiliateUrl || p.productUrl;
-                        if (url) window.open(url, "_blank", "noopener,noreferrer");
-                      }}
-                      className="w-full mt-3 py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm"
-                    >
-                      Купить сейчас
-                    </button>
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      <button
+                        onClick={() => {
+                          actions.addToWardrobe(p);
+                          window.location.hash = "#/create-look";
+                        }}
+                        className="w-full py-2.5 bg-zinc-900 border border-zinc-900 rounded-full text-white text-[9px] font-black uppercase tracking-[0.15em] hover:bg-white hover:text-zinc-900 transition-all active:scale-95 shadow-sm"
+                      >
+                        Примерить
+                      </button>
+                      <button
+                        onClick={() => {
+                          const url = p.affiliateUrl || p.productUrl;
+                          if (url) window.open(url, "_blank", "noopener,noreferrer");
+                        }}
+                        className="w-full py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm"
+                      >
+                        Купить
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
