@@ -232,7 +232,7 @@ async function imageToBase64(input) {
     // поэтому делаем абсолютный URL через base.
     const base =
       process.env.INTERNAL_BASE_URL ||
-      `http://127.0.0.1:`;
+      `http://127.0.0.1:5174`;
 
     const url =
       clean.startsWith("http://") || clean.startsWith("https://")
