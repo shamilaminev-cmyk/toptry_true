@@ -722,7 +722,10 @@ const Catalog = () => {
     Примерить
   </button>
 </div>
-</div>}
+</div> {
+                        const el = e.currentTarget as HTMLImageElement;
+                        el.style.display = "none";
+                      }}
                       className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-all duration-700"
                     />
 
