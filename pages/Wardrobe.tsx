@@ -1050,7 +1050,7 @@ const Wardrobe = () => {
 
                     <button
                       onClick={() => requestDeleteItem(item)}
-                      className="absolute top-2 right-2 hidden md:block opacity-0 md:group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-lg text-zinc-400 hover:text-red-500 shadow-sm z-10"
+                      className="absolute top-2 right-2 transition-opacity bg-white/90 p-1.5 rounded-lg text-zinc-400 hover:text-red-500 shadow-sm z-10"
                       aria-label="Удалить вещь"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
