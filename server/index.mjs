@@ -786,6 +786,101 @@ app.get("/media/:key(*)", async (req, res) => {
  * Server-first create: saves look in DB/MinIO and returns persistent URLs
  */
 
+
+function isPublicHttpUrl(v) {
+  return typeof v === "string" && /^https?:\/\//i.test(v);
+}
+
+function fashnCategoryFromSourceItems(sourceItems) {
+  const first = Array.isArray(sourceItems) ? sourceItems[0] : null;
+  const raw = String(
+    first?.displayCategory ||
+    first?.category ||
+    first?.type ||
+    ""
+  ).toUpperCase();
+
+  if (raw.includes("TOP") || raw.includes("SHIRT") || raw.includes("HOODIE") || raw.includes("JACKET")) return "tops";
+  if (raw.includes("BOTTOM") || raw.includes("PANTS") || raw.includes("TROUSER") || raw.includes("SHORT")) return "bottoms";
+  if (raw.includes("DRESS") || raw.includes("ONE")) return "one-pieces";
+
+  // безопасный default для MVP: если FASHN включен и item один, чаще всего это верх
+  return "tops";
+}
+
+async function runFashnTryOn({ modelImageUrl, garmentImageUrl, category }) {
+  if (!process.env.FASHN_API_KEY) {
+    throw new Error("FASHN_API_KEY is not configured");
+  }
+
+  if (!isPublicHttpUrl(modelImageUrl) || !isPublicHttpUrl(garmentImageUrl)) {
+    throw new Error("FASHN requires public http(s) URLs for model_image and garment_image");
+  }
+
+  const { default: Fashn } = await import("fashn");
+
+  const client = new Fashn({
+    apiKey: process.env.FASHN_API_KEY,
+    timeout: Number(process.env.FASHN_TIMEOUT_MS || 600000),
+    maxRetries: Number(process.env.FASHN_MAX_RETRIES || 2),
+  });
+
+  console.log("[toptry] FASHN try-on start", {
+    modelPrefix: String(modelImageUrl).slice(0, 80),
+    garmentPrefix: String(garmentImageUrl).slice(0, 80),
+    category,
+  });
+
+  const started = await client.predictions.run({
+    model_name: process.env.FASHN_MODEL || "tryon-v1.6",
+    inputs: {
+      model_image: modelImageUrl,
+      garment_image: garmentImageUrl,
+      category: category || "tops",
+    },
+  });
+
+  const predictionId = started?.id;
+  if (!predictionId) {
+    throw new Error("FASHN did not return prediction id");
+  }
+
+  console.log("[toptry] FASHN queued", { predictionId });
+
+  const maxPolls = Number(process.env.FASHN_MAX_POLLS || 90);
+  const pollMs = Number(process.env.FASHN_POLL_MS || 3000);
+
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise((r) => setTimeout(r, pollMs));
+
+    const status = await client.predictions.status(predictionId);
+    const s = String(status?.status || "").toLowerCase();
+
+    console.log("[toptry] FASHN status", {
+      predictionId,
+      status: s,
+      poll: i + 1,
+    });
+
+    if (s === "completed" || s === "succeeded") {
+      const out = Array.isArray(status?.output) ? status.output[0] : status?.output;
+      if (!out) throw new Error("FASHN completed without output");
+      console.log("[toptry] FASHN completed", {
+        predictionId,
+        outputPrefix: String(out).slice(0, 80),
+      });
+      return String(out);
+    }
+
+    if (s === "failed" || s === "canceled" || s === "cancelled") {
+      throw new Error("FASHN failed: " + JSON.stringify(status));
+    }
+  }
+
+  throw new Error("FASHN timeout");
+}
+
+
 async function generateImageWithRetry(ai, payload, { primaryModel, fallbackModel, retries = 1 }) {
   let lastError;
 
@@ -855,10 +950,18 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
         ? String(req.body.itemImageUrls[0]).slice(0, 32)
         : null,
     });
-    if (!GEMINI_API_KEY) {
+    const requestedProvider = String(process.env.TRYON_PROVIDER || "gemini").trim().toLowerCase();
+
+    if (requestedProvider !== "fashn" && !GEMINI_API_KEY) {
       return res
         .status(500)
         .json({ error: "GEMINI_API_KEY is not configured on the server" });
+    }
+
+    if (requestedProvider === "fashn" && !process.env.FASHN_API_KEY) {
+      return res
+        .status(500)
+        .json({ error: "FASHN_API_KEY is not configured on the server" });
     }
 
     const b = req.body || {};
@@ -881,42 +984,77 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
     const selfieAbs = absUrlFromReq(req, selfieDataUrl);
     const itemsAbs = itemImageUrls.map((u) => absUrlFromReq(req, u));
 
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    let imageDataUrl = "";
 
-    console.log("[debug looks/create] before imageToBase64", {
-      selfieAbsPrefix: typeof selfieAbs === "string" ? selfieAbs.slice(0, 64) : null,
-      itemsAbsCount: Array.isArray(itemsAbs) ? itemsAbs.length : null,
-      firstItemAbsPrefix: Array.isArray(itemsAbs) && itemsAbs[0] ? String(itemsAbs[0]).slice(0, 64) : null,
-    });
+    const canUseFashn =
+      requestedProvider === "fashn" &&
+      itemsAbs.length === 1 &&
+      isPublicHttpUrl(selfieAbs) &&
+      isPublicHttpUrl(itemsAbs[0]);
 
-    const selfie = await imageToBase64(selfieAbs);
+    if (requestedProvider === "fashn" && canUseFashn) {
+      console.log("[toptry] FASHN provider selected");
 
-    console.log("[debug looks/create] selfie prepared", {
-      mimeType: selfie?.mimeType || null,
-      base64Len: selfie?.base64 ? String(selfie.base64).length : null,
-    });
+      const fashnOutputUrl = await runFashnTryOn({
+        modelImageUrl: selfieAbs,
+        garmentImageUrl: itemsAbs[0],
+        category: fashnCategoryFromSourceItems(sourceItems),
+      });
 
-    const itemParts = await Promise.all(
-      itemsAbs.map(async (url, idx) => {
-        console.log("[debug looks/create] preparing item", {
-          idx,
-          prefix: typeof url === "string" ? url.slice(0, 64) : null,
+      const fashnImage = await imageToBase64(fashnOutputUrl);
+      imageDataUrl = "data:" + fashnImage.mimeType + ";base64," + fashnImage.base64;
+    } else {
+      if (requestedProvider === "fashn") {
+        console.warn("[toptry] FASHN fallback to Gemini", {
+          reason: "FASHN requires exactly 1 public http(s) selfie/item URL",
+          itemCount: itemsAbs.length,
+          selfieIsPublic: isPublicHttpUrl(selfieAbs),
+          firstItemIsPublic: isPublicHttpUrl(itemsAbs[0]),
         });
-        const img = await imageToBase64(url);
-        console.log("[debug looks/create] item prepared", {
-          idx,
-          mimeType: img?.mimeType || null,
-          base64Len: img?.base64 ? String(img.base64).length : null,
-        });
-        return { inlineData: { data: img.base64, mimeType: img.mimeType } };
-      })
-    );
+      }
 
-    console.log("[debug looks/create] before Gemini", {
-      itemParts: itemParts.length,
-    });
+      if (!GEMINI_API_KEY) {
+        return res
+          .status(500)
+          .json({ error: "GEMINI_API_KEY is not configured on the server" });
+      }
 
-    const prompt = `Act as a professional fashion photographer and AI stylist.
+      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+      console.log("[debug looks/create] before imageToBase64", {
+        selfieAbsPrefix: typeof selfieAbs === "string" ? selfieAbs.slice(0, 64) : null,
+        itemsAbsCount: Array.isArray(itemsAbs) ? itemsAbs.length : null,
+        firstItemAbsPrefix: Array.isArray(itemsAbs) && itemsAbs[0] ? String(itemsAbs[0]).slice(0, 64) : null,
+      });
+
+      const selfie = await imageToBase64(selfieAbs);
+
+      console.log("[debug looks/create] selfie prepared", {
+        mimeType: selfie?.mimeType || null,
+        base64Len: selfie?.base64 ? String(selfie.base64).length : null,
+      });
+
+      const itemParts = await Promise.all(
+        itemsAbs.map(async (url, idx) => {
+          console.log("[debug looks/create] preparing item", {
+            idx,
+            prefix: typeof url === "string" ? url.slice(0, 64) : null,
+          });
+          const img = await imageToBase64(url);
+          console.log("[debug looks/create] item prepared", {
+            idx,
+            mimeType: img?.mimeType || null,
+            base64Len: img?.base64 ? String(img.base64).length : null,
+          });
+          return { inlineData: { data: img.base64, mimeType: img.mimeType } };
+        })
+      );
+
+      console.log("[debug looks/create] before Gemini", {
+        itemParts: itemParts.length,
+      });
+
+      const prompt = `Act as a professional fashion photographer and AI stylist.
 I am providing a selfie of a person and images of ${itemsAbs.length} clothing items.
 Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.
 The person should have the same face as in the selfie.
@@ -924,49 +1062,49 @@ Style: premium e-commerce, professional lighting, consistent with luxury fashion
 Result should be front view, clean neutral background.
 Avoid brand logos and text.`;
 
-    const response = await generateImageWithRetry(
-      ai,
-      {
-        contents: {
-          parts: [
-            { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
-            ...itemParts,
-            { text: prompt },
-          ],
-        },
-        config: {
-          imageConfig: {
-            aspectRatio: aspectRatio || "3:4",
-            imageSize: "1K",
+      const response = await generateImageWithRetry(
+        ai,
+        {
+          contents: {
+            parts: [
+              { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
+              ...itemParts,
+              { text: prompt },
+            ],
+          },
+          config: {
+            imageConfig: {
+              aspectRatio: aspectRatio || "3:4",
+              imageSize: "1K",
+            },
           },
         },
-      },
-      {
-        primaryModel: process.env.GEMINI_MODEL_IMAGE || "gemini-3-pro-image-preview",
-        fallbackModel: process.env.GEMINI_MODEL_IMAGE_FALLBACK || "gemini-2.5-flash-image",
-        retries: Number(process.env.GEMINI_IMAGE_RETRIES || 1),
+        {
+          primaryModel: process.env.GEMINI_MODEL_IMAGE || "gemini-3-pro-image-preview",
+          fallbackModel: process.env.GEMINI_MODEL_IMAGE_FALLBACK || "gemini-2.5-flash-image",
+          retries: Number(process.env.GEMINI_IMAGE_RETRIES || 1),
+        }
+      );
+
+      console.log("[debug looks/create] Gemini response meta", {
+        candidates: Array.isArray(response?.candidates) ? response.candidates.length : null,
+        parts: Array.isArray(response?.candidates?.[0]?.content?.parts) ? response.candidates[0].content.parts.length : null,
+        finishReason: response?.candidates?.[0]?.finishReason || null,
+      });
+
+      const parts = (response && response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) || [];
+      for (const part of parts) {
+        if (part && part.inlineData && part.inlineData.data) {
+          const mt = (part.inlineData.mimeType || "image/png");
+          imageDataUrl = "data:" + mt + ";base64," + part.inlineData.data;
+          break;
+        }
       }
-    );
 
-    console.log("[debug looks/create] Gemini response meta", {
-      candidates: Array.isArray(response?.candidates) ? response.candidates.length : null,
-      parts: Array.isArray(response?.candidates?.[0]?.content?.parts) ? response.candidates[0].content.parts.length : null,
-      finishReason: response?.candidates?.[0]?.finishReason || null,
-    });
-
-    let imageDataUrl = "";
-    const parts = (response && response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) || [];
-    for (const part of parts) {
-      if (part && part.inlineData && part.inlineData.data) {
-        const mt = (part.inlineData.mimeType || "image/png");
-        imageDataUrl = "data:" + mt + ";base64," + part.inlineData.data;
-        break;
+      if (!imageDataUrl) {
+        console.error("[debug looks/create] Gemini returned no image", JSON.stringify(response, null, 2));
+        return res.status(502).json({ error: "Gemini did not return an image" });
       }
-    }
-
-    if (!imageDataUrl) {
-      console.error("[debug looks/create] Gemini returned no image", JSON.stringify(response, null, 2));
-      return res.status(502).json({ error: "Gemini did not return an image" });
     }
 
     const userId = req.auth.userId;
