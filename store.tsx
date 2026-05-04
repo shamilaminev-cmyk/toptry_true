@@ -309,35 +309,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return j;
 },
-    credentials: 'include',
-    body: JSON.stringify({ phone })
-  });
-
-  let text = '';
-  try {
-    text = await r.text();
-  } catch {}
-
-  let j: any = {};
-  try {
-    j = text ? JSON.parse(text) : {};
-  } catch {}
-
-  if (!r.ok) {
-    const msg =
-      j?.error ||
-      (r.status === 429 ? 'Код уже отправлен, подождите немного' : null) ||
-      `HTTP ${r.status}`;
-
-    const err: any = new Error(msg);
-    err.retryAfterSec = j?.retryAfterSec;
-    err.status = r.status;
-
-    throw err;
-  }
-
-  return j;
-},
 
     verifyPhoneAuth: async (phone: string, code: string) => {
       let resp: Response;
