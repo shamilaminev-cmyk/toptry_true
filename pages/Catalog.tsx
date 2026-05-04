@@ -762,26 +762,15 @@ const Catalog = () => {
                         {(p.storeName || p.brand || "Store")}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 mt-3">
-                      <button
-                        onClick={() => {
-                          actions.addToWardrobe(p);
-                          window.location.hash = "#/create-look";
-                        }}
-                        className="w-full py-2.5 bg-zinc-900 border border-zinc-900 rounded-full text-white text-[9px] font-black uppercase tracking-[0.15em] hover:bg-white hover:text-zinc-900 transition-all active:scale-95 shadow-sm"
-                      >
-                        Примерить
-                      </button>
-                      <button
-                        onClick={() => {
-                          const url = p.affiliateUrl || p.productUrl;
-                          if (url) window.open(url, "_blank", "noopener,noreferrer");
-                        }}
-                        className="w-full py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm"
-                      >
-                        Купить
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => {
+                        const url = p.affiliateUrl || p.productUrl;
+                        if (url) window.open(url, "_blank", "noopener,noreferrer");
+                      }}
+                      className="w-full mt-3 py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm"
+                    >
+                      Купить сейчас
+                    </button>
                   </div>
                 </div>
               );
