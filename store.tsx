@@ -277,24 +277,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const actions = useMemo(() => ({
     startPhoneAuth: async (phone: string) => {
-      let resp: Response;
-      try {
-        const body = new URLSearchParams({ phone });
-        resp = await fetch('/api/auth/phone/start', {
-          method: 'POST',
-          credentials: 'include',
-          body,
-        });
-      } catch (e: any) {
-        throw new Error('Не удалось связаться с сервером. Попробуйте обновить страницу или открыть сайт в новой вкладке.');
-      }
+  const r = await fetch('/api/auth/phone/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ phone })
+  });
 
-      const data = await resp.json().catch(() => ({}));
+  let text = '';
+  try {
+    text = await r.text();
+  } catch {}
 
-      if (!resp.ok) {
-        throw new Error(data?.error || 'Не удалось отправить код');
-      }
-    },
+  let j: any = {};
+  try {
+    j = text ? JSON.parse(text) : {};
+  } catch {}
+
+  if (!r.ok) {
+    const msg =
+      j?.error ||
+      (r.status === 429 ? 'Код уже отправлен, подождите немного' : null) ||
+      `HTTP ${r.status}`;
+
+    const err: any = new Error(msg);
+    err.retryAfterSec = j?.retryAfterSec;
+    err.status = r.status;
+
+    throw err;
+  }
+
+  return j;
+},
+    credentials: 'include',
+    body: JSON.stringify({ phone })
+  });
+
+  let text = '';
+  try {
+    text = await r.text();
+  } catch {}
+
+  let j: any = {};
+  try {
+    j = text ? JSON.parse(text) : {};
+  } catch {}
+
+  if (!r.ok) {
+    const msg =
+      j?.error ||
+      (r.status === 429 ? 'Код уже отправлен, подождите немного' : null) ||
+      `HTTP ${r.status}`;
+
+    const err: any = new Error(msg);
+    err.retryAfterSec = j?.retryAfterSec;
+    err.status = r.status;
+
+    throw err;
+  }
+
+  return j;
+},
 
     verifyPhoneAuth: async (phone: string, code: string) => {
       let resp: Response;
