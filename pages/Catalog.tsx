@@ -492,19 +492,19 @@ const Catalog = () => {
   return (
     <div className="pb-12">
       <div className="sticky top-0 z-40 bg-white px-4 py-4 space-y-4 shadow-sm">
-        <div className="relative w-full h-full">
-      <img
-        src={p?.images?.[0] ? catalogImageSrc(p.images[0], { w: 420 }) : IMG_FALLBACK}
-        alt={p.title || ""}
-        loading="lazy"
-        decoding="async"
-        onError={(e) => {
-          const el = e.currentTarget as HTMLImageElement;
-          el.style.display = "none";
-        }}
-        className="w-full h-full object-contain"
-      />
-    </div>
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Поиск по каталогу..."
+            className="w-full bg-zinc-100 border-none rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-zinc-900 outline-none"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
         </div>
 
 
