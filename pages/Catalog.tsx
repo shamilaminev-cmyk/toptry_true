@@ -705,31 +705,26 @@ const Catalog = () => {
                       </div>
                     )}
 
-                    <div className="relative w-full h-full">
-                      <img
-                        src={p?.images?.[0] ? catalogImageSrc(p.images[0], { w: 420 }) : IMG_FALLBACK}
-                        alt={p.title || ""}
-                        loading="lazy"
-                        decoding="async"
-                        onError={(e) => {
-                          const el = e.currentTarget as HTMLImageElement;
-                          el.style.display = "none";
-                        }}
-                        className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-all duration-700"
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-white/20 backdrop-blur-[1px]">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            actions.addToWardrobe(p);
-                            window.location.hash = "#/create-look";
-                          }}
-                          className="bg-black text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg active:scale-95"
-                        >
-                          Примерить
-                        </button>
-                      </div>
+                    <div className="relative"><img
+                      src={p?.images?.[0] ? catalogImageSrc(p.images[0], { w: 420 }) : IMG_FALLBACK}
+                      alt={p.title || ""}
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) =>
+<div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+  <button
+    onClick={() => {
+      actions.addToWardrobe(p);
+      window.location.hash = "#/create-look";
+    }}
+    className="bg-black text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg"
+  >
+    Примерить
+  </button>
+</div>
+</div>
+                      className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-all duration-700"
+                    />
 
                     <button
                       onClick={(e) => {
