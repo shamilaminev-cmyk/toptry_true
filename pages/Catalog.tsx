@@ -722,7 +722,7 @@ const Catalog = () => {
     Примерить
   </button>
 </div>
-</div>}
+</div>
                       className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-all duration-700"
                     />
 
