@@ -1071,6 +1071,16 @@ const Wardrobe = () => {
 
         <div className="pt-6">
           <div className="bg-zinc-900 text-white p-8 rounded-[40px] space-y-6 shadow-2xl overflow-hidden relative group">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          removeWardrobeItem(item.id);
+        }}
+        className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-xs font-bold hover:bg-red-500 hover:text-white transition z-10"
+      >
+        ×
+      </button>
+
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 blur-3xl -translate-y-1/2 translate-x-1/2"></div>
             <div className="relative z-10 space-y-2">
               <h3 className="text-xl font-bold uppercase tracking-widest">Стилизовать образ</h3>
