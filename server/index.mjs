@@ -797,15 +797,73 @@ function fashnCategoryFromSourceItems(sourceItems) {
     first?.displayCategory ||
     first?.category ||
     first?.type ||
+    first?.title ||
     ""
   ).toUpperCase();
 
-  if (raw.includes("TOP") || raw.includes("SHIRT") || raw.includes("HOODIE") || raw.includes("JACKET")) return "tops";
-  if (raw.includes("BOTTOM") || raw.includes("PANTS") || raw.includes("TROUSER") || raw.includes("SHORT")) return "bottoms";
-  if (raw.includes("DRESS") || raw.includes("ONE")) return "one-pieces";
+  if (raw.includes("BOTTOM") || raw.includes("PANTS") || raw.includes("TROUSER") || raw.includes("SHORT") || raw.includes("JEANS") || raw.includes("БРЮ") || raw.includes("ДЖИН") || raw.includes("ШОРТ")) return "bottoms";
+  if (raw.includes("DRESS") || raw.includes("ONE") || raw.includes("ПЛАТ")) return "one-pieces";
+  if (raw.includes("TOP") || raw.includes("SHIRT") || raw.includes("HOODIE") || raw.includes("SWEAT") || raw.includes("ФУТБ") || raw.includes("РУБАШ") || raw.includes("ХУДИ") || raw.includes("СВИТ")) return "tops";
 
-  // безопасный default для MVP: если FASHN включен и item один, чаще всего это верх
   return "tops";
+}
+
+function hasOuterwearSignal(sourceItems) {
+  const raw = (Array.isArray(sourceItems) ? sourceItems : [])
+    .map((i) => [
+      i?.displayCategory,
+      i?.category,
+      i?.type,
+      i?.title,
+      i?.brand,
+    ].filter(Boolean).join(" "))
+    .join(" ")
+    .toUpperCase();
+
+  return (
+    raw.includes("OUTERWEAR") ||
+    raw.includes("JACKET") ||
+    raw.includes("COAT") ||
+    raw.includes("BLAZER") ||
+    raw.includes("ПАЛЬТО") ||
+    raw.includes("КУРТ") ||
+    raw.includes("ПУХОВ") ||
+    raw.includes("БОМБЕР") ||
+    raw.includes("ВЕРХНЯЯ ОДЕЖДА")
+  );
+}
+
+function shouldUseFashnTryOn({ requestedProvider, selfieAbs, itemsAbs, sourceItems }) {
+  const provider = String(requestedProvider || "gemini").trim().toLowerCase();
+  const hybrid = provider === "hybrid";
+  const fashnOnly = provider === "fashn";
+
+  if (!hybrid && !fashnOnly) {
+    return { useFashn: false, reason: "provider_is_not_fashn" };
+  }
+
+  if (!process.env.FASHN_API_KEY) {
+    return { useFashn: false, reason: "fashn_api_key_missing" };
+  }
+
+  if (!Array.isArray(itemsAbs) || itemsAbs.length !== 1) {
+    return { useFashn: false, reason: "fashn_single_item_only" };
+  }
+
+  if (!isPublicHttpUrl(selfieAbs) || !isPublicHttpUrl(itemsAbs[0])) {
+    return { useFashn: false, reason: "fashn_requires_public_urls" };
+  }
+
+  if (hasOuterwearSignal(sourceItems) && String(process.env.FASHN_ALLOW_OUTERWEAR || "false").toLowerCase() !== "true") {
+    return { useFashn: false, reason: "outerwear_disabled_for_fashn" };
+  }
+
+  const category = fashnCategoryFromSourceItems(sourceItems);
+  if (!["tops", "bottoms", "one-pieces"].includes(category)) {
+    return { useFashn: false, reason: "unsupported_fashn_category" };
+  }
+
+  return { useFashn: true, reason: "eligible", category };
 }
 
 async function runFashnTryOn({ modelImageUrl, garmentImageUrl, category }) {
@@ -952,7 +1010,11 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
     });
     const requestedProvider = String(process.env.TRYON_PROVIDER || "gemini").trim().toLowerCase();
 
-    if (requestedProvider !== "fashn" && !GEMINI_API_KEY) {
+    if (!["gemini", "fashn", "hybrid"].includes(requestedProvider)) {
+      return res.status(500).json({ error: "Unsupported TRYON_PROVIDER" });
+    }
+
+    if ((requestedProvider === "gemini" || requestedProvider === "hybrid") && !GEMINI_API_KEY) {
       return res
         .status(500)
         .json({ error: "GEMINI_API_KEY is not configured on the server" });
@@ -986,33 +1048,75 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
 
     let imageDataUrl = "";
 
-    const canUseFashn =
-      requestedProvider === "fashn" &&
-      itemsAbs.length === 1 &&
-      isPublicHttpUrl(selfieAbs) &&
-      isPublicHttpUrl(itemsAbs[0]);
+    const fashnDecision = shouldUseFashnTryOn({
+      requestedProvider,
+      selfieAbs,
+      itemsAbs,
+      sourceItems,
+    });
 
-    if (requestedProvider === "fashn" && canUseFashn) {
-      console.log("[toptry] FASHN provider selected");
+    let actualProvider = "gemini";
+    let providerFallbackReason = "";
 
-      const fashnOutputUrl = await runFashnTryOn({
-        modelImageUrl: selfieAbs,
-        garmentImageUrl: itemsAbs[0],
-        category: fashnCategoryFromSourceItems(sourceItems),
-      });
+    if (fashnDecision.useFashn) {
+      const fashnT0 = Date.now();
+      try {
+        actualProvider = "fashn";
+        console.log("[toptry] FASHN provider selected", {
+          requestedProvider,
+          category: fashnDecision.category,
+          itemCount: itemsAbs.length,
+        });
 
-      const fashnImage = await imageToBase64(fashnOutputUrl);
-      imageDataUrl = "data:" + fashnImage.mimeType + ";base64," + fashnImage.base64;
+        const fashnOutputUrl = await runFashnTryOn({
+          modelImageUrl: selfieAbs,
+          garmentImageUrl: itemsAbs[0],
+          category: fashnDecision.category,
+        });
+
+        const fashnImage = await imageToBase64(fashnOutputUrl);
+        imageDataUrl = "data:" + fashnImage.mimeType + ";base64," + fashnImage.base64;
+
+        console.log("[toptry] try-on provider result", {
+          requestedProvider,
+          actualProvider,
+          fallbackUsed: false,
+          ms: Date.now() - fashnT0,
+        });
+      } catch (fashnErr) {
+        providerFallbackReason = String(fashnErr?.message || fashnErr).slice(0, 300);
+
+        if (requestedProvider === "fashn" && String(process.env.FASHN_FALLBACK_TO_GEMINI || "true").toLowerCase() !== "true") {
+          throw fashnErr;
+        }
+
+        console.warn("[toptry] FASHN failed, fallback to Gemini", {
+          requestedProvider,
+          reason: providerFallbackReason,
+          ms: Date.now() - fashnT0,
+        });
+
+        imageDataUrl = "";
+        actualProvider = "gemini";
+      }
     } else {
+      providerFallbackReason = fashnDecision.reason;
       if (requestedProvider === "fashn") {
         console.warn("[toptry] FASHN fallback to Gemini", {
-          reason: "FASHN requires exactly 1 public http(s) selfie/item URL",
+          reason: fashnDecision.reason,
           itemCount: itemsAbs.length,
           selfieIsPublic: isPublicHttpUrl(selfieAbs),
           firstItemIsPublic: isPublicHttpUrl(itemsAbs[0]),
         });
+      } else if (requestedProvider === "hybrid") {
+        console.log("[toptry] hybrid selected Gemini", {
+          reason: fashnDecision.reason,
+          itemCount: itemsAbs.length,
+        });
       }
+    }
 
+    if (!imageDataUrl) {
       if (!GEMINI_API_KEY) {
         return res
           .status(500)
@@ -1105,6 +1209,13 @@ Avoid brand logos and text.`;
         console.error("[debug looks/create] Gemini returned no image", JSON.stringify(response, null, 2));
         return res.status(502).json({ error: "Gemini did not return an image" });
       }
+
+      console.log("[toptry] try-on provider result", {
+        requestedProvider,
+        actualProvider: "gemini",
+        fallbackUsed: requestedProvider !== "gemini",
+        fallbackReason: providerFallbackReason || null,
+      });
     }
 
     const userId = req.auth.userId;
