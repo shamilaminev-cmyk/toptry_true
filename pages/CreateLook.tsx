@@ -22,6 +22,7 @@ const CreateLook = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [genStep, setGenStep] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [qualityMode, setQualityMode] = useState<'fast' | 'quality'>('fast');
   const selfie = user?.selfieUrl || user?.avatarUrl;
   const selectedItems = wardrobe.filter((i) => selectedIds.has(i.id));
 
@@ -86,7 +87,7 @@ const CreateLook = () => {
     }, 2200);
 
     try {
-      const lookId = await actions.createLook(selectedItems);
+      const lookId = await actions.createLook(selectedItems, qualityMode);
       clearInterval(interval);
       clearInterval(progressInterval);
       setGenStep(STAGES.length - 1);
@@ -208,6 +209,27 @@ const CreateLook = () => {
                 </div>
               ))}
             </div>
+            <div className="flex items-center gap-2 mr-3">
+              <button
+                type="button"
+                onClick={() => setQualityMode('fast')}
+                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                  qualityMode === 'fast' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500'
+                }`}
+              >
+                Fast / OpenAI
+              </button>
+              <button
+                type="button"
+                onClick={() => setQualityMode('quality')}
+                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                  qualityMode === 'quality' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500'
+                }`}
+              >
+                HQ / Gemini
+              </button>
+            </div>
+
             <button 
               onClick={handleGenerate}
               disabled={selectedIds.size < 1}
@@ -237,6 +259,9 @@ const CreateLook = () => {
             </div>
             <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-[0.2em] mt-6 animate-pulse">
               {STAGES[genStep]}
+            </p>
+            <p className="text-[10px] text-zinc-300 font-black uppercase tracking-[0.3em]">
+              {qualityMode === 'fast' ? 'FAST PREVIEW · OPENAI' : 'HQ GENERATION · GEMINI'}
             </p>
           </div>
         </div>
