@@ -1,10 +1,12 @@
 import OpenAI from "openai";
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-
-const client = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
+function getOpenAiClient() {
+  const apiKey = process.env.OPENAI_API_KEY || "";
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+  return new OpenAI({ apiKey });
+}
 
 async function fetchAsFile(url, name) {
   const r = await fetch(url);
@@ -56,6 +58,8 @@ SCENE:
 - Premium e-commerce fashion photography
 - Photorealistic
 `;
+
+  const client = getOpenAiClient();
 
   const result = await client.images.edit({
     model: "gpt-image-1",
