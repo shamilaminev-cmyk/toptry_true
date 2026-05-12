@@ -1,4 +1,16 @@
 import jwt from 'jsonwebtoken';
+
+const TOPTRY_SESSION_DAYS = Math.max(
+  1,
+  Number(process.env.TOPTRY_SESSION_DAYS || 180)
+);
+
+const TOPTRY_SESSION_MAX_AGE_MS =
+  TOPTRY_SESSION_DAYS * 24 * 60 * 60 * 1000;
+
+const TOPTRY_SESSION_EXPIRES_IN =
+  `${TOPTRY_SESSION_DAYS}d`;
+
 import bcrypt from 'bcryptjs';
 import { getPrisma } from './db.mjs';
 
@@ -17,7 +29,7 @@ export function getAuthConfig() {
       sameSite: secure ? 'none' : 'lax',
       secure,
       path: '/',
-      maxAge: 1000 * 60 * 60 * 24 * 30, // 14 days
+      maxAge: TOPTRY_SESSION_MAX_AGE_MS * 60 * 24 * 30, // 14 days
     },
   };
 }
@@ -32,7 +44,7 @@ export function signSession(user) {
   return jwt.sign(
     { sub: user.id, username: user.username, email: user.email },
     JWT_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: TOPTRY_SESSION_EXPIRES_IN }
   );
 }
 
