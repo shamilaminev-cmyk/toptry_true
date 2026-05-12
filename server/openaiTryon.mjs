@@ -16,10 +16,22 @@ async function fetchAsFile(url, name) {
 
   const ab = await r.arrayBuffer();
 
+  let mime = String(
+    r.headers.get("content-type") || "image/png"
+  ).toLowerCase().trim();
+
+  if (mime === "image/jpg") {
+    mime = "image/jpeg";
+  }
+
+  if (mime.includes(";")) {
+    mime = mime.split(";")[0].trim();
+  }
+
   return new File(
     [Buffer.from(ab)],
     name,
-    { type: r.headers.get("content-type") || "image/png" }
+    { type: mime }
   );
 }
 
@@ -40,23 +52,39 @@ export async function runOpenAiStrictTryon({
   const prompt = `
 Create a realistic fashion try-on photo.
 
-STRICT REQUIREMENTS:
-- Preserve the EXACT identity and facial structure of the person.
-- Preserve skin tone, hairstyle, body proportions and age.
-- Do NOT beautify or stylize the face.
-- The generated person must look like the same real person.
+CRITICAL IDENTITY PRESERVATION:
+- Preserve the EXACT same person from the avatar image.
+- Preserve facial geometry exactly.
+- Preserve eyes, nose, mouth, jawline, beard, hairstyle and hairline.
+- Preserve age and ethnicity.
+- Preserve body proportions exactly.
+- Do NOT beautify.
+- Do NOT make the person more attractive.
+- Do NOT change facial structure.
+- The output must look like the same real human photographed in different clothing.
 
-GARMENT REQUIREMENTS:
-- Preserve the EXACT clothing items from reference images.
-- Preserve colors, fit, materials, prints, logos and proportions.
-- Do not redesign or reinterpret garments.
-- Do not invent new clothing details.
+CRITICAL GARMENT PRESERVATION:
+- Preserve the EXACT garment from the clothing reference.
+- Preserve fabric texture exactly.
+- Preserve stitching exactly.
+- Preserve fit and silhouette exactly.
+- Preserve colors exactly.
+- Preserve patterns exactly.
+- Preserve logos and buttons exactly.
+- Do NOT redesign the garment.
+- Do NOT replace the garment with similar clothing.
+- Do NOT generate a new interpretation.
 
-SCENE:
+OUTPUT REQUIREMENTS:
+- Photorealistic fashion e-commerce photo
 - Front-facing standing pose
 - Neutral studio background
-- Premium e-commerce fashion photography
-- Photorealistic
+- Full body
+- Natural anatomy
+- No stylization
+- No cinematic effects
+- No fashion editorial style
+- No beauty retouching
 `;
 
   const client = getOpenAiClient();
