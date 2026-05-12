@@ -18,6 +18,7 @@ import {
   signSession,
 } from "./auth.mjs";
 import sharp from "sharp";
+import { runOpenAiStrictTryon } from "./openaiTryon.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
 
@@ -866,6 +867,8 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
     const selfieDataUrl = b.selfieDataUrl;
     const itemImageUrls = b.itemImageUrls;
     const aspectRatio = b.aspectRatio;
+    const qualityMode = String(b.qualityMode || "quality").trim().toLowerCase();
+    const useOpenAI = qualityMode === "fast";
     const sourceItems = Array.isArray(b.sourceItems) ? b.sourceItems : [];
     const itemIds = Array.isArray(b.itemIds) ? b.itemIds.map(String) : [];
     const priceBuyNowRUB = Number(b.priceBuyNowRUB || 0);
@@ -884,7 +887,27 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
 
     let imageDataUrl = "";
 
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    if (useOpenAI) {
+      console.log("[toptry] using OpenAI strict fast try-on", {
+        itemCount: itemsAbs.length,
+      });
+
+      const b64 = await runOpenAiStrictTryon({
+        selfieUrl: selfieAbs,
+        itemUrls: itemsAbs,
+      });
+
+      if (!b64) {
+        return res.status(502).json({ error: "OpenAI did not return an image" });
+      }
+
+      imageDataUrl = `data:image/png;base64,${b64}`;
+    } else {
+      console.log("[toptry] using Gemini quality try-on", {
+        itemCount: itemsAbs.length,
+      });
+
+      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
       console.log("[debug looks/create] before imageToBase64", {
         selfieAbsPrefix: typeof selfieAbs === "string" ? selfieAbs.slice(0, 64) : null,
@@ -970,6 +993,7 @@ Avoid brand logos and text.`;
         console.error("[debug looks/create] Gemini returned no image", JSON.stringify(response, null, 2));
         return res.status(502).json({ error: "Gemini did not return an image" });
       }
+    }
 
     const userId = req.auth.userId;
     const p = getPrisma();
