@@ -868,7 +868,7 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
     const itemImageUrls = b.itemImageUrls;
     const aspectRatio = b.aspectRatio;
     const qualityMode = String(b.qualityMode || "quality").trim().toLowerCase();
-    const useOpenAI = qualityMode === "fast";
+    const useOpenAI = false;
     const sourceItems = Array.isArray(b.sourceItems) ? b.sourceItems : [];
     const itemIds = Array.isArray(b.itemIds) ? b.itemIds.map(String) : [];
     const priceBuyNowRUB = Number(b.priceBuyNowRUB || 0);
@@ -1857,6 +1857,42 @@ function normalizeCatalogCurrency(value) {
   return s;
 }
 
+function normalizeCatalogSizes(raw) {
+  const s = String(raw || "").toUpperCase();
+
+  const letterSizes = Array.from(
+    new Set(
+      (s.match(/\b(XXL|XL|XS|S|M|L)\b/g) || [])
+        .map((v) => String(v).trim().toUpperCase())
+    )
+  );
+
+  const shoeSizes = Array.from(
+    new Set(
+      (s.match(/\b(3[5-9]|4[0-6])\b/g) || [])
+        .map((v) => String(v).trim())
+    )
+  );
+
+  return { letterSizes, shoeSizes };
+}
+
+function buildCatalogSizes(row, category, rawText) {
+  const text = [
+    rawText,
+    pickFirst(row, ["sizes", "size", "available_sizes", "param", "params", "description", "name", "title"])
+  ].join(" ");
+
+  const { letterSizes, shoeSizes } = normalizeCatalogSizes(text);
+  const c = String(category || "").toUpperCase();
+
+  return {
+    sizesTop: ["TOPS", "JACKETS", "DRESS"].includes(c) ? letterSizes : [],
+    sizesBottom: ["BOTTOMS", "DRESS"].includes(c) ? letterSizes : [],
+    sizesShoes: c === "SHOES" ? shoeSizes : [],
+  };
+}
+
 function normalizeCatalogGender(raw) {
   const s = String(raw || "").toLowerCase();
 
@@ -2287,6 +2323,8 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
       const gender = normalizeCatalogGender(haystack);
       const category = normalizeCatalogCategory(haystack);
 
+      const catalogSizes = buildCatalogSizes(r, category, haystack);
+
       const data = {
         id: `cat-sportcourt-${externalId}`,
         merchant: "sportcourt",
@@ -2295,6 +2333,7 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
         brand: brand || null,
         category,
         gender,
+        ...catalogSizes,
         price,
         oldPrice,
         currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
@@ -2445,6 +2484,8 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       const gender = normalizeCatalogGender(haystack);
       const category = normalizeCatalogCategory(haystack);
 
+      const catalogSizes = buildCatalogSizes(r, category, [rawCategory, haystack].join(" "));
+
       const data = {
         id: `cat-sportmaster-${externalId}`,
         merchant: "sportmaster",
@@ -2453,6 +2494,7 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
         brand: brand || null,
         category,
         gender,
+        ...catalogSizes,
         price,
         oldPrice,
         currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
@@ -2619,6 +2661,8 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
                   ? "ACCESSORIES"
                   : normalizeCatalogCategory(remingtonSignals);
 
+      const catalogSizes = buildCatalogSizes(r, category, [remingtonSignals, haystack].join(" "));
+
       const data = {
         id: `cat-remington-${externalId}`,
         merchant: "remington",
@@ -2627,6 +2671,7 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
         brand: brand || null,
         category,
         gender,
+        ...catalogSizes,
         price,
         oldPrice,
         currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
@@ -2774,6 +2819,8 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       const gender = normalizeCatalogGender(haystack);
       const category = normalizeCatalogCategory(haystack);
 
+      const catalogSizes = buildCatalogSizes(r, category, [rawCategory, haystack].join(" "));
+
       const data = {
         id: `cat-rendezvous-${externalId}`,
         merchant: "rendezvous",
@@ -2782,6 +2829,7 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
         brand: brand || null,
         category,
         gender,
+        ...catalogSizes,
         price,
         oldPrice,
         currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
@@ -3030,6 +3078,8 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
       const gender = normalizeCatalogGender(haystack);
       const category = normalizeCatalogCategory(haystack);
 
+      const catalogSizes = buildCatalogSizes(r, category, [rawCategory, haystack].join(" "));
+
       const data = {
         id: `cat-thecultt-${externalId}`,
         merchant: "thecultt",
@@ -3038,6 +3088,7 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
         brand: brand || null,
         category,
         gender,
+        ...catalogSizes,
         price,
         oldPrice,
         currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
@@ -3321,7 +3372,16 @@ app.get("/api/catalog/products", async (req, res) => {
         gender: p.gender || "UNISEX",
         category: p.category || "OTHER",
         displayCategory: normalizedDisplayCategory,
-        sizes: ["ONE"],
+        sizes: [
+          ...(p.sizesTop || []),
+          ...(p.sizesBottom || []),
+          ...(p.sizesShoes || []),
+        ].length
+          ? Array.from(new Set([...(p.sizesTop || []), ...(p.sizesBottom || []), ...(p.sizesShoes || [])]))
+          : ["ONE"],
+        sizesTop: p.sizesTop || [],
+        sizesBottom: p.sizesBottom || [],
+        sizesShoes: p.sizesShoes || [],
         images: p.imageUrl ? [p.imageUrl] : [],
         storeId: p.merchant,
         storeName:
