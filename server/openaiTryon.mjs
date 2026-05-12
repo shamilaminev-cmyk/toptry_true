@@ -50,60 +50,93 @@ export async function runOpenAiStrictTryon({
   );
 
   const prompt = `
-IDENTITY-LOCKED VIRTUAL TRY-ON.
+STRICT IDENTITY-PRESERVING VIRTUAL TRY-ON.
 
-The FIRST image is the identity reference.
-All other images are clothing references.
+INPUTS:
+- Image 1 is the PERSON / IDENTITY reference.
+- All other images are GARMENT references.
 
-PRIMARY GOAL:
-Generate the same real person from the FIRST image wearing the provided clothing items.
+NON-NEGOTIABLE TASK:
+Create a new full-body image of the EXACT SAME PERSON from Image 1 wearing the referenced garments.
 
-IDENTITY IS MORE IMPORTANT THAN FASHION BEAUTY.
-If there is any conflict, preserve the person's identity over making the image more attractive.
+IDENTITY LOCK — HIGHEST PRIORITY:
+The generated face must be recognizable as the same individual from Image 1.
+Do not generate a similar-looking person.
+Do not generate an idealized replacement.
+Do not infer a new face.
 
-CRITICAL IDENTITY RULES:
-- Preserve the exact same face from the FIRST image.
-- Preserve face shape, head shape and skull proportions.
-- Preserve forehead height and hairline.
-- Preserve hairstyle, hair color and hair density.
-- Preserve eyebrows, eyes, eyelids and eye spacing.
-- Preserve nose shape and nose size.
-- Preserve mouth shape, lips and smile/expression.
-- Preserve cheeks, jawline, chin and neck.
-- Preserve beard/stubble/moustache exactly if present.
-- Preserve glasses exactly if present.
-- Preserve age, weight, body proportions and posture.
-- Preserve facial asymmetry and natural imperfections.
-- Do NOT make the person younger.
-- Do NOT make the person slimmer.
-- Do NOT make the person more handsome.
-- Do NOT beautify.
-- Do NOT smooth skin.
-- Do NOT create an idealized face.
-- Do NOT change expression unless absolutely required.
-- The output must be recognizable as the SAME PERSON, not a similar person.
+PRESERVE EXACTLY:
+- head size and head shape
+- face outline and skull proportions
+- forehead height
+- hairline
+- hair color
+- hairstyle
+- eyebrows
+- eye shape
+- eye spacing
+- eyelids
+- nose bridge
+- nose width
+- nostrils
+- mouth shape
+- lip shape
+- expression
+- cheeks
+- jawline
+- chin
+- neck
+- age
+- skin texture
+- facial asymmetry
+- body build
+- posture
+- hands if visible
 
-GARMENT RULES:
-- Dress the same person in the clothing items from the reference images.
-- Preserve garment color, fabric texture, silhouette, cut, length, lapels, buttons, zipper, pockets, collar, hood, pattern and proportions.
-- Do NOT replace the garment with a similar item.
-- Do NOT invent a new garment.
-- Do NOT add extra accessories unless they already exist in the references.
+FORBIDDEN FACE CHANGES:
+- no beautification
+- no younger face
+- no older face
+- no slimmer face
+- no stronger jaw
+- no larger eyes
+- no smoother skin
+- no different expression
+- no model-like face
+- no celebrity-like face
+- no stock-photo face
+- no generic commercial face
+- no fashion campaign retouching
 
-COMPOSITION:
-- Full body.
-- Front-facing standing pose.
-- Neutral white or light studio background.
-- Realistic e-commerce try-on photo.
-- Natural lighting.
-- No cinematic style.
-- No editorial fashion styling.
-- No luxury campaign retouching.
-- No text, no watermark, no logo overlay.
+GARMENT LOCK:
+Use the garment references as clothing to be worn by the same person.
+Preserve garment color, fabric, texture, weave, pattern, lapels, collar, cuffs, buttons, pockets, length, fit and silhouette.
+Do not replace garments with similar garments.
+Do not invent extra layers.
+Do not add accessories that are not in Image 1 or garment references.
 
-NEGATIVE CONSTRAINT:
-A result with a beautiful but different face is a failed result.
-A result with a slightly imperfect outfit but the exact same face is preferred.
+STYLE:
+This is NOT a fashion editorial.
+This is NOT a creative reinterpretation.
+This is NOT a beauty portrait.
+This is a virtual fitting room result.
+
+OUTPUT:
+- full body
+- standing
+- front-facing or close to the original pose
+- neutral white background
+- realistic camera photo
+- minimal retouching
+- no text
+- no logo overlay
+- no watermark
+
+FAILURE CONDITIONS:
+If the face is more attractive but less similar, the result is wrong.
+If the person looks like a different man, the result is wrong.
+If the clothing is beautiful but not the referenced clothing, the result is wrong.
+Identity preservation is more important than visual polish.
 
 `;
 
