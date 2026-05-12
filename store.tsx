@@ -713,7 +713,7 @@ register: async (email: string, username: string, password: string) => {
           itemIds,
           sourceItems,
           aspectRatio: '3:4',
-          qualityMode: 'fast',
+          qualityMode: 'quality',
           priceBuyNowRUB,
         };
 
