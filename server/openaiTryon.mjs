@@ -27,7 +27,7 @@ export async function runOpenAiStrictTryon({
   selfieUrl,
   itemUrls,
 }) {
-  if (!OPENAI_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
