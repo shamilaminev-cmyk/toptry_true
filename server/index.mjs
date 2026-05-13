@@ -3472,6 +3472,48 @@ app.get("/api/catalog/products", async (req, res) => {
       sizeShoes: effectiveMySizeShoes,
     });
 
+    const baseWhereForMySize = buildCatalogDbWhere({
+      merchant,
+      gender,
+      category,
+      displayCategory,
+      q,
+      discountOnly,
+      brand,
+      priceMin,
+      priceMax,
+      size: "",
+      sizeTop: "",
+      sizeBottom: "",
+      sizeShoes: "",
+    });
+
+    const matchesEffectiveMySize = (p) => {
+      if (rawSize !== "MY") return true;
+
+      const c = String(p?.category || "").trim().toUpperCase();
+
+      if (c === "SHOES") {
+        return !!effectiveMySizeShoes && Array.isArray(p?.sizesShoes) && p.sizesShoes.includes(effectiveMySizeShoes);
+      }
+
+      if (c === "BOTTOMS") {
+        return !!effectiveMySizeBottom && Array.isArray(p?.sizesBottom) && p.sizesBottom.includes(effectiveMySizeBottom);
+      }
+
+      if (["TOPS", "JACKETS"].includes(c)) {
+        return !!effectiveMySizeTop && Array.isArray(p?.sizesTop) && p.sizesTop.includes(effectiveMySizeTop);
+      }
+
+      if (c === "DRESS") {
+        const topOk = !!effectiveMySizeTop && Array.isArray(p?.sizesTop) && p.sizesTop.includes(effectiveMySizeTop);
+        const bottomOk = !!effectiveMySizeBottom && Array.isArray(p?.sizesBottom) && p.sizesBottom.includes(effectiveMySizeBottom);
+        return topOk || bottomOk;
+      }
+
+      return false;
+    };
+
     const orderBy = getCatalogOrderBy(sort);
 
     const mapProduct = (p) => {
@@ -3531,7 +3573,32 @@ app.get("/api/catalog/products", async (req, res) => {
     let rows = [];
     let total = 0;
 
-    if (sort === "discount_desc") {
+    if (rawSize === "MY") {
+      let allRows = await prisma.catalogProduct.findMany({
+        where: baseWhereForMySize,
+        orderBy: sort === "discount_desc" ? [{ updatedAt: "desc" }] : orderBy,
+      });
+
+      allRows = allRows.filter(matchesEffectiveMySize);
+
+      if (sort === "discount_desc") {
+        allRows.sort((a, b) => {
+          const priceA = Number(a.price || 0);
+          const oldA = Number(a.oldPrice || 0);
+          const discountA = oldA > priceA && priceA > 0 ? (oldA - priceA) / oldA : 0;
+
+          const priceB = Number(b.price || 0);
+          const oldB = Number(b.oldPrice || 0);
+          const discountB = oldB > priceB && priceB > 0 ? (oldB - priceB) / oldB : 0;
+
+          if (discountB !== discountA) return discountB - discountA;
+          return Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
+        });
+      }
+
+      total = allRows.length;
+      rows = allRows.slice(offset, offset + limit);
+    } else if (sort === "discount_desc") {
       const allRows = await prisma.catalogProduct.findMany({
         where,
         orderBy: [{ updatedAt: "desc" }],
