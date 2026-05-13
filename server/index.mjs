@@ -3402,7 +3402,18 @@ app.get("/api/catalog/products", async (req, res) => {
     let mySizeBottom = "";
     let mySizeShoes = "";
 
-    if (rawSize === "MY" && req.auth?.userId) {
+    if (rawSize === "MY") {
+      if (!req.auth?.userId) {
+        return res.json({
+          products: [],
+          total: 0,
+          limit,
+          offset,
+          hasMore: false,
+          reason: "my_size_requires_auth",
+        });
+      }
+
       const me = await prisma.user.findUnique({
         where: { id: req.auth.userId },
         select: { sizeTop: true, sizeBottom: true, sizeShoes: true },
@@ -3411,6 +3422,17 @@ app.get("/api/catalog/products", async (req, res) => {
       mySizeTop = me?.sizeTop || "";
       mySizeBottom = me?.sizeBottom || "";
       mySizeShoes = me?.sizeShoes || "";
+
+      if (!mySizeTop && !mySizeBottom && !mySizeShoes) {
+        return res.json({
+          products: [],
+          total: 0,
+          limit,
+          offset,
+          hasMore: false,
+          reason: "my_size_not_set",
+        });
+      }
     }
 
     const where = buildCatalogDbWhere({
