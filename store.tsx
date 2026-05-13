@@ -27,7 +27,7 @@ interface AppState {
     addMultipleToWardrobe: (products: Product[]) => void;
     upsertWardrobeItem: (item: WardrobeItem) => void;
     removeFromWardrobe: (id: string) => void;
-    createLook: (items: WardrobeItem[], qualityMode?: 'fast' | 'quality') => Promise<string | undefined>;
+    createLook: (items: WardrobeItem[]) => Promise<string | undefined>;
     setSelfie: (url: string) => void;
     likeLook: (id: string) => void;
     reactToLook: (id: string, reaction: 'like' | 'want_try' | 'would_buy') => Promise<void>;
@@ -631,7 +631,7 @@ register: async (email: string, username: string, password: string) => {
         console.error('[wardrobe] delete failed', e);
       }
     },
-    createLook: async (selectedItems: WardrobeItem[], qualityMode: 'fast' | 'quality' = 'fast') => {
+    createLook: async (selectedItems: WardrobeItem[]) => {
       const selfieUrl = user?.selfieUrl || user?.avatarUrl;
       if (!user || !selfieUrl) {
         throw new Error('CREATE_LOOK_PRECHECK: missing user or selfie');
@@ -713,7 +713,7 @@ register: async (email: string, username: string, password: string) => {
           itemIds,
           sourceItems,
           aspectRatio: '3:4',
-          qualityMode,
+          qualityMode: 'quality',
           priceBuyNowRUB,
         };
 
