@@ -2117,12 +2117,7 @@ function buildCatalogDbWhere({
   }
 
   if (sizeOr.length) {
-    and.push({
-      OR: [
-        ...sizeOr,
-        { category: "ACCESSORIES" },
-      ],
-    });
+    and.push({ OR: sizeOr });
   }
 
   return { AND: and };
