@@ -3435,6 +3435,27 @@ app.get("/api/catalog/products", async (req, res) => {
       }
     }
 
+    let effectiveMySizeTop = mySizeTop;
+    let effectiveMySizeBottom = mySizeBottom;
+    let effectiveMySizeShoes = mySizeShoes;
+
+    if (rawSize === "MY") {
+      const requestedCategory = String(category || displayCategory || "").trim().toUpperCase();
+
+      if (requestedCategory === "SHOES") {
+        effectiveMySizeTop = "";
+        effectiveMySizeBottom = "";
+      } else if (requestedCategory === "BOTTOMS") {
+        effectiveMySizeTop = "";
+        effectiveMySizeShoes = "";
+      } else if (["TOPS", "JACKETS", "OUTERWEAR"].includes(requestedCategory)) {
+        effectiveMySizeBottom = "";
+        effectiveMySizeShoes = "";
+      } else if (["DRESS", "DRESSES"].includes(requestedCategory)) {
+        effectiveMySizeShoes = "";
+      }
+    }
+
     const where = buildCatalogDbWhere({
       merchant,
       gender,
@@ -3446,9 +3467,9 @@ app.get("/api/catalog/products", async (req, res) => {
       priceMin,
       priceMax,
       size: rawSize === "MY" ? "" : rawSize,
-      sizeTop: mySizeTop,
-      sizeBottom: mySizeBottom,
-      sizeShoes: mySizeShoes,
+      sizeTop: effectiveMySizeTop,
+      sizeBottom: effectiveMySizeBottom,
+      sizeShoes: effectiveMySizeShoes,
     });
 
     const orderBy = getCatalogOrderBy(sort);
