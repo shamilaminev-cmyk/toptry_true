@@ -1877,12 +1877,38 @@ function normalizeCatalogSizes(raw) {
   return { letterSizes, shoeSizes };
 }
 
-function buildCatalogSizes(row, category, rawText) {
-  const text = [
-    rawText,
-    pickFirst(row, ["sizes", "size", "available_sizes", "param", "params", "description", "name", "title"])
-  ].join(" ");
+function extractExplicitSizeText(row) {
+  const parts = [];
 
+  for (const key of ["sizes", "size", "available_sizes"]) {
+    const v = row?.[key];
+    if (v) parts.push(String(v));
+  }
+
+  const param = String(row?.param || "");
+  for (const chunk of param.split("|")) {
+    const [k, ...rest] = chunk.split(":");
+    const key = String(k || "").trim().toLowerCase();
+    const value = rest.join(":").trim();
+
+    if (!value) continue;
+
+    if (
+      key === "размер" ||
+      key === "размеры" ||
+      key === "size" ||
+      key === "sizes" ||
+      key.includes("размер товара")
+    ) {
+      parts.push(value);
+    }
+  }
+
+  return parts.join(" ");
+}
+
+function buildCatalogSizes(row, category, rawText) {
+  const text = extractExplicitSizeText(row);
   const { letterSizes, shoeSizes } = normalizeCatalogSizes(text);
   const c = String(category || "").toUpperCase();
 
