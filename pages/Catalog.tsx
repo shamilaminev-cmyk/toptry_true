@@ -269,6 +269,7 @@ const Catalog = () => {
     if (priceMin) params.set('priceMin', priceMin);
     if (priceMax) params.set('priceMax', priceMax);
     if (sort) params.set('sort', sort);
+    if (size) params.set('size', size);
 
         const url = withApiOrigin(`/api/catalog/products?${params.toString()}`);
         const resp = await fetch(url, { credentials: 'include' });
@@ -299,7 +300,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort]);
+  }, [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size]);
 
   useEffect(() => {
     try {
@@ -329,6 +330,7 @@ const Catalog = () => {
     if (priceMin) params.set('priceMin', priceMin);
     if (priceMax) params.set('priceMax', priceMax);
     if (sort) params.set('sort', sort);
+    if (size) params.set('size', size);
 
     const base = (window.location.hash || '#/catalog').split('?')[0] || '#/catalog';
     const qs = params.toString();
