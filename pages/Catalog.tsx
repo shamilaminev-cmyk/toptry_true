@@ -248,6 +248,10 @@ const Catalog = () => {
   };
 
   useEffect(() => {
+    setItems([]);
+    setOffset(0);
+    setHasMore(false);
+
     let cancelled = false;
 
     const run = async () => {
