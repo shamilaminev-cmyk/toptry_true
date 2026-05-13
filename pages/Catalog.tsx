@@ -58,6 +58,8 @@ const Catalog = () => {
   const [draftPriceMax, setDraftPriceMax] = useState('');
   const [size, setSize] = useState('');
   const [draftSize, setDraftSize] = useState('');
+  const [sizeLoose, setSizeLoose] = useState(false);
+  const [draftSizeLoose, setDraftSizeLoose] = useState(false);
 
   const [draftTotal, setDraftTotal] = useState<number | null>(null)
   const [items, setItems] = useState<any[]>([]);
@@ -91,6 +93,7 @@ const Catalog = () => {
       priceMax?: string;
       sort?: string;
       size?: string;
+      sizeLoose?: boolean;
     } = null;
 
     if (!hasHashFilters) {
@@ -119,6 +122,7 @@ const Catalog = () => {
     const priceMaxParam = hasHashFilters ? (hashParams.get('priceMax') || '') : (saved?.priceMax || '');
     const sortParam = hasHashFilters ? (hashParams.get('sort') || '') : (saved?.sort || '');
     const sizeParam = hasHashFilters ? (hashParams.get('size') || '') : (saved?.size || '');
+    const sizeLooseParam = sizeParam === 'MY' && (hasHashFilters ? hashParams.get('sizeLoose') === '1' : Boolean(saved?.sizeLoose));
 
     setSearch(q);
     setDebouncedSearch(q);
@@ -138,6 +142,8 @@ const Catalog = () => {
     setSort(sortParam);
     setSize(sizeParam);
     setDraftSize(sizeParam);
+    setSizeLoose(sizeLooseParam);
+    setDraftSizeLoose(sizeLooseParam);
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
@@ -173,7 +179,8 @@ const Catalog = () => {
     setDraftPriceMin(priceMin);
     setDraftPriceMax(priceMax);
     setDraftSize(size);
-  }, [filtersOpen, gender, displayCategory, discountOnly, brand, priceMin, priceMax, size]);
+    setDraftSizeLoose(size === 'MY' ? sizeLoose : false);
+  }, [filtersOpen, gender, displayCategory, discountOnly, brand, priceMin, priceMax, size, sizeLoose]);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,6 +237,7 @@ const Catalog = () => {
     if (priceMax) params.set('priceMax', priceMax);
     if (sort) params.set('sort', sort);
     if (size) params.set('size', size);
+    if (size === 'MY' && sizeLoose) params.set('sizeLoose', '1');
 
     const url = withApiOrigin(`/api/catalog/products?${params.toString()}`);
     const resp = await fetch(url, { credentials: 'include' });
@@ -270,6 +278,7 @@ const Catalog = () => {
     if (priceMax) params.set('priceMax', priceMax);
     if (sort) params.set('sort', sort);
     if (size) params.set('size', size);
+    if (size === 'MY' && sizeLoose) params.set('sizeLoose', '1');
 
         const url = withApiOrigin(`/api/catalog/products?${params.toString()}`);
         const resp = await fetch(url, { credentials: 'include' });
@@ -300,7 +309,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size]);
+  }, [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
 
   useEffect(() => {
     try {
@@ -314,10 +323,11 @@ const Catalog = () => {
         priceMax,
         sort,
         size,
+        sizeLoose: size === 'MY' && sizeLoose,
       };
       window.sessionStorage.setItem(CATALOG_FILTERS_STORAGE_KEY, JSON.stringify(payload));
     } catch {}
-  }, [debouncedSearch, gender, displayCategory, discountOnly, brand, priceMin, priceMax, sort, size]);
+  }, [debouncedSearch, gender, displayCategory, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -331,6 +341,7 @@ const Catalog = () => {
     if (priceMax) params.set('priceMax', priceMax);
     if (sort) params.set('sort', sort);
     if (size) params.set('size', size);
+    if (size === 'MY' && sizeLoose) params.set('sizeLoose', '1');
 
     const base = (window.location.hash || '#/catalog').split('?')[0] || '#/catalog';
     const qs = params.toString();
@@ -349,6 +360,7 @@ const Catalog = () => {
     priceMax,
     sort,
     size,
+    sizeLoose,
   ]);
 
   const isInWardrobe = (product: any) => {
@@ -380,11 +392,13 @@ const Catalog = () => {
     setPriceMax('');
     setSort('');
     setSize('');
+    setSizeLoose(false);
     setDraftDiscountOnly(false);
     setDraftBrand('');
     setDraftPriceMin('');
     setDraftPriceMax('');
     setDraftSize('');
+    setDraftSizeLoose(false);
     try {
       window.sessionStorage.removeItem(CATALOG_FILTERS_STORAGE_KEY);
     } catch {}
@@ -399,6 +413,7 @@ const Catalog = () => {
     setDraftPriceMin('');
     setDraftPriceMax('');
     setDraftSize('');
+    setDraftSizeLoose(false);
   };
 
   
@@ -419,6 +434,7 @@ const Catalog = () => {
         if (draftPriceMin) params.set('priceMin', draftPriceMin)
         if (draftPriceMax) params.set('priceMax', draftPriceMax)
         if (draftSize) params.set('size', draftSize)
+        if (draftSize === 'MY' && draftSizeLoose) params.set('sizeLoose', '1')
 
         params.set('limit', '1') // только ради total
 
@@ -452,7 +468,8 @@ const Catalog = () => {
     draftDiscountOnly,
     draftPriceMin,
     draftPriceMax,
-    draftSize
+    draftSize,
+    draftSizeLoose
   ])
 
 
@@ -464,6 +481,7 @@ const Catalog = () => {
     setPriceMin(draftPriceMin);
     setPriceMax(draftPriceMax);
     setSize(draftSize);
+    setSizeLoose(draftSize === 'MY' ? draftSizeLoose : false);
     setFiltersOpen(false);
   };
 
@@ -483,13 +501,13 @@ const Catalog = () => {
   const filteredCountLabel = useMemo(() => total, [total]);
   const activeFiltersCount = useMemo(
     () =>
-      [gender, displayCategory, debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size].filter(Boolean).length,
-    [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size]
+      [gender, displayCategory, debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+    [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]
   );
   const draftActiveFiltersCount = useMemo(
     () =>
-      [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSize].filter(Boolean).length,
-    [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSize]
+      [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSize === 'MY' && draftSizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+    [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSizeLoose]
   );
   const applyButtonLabel = useMemo(() => {
     if (loading) return 'Загружаем...';
@@ -532,6 +550,7 @@ const Catalog = () => {
               setDraftPriceMin(priceMin);
               setDraftPriceMax(priceMax);
               setDraftSize(size);
+              setDraftSizeLoose(size === 'MY' ? sizeLoose : false);
               setFiltersOpen(true);
             }}
             className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 flex items-center justify-between"
@@ -570,7 +589,7 @@ const Catalog = () => {
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           Найдено: {filteredCountLabel}
         </p>
-        {(gender || displayCategory || search || discountOnly || brand || priceMin || priceMax || sort || size) && (
+        {(gender || displayCategory || search || discountOnly || brand || priceMin || priceMax || sort || size || (size === 'MY' && sizeLoose)) && (
           <button
             onClick={clearFilters}
             className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 underline underline-offset-4"
@@ -655,7 +674,11 @@ const Catalog = () => {
 
             <select
               value={draftSize}
-              onChange={(e) => setDraftSize(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setDraftSize(next);
+                if (next !== 'MY') setDraftSizeLoose(false);
+              }}
               className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
             >
               <option value="">Размер</option>
@@ -691,19 +714,39 @@ const Catalog = () => {
               Со скидкой
             </button>
 
-            <button
-              onClick={() => {
-                if (!hasProfileSize) return;
-                setDraftSize((v) => (v === 'MY' ? '' : 'MY'));
-              }}
-              disabled={!hasProfileSize}
-              title={hasProfileSize ? mySizeLabel : 'Укажите размеры в профиле'}
-              className={`w-full h-12 inline-flex items-center justify-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                draftSize === 'MY' ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
-              }`}
-            >
-              Мой размер
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  if (!hasProfileSize) return;
+                  setDraftSize((v) => {
+                    const next = v === 'MY' ? '' : 'MY';
+                    if (next !== 'MY') setDraftSizeLoose(false);
+                    return next;
+                  });
+                }}
+                disabled={!hasProfileSize}
+                title={hasProfileSize ? mySizeLabel : 'Укажите размеры в профиле'}
+                className={`w-full h-12 inline-flex items-center justify-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                  draftSize === 'MY' ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                }`}
+              >
+                Мой размер
+              </button>
+
+              <button
+                onClick={() => {
+                  if (draftSize !== 'MY') return;
+                  setDraftSizeLoose((v) => !v);
+                }}
+                disabled={draftSize !== 'MY'}
+                title="Показывать соседние размеры"
+                className={`w-full h-12 inline-flex items-center justify-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                  draftSize === 'MY' && draftSizeLoose ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                }`}
+              >
+                ± 1 размер
+              </button>
+            </div>
 
             <div className="sticky bottom-0 -mx-5 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] bg-white border-t border-zinc-100 grid grid-cols-2 gap-2">
               <button
