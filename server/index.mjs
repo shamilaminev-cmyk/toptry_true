@@ -3646,23 +3646,6 @@ app.get("/api/catalog/products", async (req, res) => {
       sizeLoose,
     });
 
-    const baseWhereForMySize = buildCatalogDbWhere({
-      merchant,
-      gender,
-      category,
-      displayCategory,
-      q,
-      discountOnly,
-      brand,
-      priceMin,
-      priceMax,
-      size: "",
-      sizeTop: "",
-      sizeBottom: "",
-      sizeShoes: "",
-      sizeLoose: false,
-    });
-
     const matchesEffectiveMySize = (p) => {
       if (rawSize !== "MY") return true;
 
@@ -3767,7 +3750,7 @@ app.get("/api/catalog/products", async (req, res) => {
 
     if (rawSize === "MY") {
       let allRows = await prisma.catalogProduct.findMany({
-        where: baseWhereForMySize,
+        where,
         orderBy: sort === "discount_desc" ? [{ updatedAt: "desc" }] : orderBy,
       });
 
