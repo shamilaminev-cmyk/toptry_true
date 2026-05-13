@@ -2016,6 +2016,10 @@ function buildCatalogDbWhere({
   brand,
   priceMin,
   priceMax,
+  size,
+  sizeTop,
+  sizeBottom,
+  sizeShoes,
 }) {
   const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington"];
 
@@ -2062,6 +2066,61 @@ function buildCatalogDbWhere({
         { title: { contains: needle, mode: "insensitive" } },
         { brand: { contains: needle, mode: "insensitive" } },
         { category: { contains: needle, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  const normalizeLetterSizeForFilter = (v) => {
+    const s = String(v || "").trim().toUpperCase();
+    return ["XS", "S", "M", "L", "XL", "XXL"].includes(s) ? s : "";
+  };
+
+  const normalizeShoeSizeForFilter = (v) => {
+    const s = String(v || "").trim();
+    return /^(3[5-9]|4[0-6])$/.test(s) ? s : "";
+  };
+
+  const directLetterSize = normalizeLetterSizeForFilter(size);
+  const directShoeSize = normalizeShoeSizeForFilter(size);
+
+  const topSize = normalizeLetterSizeForFilter(sizeTop || directLetterSize);
+  const bottomSize = normalizeLetterSizeForFilter(sizeBottom || directLetterSize);
+  const shoeSize = normalizeShoeSizeForFilter(sizeShoes || directShoeSize);
+
+  const sizeOr = [];
+
+  if (topSize) {
+    sizeOr.push({
+      AND: [
+        { category: { in: ["TOPS", "JACKETS", "DRESS"] } },
+        { sizesTop: { has: topSize } },
+      ],
+    });
+  }
+
+  if (bottomSize) {
+    sizeOr.push({
+      AND: [
+        { category: { in: ["BOTTOMS", "DRESS"] } },
+        { sizesBottom: { has: bottomSize } },
+      ],
+    });
+  }
+
+  if (shoeSize) {
+    sizeOr.push({
+      AND: [
+        { category: "SHOES" },
+        { sizesShoes: { has: shoeSize } },
+      ],
+    });
+  }
+
+  if (sizeOr.length) {
+    and.push({
+      OR: [
+        ...sizeOr,
+        { category: "ACCESSORIES" },
       ],
     });
   }
@@ -3267,6 +3326,10 @@ app.get("/api/catalog/brands", async (req, res) => {
       brand: "",
       priceMin: "",
       priceMax: "",
+      size: "",
+      sizeTop: "",
+      sizeBottom: "",
+      sizeShoes: "",
     });
 
     const rows = await prisma.catalogProduct.findMany({
@@ -3335,6 +3398,26 @@ app.get("/api/catalog/products", async (req, res) => {
         ? req.query.sort.trim()
         : "";
 
+    const rawSize =
+      typeof req.query.size === "string" && req.query.size.trim()
+        ? req.query.size.trim().toUpperCase()
+        : "";
+
+    let mySizeTop = "";
+    let mySizeBottom = "";
+    let mySizeShoes = "";
+
+    if (rawSize === "MY" && req.auth?.userId) {
+      const me = await prisma.user.findUnique({
+        where: { id: req.auth.userId },
+        select: { sizeTop: true, sizeBottom: true, sizeShoes: true },
+      });
+
+      mySizeTop = me?.sizeTop || "";
+      mySizeBottom = me?.sizeBottom || "";
+      mySizeShoes = me?.sizeShoes || "";
+    }
+
     const where = buildCatalogDbWhere({
       merchant,
       gender,
@@ -3345,6 +3428,10 @@ app.get("/api/catalog/products", async (req, res) => {
       brand,
       priceMin,
       priceMax,
+      size: rawSize === "MY" ? "" : rawSize,
+      sizeTop: mySizeTop,
+      sizeBottom: mySizeBottom,
+      sizeShoes: mySizeShoes,
     });
 
     const orderBy = getCatalogOrderBy(sort);
@@ -3364,6 +3451,7 @@ app.get("/api/catalog/products", async (req, res) => {
 
       return {
         id: p.id,
+        merchant: p.merchant,
         title: p.title,
         price,
         oldPrice: oldPrice > price ? oldPrice : undefined,

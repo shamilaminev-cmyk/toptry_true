@@ -37,7 +37,7 @@ const PAGE_SIZE = 24;
 const CATALOG_FILTERS_STORAGE_KEY = 'toptry.catalog.filters.v1';
 
 const Catalog = () => {
-  const { wardrobe, actions } = useAppState();
+  const { wardrobe, actions, user } = useAppState() as any;
 
   const [gender, setGender] = useState<'' | Gender>('');
   const [draftGender, setDraftGender] = useState<'' | Gender>('');
@@ -67,6 +67,13 @@ const Catalog = () => {
 
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  const hasProfileSize = Boolean(user?.sizeTop || user?.sizeBottom || user?.sizeShoes);
+  const mySizeLabel = [
+    user?.sizeTop ? `верх ${user.sizeTop}` : '',
+    user?.sizeBottom ? `низ ${user.sizeBottom}` : '',
+    user?.sizeShoes ? `обувь ${user.sizeShoes}` : '',
+  ].filter(Boolean).join(' · ');
 
   useEffect(() => {
     const rawHash = window.location.hash || '';
@@ -402,9 +409,10 @@ const Catalog = () => {
         if (draftGender) params.set('gender', draftGender)
         if (draftDisplayCategory) params.set('category', draftDisplayCategory)
         if (draftBrand) params.set('brand', draftBrand)
-        if (draftDiscountOnly) params.set('discount', '1')
+        if (draftDiscountOnly) params.set('discountOnly', '1')
         if (draftPriceMin) params.set('priceMin', draftPriceMin)
         if (draftPriceMax) params.set('priceMax', draftPriceMax)
+        if (draftSize) params.set('size', draftSize)
 
         params.set('limit', '1') // только ради total
 
@@ -437,7 +445,8 @@ const Catalog = () => {
     draftBrand,
     draftDiscountOnly,
     draftPriceMin,
-    draftPriceMax
+    draftPriceMax,
+    draftSize
   ])
 
 
@@ -664,6 +673,20 @@ const Catalog = () => {
               }`}
             >
               Со скидкой
+            </button>
+
+            <button
+              onClick={() => {
+                if (!hasProfileSize) return;
+                setDraftSize((v) => (v === 'MY' ? '' : 'MY'));
+              }}
+              disabled={!hasProfileSize}
+              title={hasProfileSize ? mySizeLabel : 'Укажите размеры в профиле'}
+              className={`w-full h-12 inline-flex items-center justify-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                draftSize === 'MY' ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+              }`}
+            >
+              Мой размер
             </button>
 
             <div className="sticky bottom-0 -mx-5 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] bg-white border-t border-zinc-100 grid grid-cols-2 gap-2">
