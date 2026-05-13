@@ -153,11 +153,11 @@ model CatalogProduct {
   oldPrice      Float?
   currency      String?
 
-    sizesTop      String[] @default([])
+  sizesTop      String[] @default([])
   sizesBottom   String[] @default([])
   sizesShoes    String[] @default([])
 
-imageUrl      String?
+  imageUrl      String?
   productUrl    String?
   affiliateUrl  String?
 
@@ -170,3 +170,4 @@ imageUrl      String?
 
   @@unique([merchant, externalId])
 }
+
