@@ -2334,6 +2334,124 @@ async function isUsableCatalogImageUrl(url) {
   }
 }
 
+
+const catalogImportJobs = new Map();
+
+function startCatalogImportJob(merchant) {
+  const m = String(merchant || "").trim().toLowerCase();
+  const allowed = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt"]);
+
+  if (!allowed.has(m)) {
+    return { ok: false, status: 400, error: "Unknown merchant" };
+  }
+
+  const existing = catalogImportJobs.get(m);
+  if (existing?.running) {
+    return {
+      ok: true,
+      queued: false,
+      running: true,
+      merchant: m,
+      jobId: existing.jobId,
+      startedAt: existing.startedAt,
+    };
+  }
+
+  const jobId = `catalog-import-${m}-${Date.now()}`;
+  const startedAt = new Date().toISOString();
+
+  catalogImportJobs.set(m, {
+    running: true,
+    jobId,
+    merchant: m,
+    startedAt,
+    finishedAt: null,
+    status: "running",
+    result: null,
+    error: null,
+  });
+
+  setImmediate(async () => {
+    const t0 = Date.now();
+    console.log("[toptry] catalog import job started", { jobId, merchant: m });
+
+    try {
+      const url = `http://127.0.0.1:${PORT}/api/admin/catalog/import/${m}`;
+      const resp = await fetch(url, { method: "POST" });
+      const text = await resp.text();
+
+      let result = text;
+      try {
+        result = JSON.parse(text);
+      } catch {}
+
+      catalogImportJobs.set(m, {
+        running: false,
+        jobId,
+        merchant: m,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        status: resp.ok ? "completed" : "failed",
+        result,
+        error: resp.ok ? null : result,
+      });
+
+      console.log("[toptry] catalog import job finished", {
+        jobId,
+        merchant: m,
+        ok: resp.ok,
+        status: resp.status,
+        ms: Date.now() - t0,
+        result,
+      });
+    } catch (e) {
+      catalogImportJobs.set(m, {
+        running: false,
+        jobId,
+        merchant: m,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        status: "failed",
+        result: null,
+        error: e?.message || String(e),
+      });
+
+      console.error("[toptry] catalog import job failed", {
+        jobId,
+        merchant: m,
+        ms: Date.now() - t0,
+        error: e?.stack || e,
+      });
+    }
+  });
+
+  return {
+    ok: true,
+    queued: true,
+    running: true,
+    merchant: m,
+    jobId,
+    startedAt,
+  };
+}
+
+app.post("/api/admin/catalog/import-async/:merchant", (req, res) => {
+  const result = startCatalogImportJob(req.params.merchant);
+
+  if (!result.ok) {
+    return res.status(result.status || 400).json(result);
+  }
+
+  return res.status(result.queued ? 202 : 200).json(result);
+});
+
+app.get("/api/admin/catalog/import-jobs", (_req, res) => {
+  return res.json({
+    jobs: Array.from(catalogImportJobs.values()),
+  });
+});
+
+
 app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
   try {
     const FEED_URL = process.env.ADMITAD_SPORTCOURT_FEED_URL || "";
