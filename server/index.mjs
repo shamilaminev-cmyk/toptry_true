@@ -3485,15 +3485,41 @@ app.get("/api/catalog/products", async (req, res) => {
       };
     };
 
-    const [rows, total] = await Promise.all([
-      prisma.catalogProduct.findMany({
+    let rows = [];
+    let total = 0;
+
+    if (sort === "discount_desc") {
+      const allRows = await prisma.catalogProduct.findMany({
         where,
-        orderBy,
-        skip: offset,
-        take: limit,
-      }),
-      prisma.catalogProduct.count({ where }),
-    ]);
+        orderBy: [{ updatedAt: "desc" }],
+      });
+
+      allRows.sort((a, b) => {
+        const priceA = Number(a.price || 0);
+        const oldA = Number(a.oldPrice || 0);
+        const discountA = oldA > priceA && priceA > 0 ? (oldA - priceA) / oldA : 0;
+
+        const priceB = Number(b.price || 0);
+        const oldB = Number(b.oldPrice || 0);
+        const discountB = oldB > priceB && priceB > 0 ? (oldB - priceB) / oldB : 0;
+
+        if (discountB !== discountA) return discountB - discountA;
+        return Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
+      });
+
+      total = allRows.length;
+      rows = allRows.slice(offset, offset + limit);
+    } else {
+      [rows, total] = await Promise.all([
+        prisma.catalogProduct.findMany({
+          where,
+          orderBy,
+          skip: offset,
+          take: limit,
+        }),
+        prisma.catalogProduct.count({ where }),
+      ]);
+    }
 
     const products = rows.map(mapProduct);
 

@@ -536,16 +536,26 @@ const Catalog = () => {
             </svg>
           </button>
 
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="h-12 min-w-[150px] px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
-          >
-            <option value="">Сортировка</option>
-            <option value="price_asc">Цена ↑</option>
-            <option value="price_desc">Цена ↓</option>
-            <option value="discount_desc">Скидка ↓</option>
-          </select>
+          <div className="relative">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="appearance-none w-full h-12 min-w-[150px] pl-5 pr-12 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
+            >
+              <option value="">Сортировка</option>
+              <option value="price_asc">Цена ↑</option>
+              <option value="price_desc">Цена ↓</option>
+              <option value="discount_desc">Скидка ↓</option>
+            </select>
+            <svg
+              className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </div>
         </div>
 
       </div>
