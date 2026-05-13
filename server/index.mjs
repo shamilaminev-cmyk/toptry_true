@@ -2046,6 +2046,7 @@ function buildCatalogDbWhere({
   sizeTop,
   sizeBottom,
   sizeShoes,
+  sizeLoose,
 }) {
   const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington"];
 
@@ -2113,31 +2114,55 @@ function buildCatalogDbWhere({
   const bottomSize = normalizeLetterSizeForFilter(sizeBottom || directLetterSize);
   const shoeSize = normalizeShoeSizeForFilter(sizeShoes || directShoeSize);
 
+  const letterOrder = ["XS", "S", "M", "L", "XL", "XXL"];
+
+  const expandLetterSize = (v) => {
+    const s = normalizeLetterSizeForFilter(v);
+    if (!s) return [];
+    if (!sizeLoose) return [s];
+    const i = letterOrder.indexOf(s);
+    return letterOrder.filter((_, idx) => Math.abs(idx - i) <= 1);
+  };
+
+  const expandShoeSize = (v) => {
+    const s = normalizeShoeSizeForFilter(v);
+    if (!s) return [];
+    if (!sizeLoose) return [s];
+    const n = Number(s);
+    return [n - 1, n, n + 1]
+      .filter((x) => x >= 35 && x <= 46)
+      .map(String);
+  };
+
+  const topSizes = expandLetterSize(topSize);
+  const bottomSizes = expandLetterSize(bottomSize);
+  const shoeSizes = expandShoeSize(shoeSize);
+
   const sizeOr = [];
 
-  if (topSize) {
+  if (topSizes.length) {
     sizeOr.push({
       AND: [
         { category: { in: ["TOPS", "JACKETS", "DRESS"] } },
-        { sizesTop: { has: topSize } },
+        { sizesTop: { hasSome: topSizes } },
       ],
     });
   }
 
-  if (bottomSize) {
+  if (bottomSizes.length) {
     sizeOr.push({
       AND: [
         { category: { in: ["BOTTOMS", "DRESS"] } },
-        { sizesBottom: { has: bottomSize } },
+        { sizesBottom: { hasSome: bottomSizes } },
       ],
     });
   }
 
-  if (shoeSize) {
+  if (shoeSizes.length) {
     sizeOr.push({
       AND: [
         { category: "SHOES" },
-        { sizesShoes: { has: shoeSize } },
+        { sizesShoes: { hasSome: shoeSizes } },
       ],
     });
   }
@@ -3469,6 +3494,7 @@ app.get("/api/catalog/brands", async (req, res) => {
       sizeTop: "",
       sizeBottom: "",
       sizeShoes: "",
+      sizeLoose: false,
     });
 
     const rows = await prisma.catalogProduct.findMany({
@@ -3542,6 +3568,9 @@ app.get("/api/catalog/products", async (req, res) => {
         ? req.query.size.trim().toUpperCase()
         : "";
 
+    const sizeLoose =
+      String(req.query.sizeLoose || "").trim() === "1";
+
     let mySizeTop = "";
     let mySizeBottom = "";
     let mySizeShoes = "";
@@ -3614,6 +3643,7 @@ app.get("/api/catalog/products", async (req, res) => {
       sizeTop: effectiveMySizeTop,
       sizeBottom: effectiveMySizeBottom,
       sizeShoes: effectiveMySizeShoes,
+      sizeLoose,
     });
 
     const baseWhereForMySize = buildCatalogDbWhere({
@@ -3630,28 +3660,46 @@ app.get("/api/catalog/products", async (req, res) => {
       sizeTop: "",
       sizeBottom: "",
       sizeShoes: "",
+      sizeLoose: false,
     });
 
     const matchesEffectiveMySize = (p) => {
       if (rawSize !== "MY") return true;
 
+      const letterOrder = ["XS", "S", "M", "L", "XL", "XXL"];
+      const expandLetter = (v) => {
+        const s = String(v || "").trim().toUpperCase();
+        if (!letterOrder.includes(s)) return [];
+        if (!sizeLoose) return [s];
+        const i = letterOrder.indexOf(s);
+        return letterOrder.filter((_, idx) => Math.abs(idx - i) <= 1);
+      };
+      const expandShoe = (v) => {
+        const s = String(v || "").trim();
+        if (!/^(3[5-9]|4[0-6])$/.test(s)) return [];
+        if (!sizeLoose) return [s];
+        const n = Number(s);
+        return [n - 1, n, n + 1].filter((x) => x >= 35 && x <= 46).map(String);
+      };
+      const anyOverlap = (a, b) => Array.isArray(a) && a.some((x) => b.includes(String(x)));
+
       const c = String(p?.category || "").trim().toUpperCase();
 
       if (c === "SHOES") {
-        return !!effectiveMySizeShoes && Array.isArray(p?.sizesShoes) && p.sizesShoes.includes(effectiveMySizeShoes);
+        return anyOverlap(p?.sizesShoes, expandShoe(effectiveMySizeShoes));
       }
 
       if (c === "BOTTOMS") {
-        return !!effectiveMySizeBottom && Array.isArray(p?.sizesBottom) && p.sizesBottom.includes(effectiveMySizeBottom);
+        return anyOverlap(p?.sizesBottom, expandLetter(effectiveMySizeBottom));
       }
 
       if (["TOPS", "JACKETS"].includes(c)) {
-        return !!effectiveMySizeTop && Array.isArray(p?.sizesTop) && p.sizesTop.includes(effectiveMySizeTop);
+        return anyOverlap(p?.sizesTop, expandLetter(effectiveMySizeTop));
       }
 
       if (c === "DRESS") {
-        const topOk = !!effectiveMySizeTop && Array.isArray(p?.sizesTop) && p.sizesTop.includes(effectiveMySizeTop);
-        const bottomOk = !!effectiveMySizeBottom && Array.isArray(p?.sizesBottom) && p.sizesBottom.includes(effectiveMySizeBottom);
+        const topOk = anyOverlap(p?.sizesTop, expandLetter(effectiveMySizeTop));
+        const bottomOk = anyOverlap(p?.sizesBottom, expandLetter(effectiveMySizeBottom));
         return topOk || bottomOk;
       }
 
