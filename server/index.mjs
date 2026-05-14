@@ -1999,78 +1999,52 @@ function getCatalogShoeTypePredicates(shoeType) {
   const st = String(shoeType || "").trim().toUpperCase();
   if (!st) return null;
 
-  if (st === "SNEAKERS") {
-    return [
-      { category: "SHOES", title: { contains: "крос", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "sneaker", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "кед", mode: "insensitive" } },
-    ];
-  }
+  const taxonomy = {
+    SNEAKERS: ["SNEAKERS"],
+    SNEAKERS_CASUAL: ["SNEAKERS_CASUAL"],
+    BOOTS: ["BOOTS"],
+    HEELS: ["HEELS"],
+    BALLET: ["BALLET"],
+    TALL_BOOTS: ["TALL_BOOTS"],
+    LOAFERS: ["LOAFERS"],
+    SANDALS: ["SANDALS"],
+    SHOES_CLASSIC: ["SHOES_CLASSIC"],
+  }[st];
 
-  if (st === "SNEAKERS_CASUAL") {
-    return [
-      { category: "SHOES", title: { contains: "кед", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "canvas", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "plimsoll", mode: "insensitive" } },
-    ];
-  }
+  if (!taxonomy?.length) return null;
 
-  if (st === "BOOTS") {
-    return [
-      { category: "SHOES", title: { contains: "бот", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "сапог", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "boot", mode: "insensitive" } },
-    ];
-  }
-
-  if (st === "HEELS") {
-    return [
-      { category: "SHOES", title: { contains: "каблу", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "heel", mode: "insensitive" } },
-    ];
-  }
-
-  if (st === "BALLET") {
-    return [
-      { category: "SHOES", title: { contains: "балет", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "ballet", mode: "insensitive" } },
-    ];
-  }
-
-  if (st === "TALL_BOOTS") {
-    return [
-      { category: "SHOES", title: { contains: "сапог", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "ботфорт", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "tall boot", mode: "insensitive" } },
-    ];
-  }
-
-  if (st === "LOAFERS") {
-    return [
-      { category: "SHOES", title: { contains: "лофер", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "loafer", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "мокас", mode: "insensitive" } },
-    ];
-  }
-
-  if (st === "SANDALS") {
-    return [
-      { category: "SHOES", title: { contains: "сандал", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "sand", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "слан", mode: "insensitive" } },
-    ];
-  }
-
-  if (st === "SHOES_CLASSIC") {
-    return [
-      { category: "SHOES", title: { contains: "туф", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "oxford", mode: "insensitive" } },
-      { category: "SHOES", title: { contains: "дерби", mode: "insensitive" } },
-    ];
-  }
-
-  return null;
+  return [
+    { category: "SHOES", taxonomySubgroup: { in: taxonomy } },
+    // fallback for old / not-yet-enriched rows
+    ...(st === "SNEAKERS" ? [
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "крос", mode: "insensitive" } },
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "sneaker", mode: "insensitive" } },
+    ] : []),
+    ...(st === "SNEAKERS_CASUAL" ? [
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "кед", mode: "insensitive" } },
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "canvas", mode: "insensitive" } },
+    ] : []),
+    ...(st === "BOOTS" ? [
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "бот", mode: "insensitive" } },
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "boot", mode: "insensitive" } },
+    ] : []),
+    ...(st === "LOAFERS" ? [
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "лофер", mode: "insensitive" } },
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "loafer", mode: "insensitive" } },
+    ] : []),
+    ...(st === "SANDALS" ? [
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "сандал", mode: "insensitive" } },
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "босонож", mode: "insensitive" } },
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "эспадриль", mode: "insensitive" } },
+    ] : []),
+    ...(st === "SHOES_CLASSIC" ? [
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "туф", mode: "insensitive" } },
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "oxford", mode: "insensitive" } },
+      { category: "SHOES", taxonomySubgroup: { in: [null, ""] }, title: { contains: "дерби", mode: "insensitive" } },
+    ] : []),
+  ];
 }
+
 
 function getCatalogClothingTypePredicates(clothingType) {
   const ct = String(clothingType || "").trim().toUpperCase();
@@ -2079,95 +2053,53 @@ function getCatalogClothingTypePredicates(clothingType) {
   if (ct === "FEMALE_CLOTHING") return [{ gender: "FEMALE" }];
   if (ct === "MALE_CLOTHING") return [{ gender: "MALE" }];
 
-  if (ct === "DRESSES") return [{ category: "DRESS" }];
-  if (ct === "TOPS") return [{ category: "TOPS" }];
-  if (ct === "BLAZERS") {
-    return [
-      { category: "JACKETS", title: { contains: "жакет", mode: "insensitive" } },
-      { category: "JACKETS", title: { contains: "пиджак", mode: "insensitive" } },
-      { category: "JACKETS", title: { contains: "blazer", mode: "insensitive" } },
-    ];
-  }
+  const taxonomy = {
+    DRESSES: ["DRESSES"],
+    TOPS: ["TOPS"],
+    BLAZERS: ["BLAZERS"],
+    OUTERWEAR: ["OUTERWEAR"],
+    SKIRTS: ["SKIRTS"],
+    TROUSERS: ["TROUSERS"],
+    DENIM: ["DENIM"],
+    TSHIRTS: ["TSHIRTS"],
+    POLO: ["POLO"],
+    HOODIES: ["HOODIES"],
+    KNITWEAR: ["KNITWEAR"],
+    SHIRTS: ["SHIRTS"],
+    SUITS: ["SUITS"],
+  }[ct];
 
-  if (ct === "OUTERWEAR") return [{ category: "JACKETS" }];
+  if (!taxonomy?.length) return null;
 
-  if (ct === "SKIRTS") {
-    return [
-      { category: "BOTTOMS", title: { contains: "юб", mode: "insensitive" } },
-      { category: "BOTTOMS", title: { contains: "skirt", mode: "insensitive" } },
-    ];
-  }
+  const baseCategory =
+    ct === "DRESSES" ? "DRESS" :
+    ["SKIRTS", "TROUSERS", "DENIM"].includes(ct) ? "BOTTOMS" :
+    ["BLAZERS", "OUTERWEAR"].includes(ct) ? "JACKETS" :
+    ["TSHIRTS", "POLO", "HOODIES", "KNITWEAR", "SHIRTS", "TOPS"].includes(ct) ? "TOPS" :
+    "";
 
-  if (ct === "TROUSERS") {
-    return [
-      { category: "BOTTOMS", title: { contains: "брюк", mode: "insensitive" } },
-      { category: "BOTTOMS", title: { contains: "штан", mode: "insensitive" } },
-      { category: "BOTTOMS", title: { contains: "trouser", mode: "insensitive" } },
-      { category: "BOTTOMS", title: { contains: "pants", mode: "insensitive" } },
-    ];
-  }
-
-  if (ct === "DENIM") {
-    return [
-      { title: { contains: "джинс", mode: "insensitive" } },
-      { title: { contains: "denim", mode: "insensitive" } },
-      { title: { contains: "jeans", mode: "insensitive" } },
-    ];
-  }
-
-  if (ct === "TSHIRTS") {
-    return [
-      { category: "TOPS", title: { contains: "футбол", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "майк", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "поло", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "t-shirt", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "tee", mode: "insensitive" } },
-    ];
-  }
-
-  if (ct === "POLO") {
-    return [
-      { category: "TOPS", title: { contains: "поло", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "polo", mode: "insensitive" } },
-    ];
-  }
-
-  if (ct === "HOODIES") {
-    return [
-      { category: "TOPS", title: { contains: "худи", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "hoodie", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "свитшот", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "sweatshirt", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "толстов", mode: "insensitive" } },
-    ];
-  }
-
-  if (ct === "KNITWEAR") {
-    return [
-      { category: "TOPS", title: { contains: "свитер", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "джемпер", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "кардиган", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "knit", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "sweater", mode: "insensitive" } },
-    ];
-  }
-
-  if (ct === "SHIRTS") {
-    return [
-      { category: "TOPS", title: { contains: "рубаш", mode: "insensitive" } },
-      { category: "TOPS", title: { contains: "shirt", mode: "insensitive" } },
-    ];
-  }
-
-  if (ct === "SUITS") {
-    return [
-      { title: { contains: "костюм", mode: "insensitive" } },
-      { title: { contains: "suit", mode: "insensitive" } },
-    ];
-  }
-
-  return null;
+  return [
+    { taxonomySubgroup: { in: taxonomy } },
+    // fallback for old / not-yet-enriched rows
+    ...(ct === "DRESSES" ? [{ category: "DRESS" }] : []),
+    ...(ct === "OUTERWEAR" ? [{ category: "JACKETS" }] : []),
+    ...(ct === "BLAZERS" ? [
+      { category: "JACKETS", taxonomySubgroup: { in: [null, ""] }, title: { contains: "жакет", mode: "insensitive" } },
+      { category: "JACKETS", taxonomySubgroup: { in: [null, ""] }, title: { contains: "пиджак", mode: "insensitive" } },
+    ] : []),
+    ...(ct === "SKIRTS" ? [{ category: "BOTTOMS", taxonomySubgroup: { in: [null, ""] }, title: { contains: "юб", mode: "insensitive" } }] : []),
+    ...(ct === "TROUSERS" ? [{ category: "BOTTOMS", taxonomySubgroup: { in: [null, ""] }, title: { contains: "брюк", mode: "insensitive" } }] : []),
+    ...(ct === "DENIM" ? [{ taxonomySubgroup: { in: [null, ""] }, title: { contains: "джинс", mode: "insensitive" } }] : []),
+    ...(ct === "TSHIRTS" ? [{ category: "TOPS", taxonomySubgroup: { in: [null, ""] }, title: { contains: "футбол", mode: "insensitive" } }] : []),
+    ...(ct === "POLO" ? [{ category: "TOPS", taxonomySubgroup: { in: [null, ""] }, title: { contains: "поло", mode: "insensitive" } }] : []),
+    ...(ct === "HOODIES" ? [{ category: "TOPS", taxonomySubgroup: { in: [null, ""] }, title: { contains: "худи", mode: "insensitive" } }] : []),
+    ...(ct === "KNITWEAR" ? [{ category: "TOPS", taxonomySubgroup: { in: [null, ""] }, title: { contains: "свитер", mode: "insensitive" } }] : []),
+    ...(ct === "SHIRTS" ? [{ category: "TOPS", taxonomySubgroup: { in: [null, ""] }, title: { contains: "рубаш", mode: "insensitive" } }] : []),
+    ...(ct === "SUITS" ? [{ taxonomySubgroup: { in: [null, ""] }, title: { contains: "костюм", mode: "insensitive" } }] : []),
+    ...(baseCategory && ct === "TOPS" ? [{ category: baseCategory }] : []),
+  ];
 }
+
 
 function getCatalogDisplayCategoryPredicates(displayCategory) {
   const dc = String(displayCategory || "").trim().toUpperCase();
