@@ -1994,6 +1994,61 @@ function normalizeCatalogDisplayCategory(raw) {
   return "ACCESSORIES";
 }
 
+
+function getCatalogShoeTypePredicates(shoeType) {
+  const st = String(shoeType || "").trim().toUpperCase();
+  if (!st) return null;
+
+  if (st === "SNEAKERS") {
+    return [
+      { category: "SHOES", title: { contains: "крос", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "sneaker", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "кед", mode: "insensitive" } },
+    ];
+  }
+
+  if (st === "BOOTS") {
+    return [
+      { category: "SHOES", title: { contains: "бот", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "сапог", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "boot", mode: "insensitive" } },
+    ];
+  }
+
+  if (st === "HEELS") {
+    return [
+      { category: "SHOES", title: { contains: "каблу", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "heel", mode: "insensitive" } },
+    ];
+  }
+
+  if (st === "LOAFERS") {
+    return [
+      { category: "SHOES", title: { contains: "лофер", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "loafer", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "мокас", mode: "insensitive" } },
+    ];
+  }
+
+  if (st === "SANDALS") {
+    return [
+      { category: "SHOES", title: { contains: "сандал", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "sand", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "слан", mode: "insensitive" } },
+    ];
+  }
+
+  if (st === "SHOES_CLASSIC") {
+    return [
+      { category: "SHOES", title: { contains: "туф", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "oxford", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "дерби", mode: "insensitive" } },
+    ];
+  }
+
+  return null;
+}
+
 function getCatalogClothingTypePredicates(clothingType) {
   const ct = String(clothingType || "").trim().toUpperCase();
   if (!ct) return null;
@@ -2114,6 +2169,7 @@ function buildCatalogDbWhere({
   priceMin,
   priceMax,
   clothingType,
+  shoeType,
   size,
   sizeTop,
   sizeBottom,
@@ -2142,6 +2198,11 @@ function buildCatalogDbWhere({
   const clothingTypePredicates = getCatalogClothingTypePredicates(clothingType);
   if (String(displayCategory || "").trim().toUpperCase() === "CLOTHING" && clothingTypePredicates?.length) {
     and.push({ OR: clothingTypePredicates });
+  }
+
+  const shoeTypePredicates = getCatalogShoeTypePredicates(shoeType);
+  if (String(displayCategory || "").trim().toUpperCase() === "SHOES" && shoeTypePredicates?.length) {
+    and.push({ OR: shoeTypePredicates });
   }
 
   const brandNeedle = String(brand || "").trim();

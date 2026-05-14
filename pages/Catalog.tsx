@@ -26,6 +26,15 @@ type ClothingType =
   | 'OUTERWEAR'
   | 'SUITS';
 
+type ShoeType =
+  | ''
+  | 'SNEAKERS'
+  | 'BOOTS'
+  | 'HEELS'
+  | 'LOAFERS'
+  | 'SANDALS'
+  | 'SHOES_CLASSIC';
+
 const GENDER_TABS: Array<{ id: '' | Gender; label: string }> = [
   { id: '', label: 'Все' },
   { id: Gender.FEMALE, label: 'Женщинам' },
@@ -71,6 +80,30 @@ const getClothingTabs = (gender: '' | Gender): Array<{ id: ClothingType; label: 
   return CLOTHING_TABS_MIXED;
 };
 
+const SHOE_TABS_FEMALE: Array<{ id: ShoeType; label: string }> = [
+  { id: '', label: 'Все' },
+  { id: 'SNEAKERS', label: 'Кроссовки' },
+  { id: 'BOOTS', label: 'Ботинки' },
+  { id: 'HEELS', label: 'Каблуки' },
+  { id: 'LOAFERS', label: 'Лоферы' },
+  { id: 'SANDALS', label: 'Сандалии' },
+];
+
+const SHOE_TABS_MALE: Array<{ id: ShoeType; label: string }> = [
+  { id: '', label: 'Все' },
+  { id: 'SNEAKERS', label: 'Кроссовки' },
+  { id: 'BOOTS', label: 'Ботинки' },
+  { id: 'SHOES_CLASSIC', label: 'Туфли' },
+  { id: 'LOAFERS', label: 'Лоферы' },
+  { id: 'SANDALS', label: 'Сандалии' },
+];
+
+const getShoeTabs = (gender: '' | Gender): Array<{ id: ShoeType; label: string }> => {
+  if (gender === Gender.FEMALE) return SHOE_TABS_FEMALE;
+  return SHOE_TABS_MALE;
+};
+
+
 const IMG_FALLBACK = "";
 const PAGE_SIZE = 24;
 const CATALOG_FILTERS_STORAGE_KEY = 'toptry.catalog.filters.v1';
@@ -87,6 +120,7 @@ const Catalog = () => {
   const [draftGender, setDraftGender] = useState<'' | Gender>('');
   const [displayCategory, setDisplayCategory] = useState<'' | DisplayCategory>('');
   const [clothingType, setClothingType] = useState<ClothingType>('');
+  const [shoeType, setShoeType] = useState<ShoeType>('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [discountOnly, setDiscountOnly] = useState(false);
@@ -98,6 +132,7 @@ const Catalog = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftDisplayCategory, setDraftDisplayCategory] = useState<'' | DisplayCategory>('');
   const [draftClothingType, setDraftClothingType] = useState<ClothingType>('');
+  const [draftShoeType, setDraftShoeType] = useState<ShoeType>('');
   const [draftDiscountOnly, setDraftDiscountOnly] = useState(false);
   const [draftBrand, setDraftBrand] = useState('');
   const [draftPriceMin, setDraftPriceMin] = useState('');
