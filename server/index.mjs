@@ -4148,6 +4148,12 @@ app.get("/api/catalog/products", async (req, res) => {
         sizesTop: p.sizesTop || [],
         sizesBottom: p.sizesBottom || [],
         sizesShoes: p.sizesShoes || [],
+        taxonomyGroup: p.taxonomyGroup || null,
+        taxonomySubgroup: p.taxonomySubgroup || null,
+        styleTags: p.styleTags || [],
+        occasionTags: p.occasionTags || [],
+        seasonTags: p.seasonTags || [],
+        colorFamily: p.colorFamily || null,
         images: p.imageUrl ? [p.imageUrl] : [],
         storeId: p.merchant,
         storeName:
