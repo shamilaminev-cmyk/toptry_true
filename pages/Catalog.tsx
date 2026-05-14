@@ -765,21 +765,65 @@ const Catalog = () => {
             </div>
 
             {draftDisplayCategory === 'CLOTHING' && (
-              <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
-                {getClothingTabs(draftGender).map((tab) => {
-                  const active = draftClothingType === tab.id;
-                  return (
-                    <button
-                      key={String(tab.id || 'all-clothing')}
-                      onClick={() => setDraftClothingType(tab.id)}
-                      className={`flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
-                        active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
+              <div className="space-y-3 rounded-[28px] bg-zinc-50/70 border border-zinc-100 p-3">
+                {!draftGender ? (
+                  <div className="space-y-2">
+                    <div className="px-1 text-[9px] font-black uppercase tracking-[0.28em] text-zinc-400">
+                      Для кого
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                      {[
+                        { id: Gender.FEMALE, label: 'Женщинам' },
+                        { id: Gender.MALE, label: 'Мужчинам' },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => {
+                            setDraftGender(tab.id);
+                            setDraftClothingType('');
+                          }}
+                          className="flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border border-zinc-200 bg-white text-zinc-600 transition-all active:scale-[0.98]"
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3 px-1">
+                      <div className="text-[9px] font-black uppercase tracking-[0.28em] text-zinc-400">
+                        Категории
+                      </div>
+                      <button
+                        onClick={() => {
+                          setDraftGender('');
+                          setDraftClothingType('');
+                        }}
+                        className="text-[9px] font-black uppercase tracking-[0.22em] text-zinc-400 underline underline-offset-4"
+                      >
+                        изменить
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                      {getClothingTabs(draftGender).map((tab) => {
+                        const active = draftClothingType === tab.id;
+                        return (
+                          <button
+                            key={String(tab.id || 'all-clothing')}
+                            onClick={() => setDraftClothingType(tab.id)}
+                            className={`flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                              active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
