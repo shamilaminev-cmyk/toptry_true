@@ -185,6 +185,7 @@ const Catalog = () => {
       size?: string;
       sizeLoose?: boolean;
       clothingType?: string;
+      shoeType?: string;
     } = null;
 
     if (!hasHashFilters) {
@@ -216,6 +217,9 @@ const Catalog = () => {
     const clothingTypeParam = String(
       hasHashFilters ? (hashParams.get('clothingType') || '') : (saved?.clothingType || '')
     ).toUpperCase() as ClothingType;
+    const shoeTypeParam = String(
+      hasHashFilters ? (hashParams.get('shoeType') || '') : (saved?.shoeType || '')
+    ).toUpperCase() as ShoeType;
     const sizeLooseParam = sizeParam === 'MY' && (hasHashFilters ? hashParams.get('sizeLoose') === '1' : Boolean(saved?.sizeLoose));
 
     setSearch(q);
@@ -240,6 +244,8 @@ const Catalog = () => {
     setDraftSizeLoose(sizeLooseParam);
     setClothingType(clothingTypeParam);
     setDraftClothingType(clothingTypeParam);
+    setShoeType(shoeTypeParam);
+    setDraftShoeType(shoeTypeParam);
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
@@ -277,7 +283,8 @@ const Catalog = () => {
     setDraftSize(size);
     setDraftSizeLoose(size === 'MY' ? sizeLoose : false);
     setDraftClothingType(clothingType);
-  }, [filtersOpen, gender, displayCategory, clothingType, discountOnly, brand, priceMin, priceMax, size, sizeLoose]);
+    setDraftShoeType(shoeType);
+  }, [filtersOpen, gender, displayCategory, clothingType, shoeType, discountOnly, brand, priceMin, priceMax, size, sizeLoose]);
 
   useEffect(() => {
     let cancelled = false;
@@ -288,6 +295,8 @@ const Catalog = () => {
         if (gender) params.set('gender', gender);
         if (displayCategory) params.set('displayCategory', displayCategory);
     if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
+    if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
+        if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
         if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
     if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
         if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
@@ -322,7 +331,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, clothingType, debouncedSearch, discountOnly, brand]);
+  }, [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand]);
 
   const fetchCatalog = async (nextOffset: number, append: boolean) => {
     const params = new URLSearchParams();
@@ -410,7 +419,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, clothingType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
+  }, [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
 
   useEffect(() => {
     try {
@@ -419,6 +428,7 @@ const Catalog = () => {
         gender,
         displayCategory,
         clothingType: displayCategory === 'CLOTHING' ? clothingType : '',
+        shoeType: displayCategory === 'SHOES' ? shoeType : '',
         discountOnly,
         brand,
         priceMin,
@@ -429,7 +439,7 @@ const Catalog = () => {
       };
       window.sessionStorage.setItem(CATALOG_FILTERS_STORAGE_KEY, JSON.stringify(payload));
     } catch {}
-  }, [debouncedSearch, gender, displayCategory, clothingType, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
+  }, [debouncedSearch, gender, displayCategory, clothingType, shoeType, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -488,6 +498,8 @@ const Catalog = () => {
     setDraftDisplayCategory('');
     setClothingType('');
     setDraftClothingType('');
+    setShoeType('');
+    setDraftShoeType('');
     setSearch('');
     setDebouncedSearch('');
     setDiscountOnly(false);
@@ -513,6 +525,7 @@ const Catalog = () => {
     setDraftGender('');
     setDraftDisplayCategory('');
     setDraftClothingType('');
+    setDraftShoeType('');
     setDraftDiscountOnly(false);
     setDraftBrand('');
     setDraftPriceMin('');
@@ -535,6 +548,7 @@ const Catalog = () => {
         if (draftGender) params.set('gender', draftGender)
         if (draftDisplayCategory) params.set('displayCategory', draftDisplayCategory)
         if (draftDisplayCategory === 'CLOTHING' && draftClothingType) params.set('clothingType', draftClothingType)
+        if (draftDisplayCategory === 'SHOES' && draftShoeType) params.set('shoeType', draftShoeType)
         if (draftBrand) params.set('brand', draftBrand)
         if (draftDiscountOnly) params.set('discountOnly', '1')
         if (draftPriceMin) params.set('priceMin', draftPriceMin)
@@ -584,6 +598,7 @@ const Catalog = () => {
     setGender(draftGender);
     setDisplayCategory(draftDisplayCategory);
     setClothingType(draftDisplayCategory === 'CLOTHING' ? draftClothingType : '');
+    setShoeType(draftDisplayCategory === 'SHOES' ? draftShoeType : '');
     setDiscountOnly(draftDiscountOnly);
     setBrand(draftBrand);
     setPriceMin(draftPriceMin);
@@ -609,13 +624,13 @@ const Catalog = () => {
   const filteredCountLabel = useMemo(() => total, [total]);
   const activeFiltersCount = useMemo(
     () =>
-      [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+      [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', displayCategory === 'SHOES' ? shoeType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
     [gender, displayCategory, clothingType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]
   );
   const draftActiveFiltersCount = useMemo(
     () =>
-      [draftGender, draftDisplayCategory, draftDisplayCategory === 'CLOTHING' ? draftClothingType : '', debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSize === 'MY' && draftSizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
-    [draftGender, draftDisplayCategory, draftClothingType, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSizeLoose]
+      [draftGender, draftDisplayCategory, draftDisplayCategory === 'CLOTHING' ? draftClothingType : '', draftDisplayCategory === 'SHOES' ? draftShoeType : '', debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSize === 'MY' && draftSizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+    [draftGender, draftDisplayCategory, draftClothingType, draftShoeType, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSizeLoose]
   );
   const applyButtonLabel = useMemo(() => {
     if (loading) return 'Загружаем...';
@@ -660,6 +675,7 @@ const Catalog = () => {
               setDraftSize(size);
               setDraftSizeLoose(size === 'MY' ? sizeLoose : false);
               setDraftClothingType(clothingType);
+              setDraftShoeType(shoeType);
               setFiltersOpen(true);
             }}
             className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 flex items-center justify-between"
@@ -698,7 +714,7 @@ const Catalog = () => {
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           Найдено: {filteredCountLabel}
         </p>
-        {(gender || displayCategory || clothingType || search || discountOnly || brand || priceMin || priceMax || sort || size || (size === 'MY' && sizeLoose)) && (
+        {(gender || displayCategory || clothingType || shoeType || search || discountOnly || brand || priceMin || priceMax || sort || size || (size === 'MY' && sizeLoose)) && (
           <button
             onClick={clearFilters}
             className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 underline underline-offset-4"
@@ -744,6 +760,7 @@ const Catalog = () => {
                       const nextCategory = tab.id;
                       setDraftDisplayCategory(nextCategory);
                       if (nextCategory !== 'CLOTHING') setDraftClothingType('');
+                      if (nextCategory !== 'SHOES') setDraftShoeType('');
 
                       setDraftSize((current) => {
                         if (!current || current === 'MY') return current;
@@ -828,6 +845,69 @@ const Catalog = () => {
                           <button
                             key={String(tab.id || 'all-clothing')}
                             onClick={() => setDraftClothingType(tab.id)}
+                            className={`flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                              active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {draftDisplayCategory === 'SHOES' && (
+              <div className="space-y-3 rounded-[28px] bg-zinc-50/70 border border-zinc-100 p-3">
+                {!draftGender ? (
+                  <div className="space-y-2">
+                    <div className="px-1 text-[9px] font-black uppercase tracking-[0.28em] text-zinc-400">
+                      Для кого
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                      {[
+                        { id: Gender.FEMALE, label: 'Женщинам' },
+                        { id: Gender.MALE, label: 'Мужчинам' },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => {
+                            setDraftGender(tab.id);
+                            setDraftShoeType('');
+                          }}
+                          className="flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border border-zinc-200 bg-white text-zinc-600 transition-all active:scale-[0.98]"
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3 px-1">
+                      <div className="text-[9px] font-black uppercase tracking-[0.28em] text-zinc-400">
+                        Категории
+                      </div>
+                      <button
+                        onClick={() => {
+                          setDraftGender('');
+                          setDraftShoeType('');
+                        }}
+                        className="text-[9px] font-black uppercase tracking-[0.22em] text-zinc-400 underline underline-offset-4"
+                      >
+                        изменить
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                      {getShoeTabs(draftGender).map((tab) => {
+                        const active = draftShoeType === tab.id;
+                        return (
+                          <button
+                            key={String(tab.id || 'all-shoes')}
+                            onClick={() => setDraftShoeType(tab.id)}
                             className={`flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
                               active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
                             }`}

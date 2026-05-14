@@ -3619,6 +3619,10 @@ app.get("/api/catalog/brands", async (req, res) => {
       typeof req.query.clothingType === "string" && req.query.clothingType.trim()
         ? req.query.clothingType.trim().toUpperCase()
         : "";
+    const shoeType =
+      typeof req.query.shoeType === "string" && req.query.shoeType.trim()
+        ? req.query.shoeType.trim().toUpperCase()
+        : "";
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
 
@@ -3633,6 +3637,7 @@ app.get("/api/catalog/brands", async (req, res) => {
       priceMin: "",
       priceMax: "",
       clothingType,
+      shoeType,
       size: "",
       sizeTop: "",
       sizeBottom: "",
@@ -3690,6 +3695,10 @@ app.get("/api/catalog/products", async (req, res) => {
     const clothingType =
       typeof req.query.clothingType === "string" && req.query.clothingType.trim()
         ? req.query.clothingType.trim().toUpperCase()
+        : "";
+    const shoeType =
+      typeof req.query.shoeType === "string" && req.query.shoeType.trim()
+        ? req.query.shoeType.trim().toUpperCase()
         : "";
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
@@ -3787,6 +3796,7 @@ app.get("/api/catalog/products", async (req, res) => {
       priceMin,
       priceMax,
       clothingType,
+      shoeType,
       size: rawSize === "MY" ? "" : rawSize,
       sizeTop: effectiveMySizeTop,
       sizeBottom: effectiveMySizeBottom,
