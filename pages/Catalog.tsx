@@ -19,18 +19,25 @@ type ClothingType =
   | 'DRESSES'
   | 'TOPS'
   | 'TSHIRTS'
+  | 'POLO'
   | 'SHIRTS'
+  | 'HOODIES'
+  | 'KNITWEAR'
   | 'SKIRTS'
   | 'TROUSERS'
   | 'DENIM'
+  | 'BLAZERS'
   | 'OUTERWEAR'
   | 'SUITS';
 
 type ShoeType =
   | ''
   | 'SNEAKERS'
+  | 'SNEAKERS_CASUAL'
   | 'BOOTS'
   | 'HEELS'
+  | 'BALLET'
+  | 'TALL_BOOTS'
   | 'LOAFERS'
   | 'SANDALS'
   | 'SHOES_CLASSIC';
@@ -58,18 +65,23 @@ const CLOTHING_TABS_FEMALE: Array<{ id: ClothingType; label: string }> = [
   { id: '', label: 'Все' },
   { id: 'DRESSES', label: 'Платья' },
   { id: 'TOPS', label: 'Топы' },
+  { id: 'SHIRTS', label: 'Блузы и рубашки' },
   { id: 'SKIRTS', label: 'Юбки' },
   { id: 'TROUSERS', label: 'Брюки' },
-  { id: 'DENIM', label: 'Деним' },
+  { id: 'DENIM', label: 'Джинсы' },
+  { id: 'BLAZERS', label: 'Жакеты' },
   { id: 'OUTERWEAR', label: 'Верхняя одежда' },
 ];
 
 const CLOTHING_TABS_MALE: Array<{ id: ClothingType; label: string }> = [
   { id: '', label: 'Все' },
   { id: 'TSHIRTS', label: 'Футболки' },
+  { id: 'POLO', label: 'Поло' },
   { id: 'SHIRTS', label: 'Рубашки' },
+  { id: 'HOODIES', label: 'Худи и свитшоты' },
+  { id: 'KNITWEAR', label: 'Свитеры' },
   { id: 'TROUSERS', label: 'Брюки' },
-  { id: 'DENIM', label: 'Деним' },
+  { id: 'DENIM', label: 'Джинсы' },
   { id: 'OUTERWEAR', label: 'Верхняя одежда' },
   { id: 'SUITS', label: 'Костюмы' },
 ];
@@ -83,18 +95,22 @@ const getClothingTabs = (gender: '' | Gender): Array<{ id: ClothingType; label: 
 const SHOE_TABS_FEMALE: Array<{ id: ShoeType; label: string }> = [
   { id: '', label: 'Все' },
   { id: 'SNEAKERS', label: 'Кроссовки' },
-  { id: 'BOOTS', label: 'Ботинки' },
-  { id: 'HEELS', label: 'Каблуки' },
+  { id: 'SNEAKERS_CASUAL', label: 'Кеды' },
+  { id: 'SHOES_CLASSIC', label: 'Туфли' },
+  { id: 'BALLET', label: 'Балетки' },
   { id: 'LOAFERS', label: 'Лоферы' },
+  { id: 'BOOTS', label: 'Ботинки' },
+  { id: 'TALL_BOOTS', label: 'Сапоги' },
   { id: 'SANDALS', label: 'Сандалии' },
 ];
 
 const SHOE_TABS_MALE: Array<{ id: ShoeType; label: string }> = [
   { id: '', label: 'Все' },
   { id: 'SNEAKERS', label: 'Кроссовки' },
-  { id: 'BOOTS', label: 'Ботинки' },
+  { id: 'SNEAKERS_CASUAL', label: 'Кеды' },
   { id: 'SHOES_CLASSIC', label: 'Туфли' },
   { id: 'LOAFERS', label: 'Лоферы' },
+  { id: 'BOOTS', label: 'Ботинки' },
   { id: 'SANDALS', label: 'Сандалии' },
 ];
 

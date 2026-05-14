@@ -2007,6 +2007,14 @@ function getCatalogShoeTypePredicates(shoeType) {
     ];
   }
 
+  if (st === "SNEAKERS_CASUAL") {
+    return [
+      { category: "SHOES", title: { contains: "кед", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "canvas", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "plimsoll", mode: "insensitive" } },
+    ];
+  }
+
   if (st === "BOOTS") {
     return [
       { category: "SHOES", title: { contains: "бот", mode: "insensitive" } },
@@ -2019,6 +2027,21 @@ function getCatalogShoeTypePredicates(shoeType) {
     return [
       { category: "SHOES", title: { contains: "каблу", mode: "insensitive" } },
       { category: "SHOES", title: { contains: "heel", mode: "insensitive" } },
+    ];
+  }
+
+  if (st === "BALLET") {
+    return [
+      { category: "SHOES", title: { contains: "балет", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "ballet", mode: "insensitive" } },
+    ];
+  }
+
+  if (st === "TALL_BOOTS") {
+    return [
+      { category: "SHOES", title: { contains: "сапог", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "ботфорт", mode: "insensitive" } },
+      { category: "SHOES", title: { contains: "tall boot", mode: "insensitive" } },
     ];
   }
 
@@ -2058,6 +2081,14 @@ function getCatalogClothingTypePredicates(clothingType) {
 
   if (ct === "DRESSES") return [{ category: "DRESS" }];
   if (ct === "TOPS") return [{ category: "TOPS" }];
+  if (ct === "BLAZERS") {
+    return [
+      { category: "JACKETS", title: { contains: "жакет", mode: "insensitive" } },
+      { category: "JACKETS", title: { contains: "пиджак", mode: "insensitive" } },
+      { category: "JACKETS", title: { contains: "blazer", mode: "insensitive" } },
+    ];
+  }
+
   if (ct === "OUTERWEAR") return [{ category: "JACKETS" }];
 
   if (ct === "SKIRTS") {
@@ -2091,6 +2122,33 @@ function getCatalogClothingTypePredicates(clothingType) {
       { category: "TOPS", title: { contains: "поло", mode: "insensitive" } },
       { category: "TOPS", title: { contains: "t-shirt", mode: "insensitive" } },
       { category: "TOPS", title: { contains: "tee", mode: "insensitive" } },
+    ];
+  }
+
+  if (ct === "POLO") {
+    return [
+      { category: "TOPS", title: { contains: "поло", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "polo", mode: "insensitive" } },
+    ];
+  }
+
+  if (ct === "HOODIES") {
+    return [
+      { category: "TOPS", title: { contains: "худи", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "hoodie", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "свитшот", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "sweatshirt", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "толстов", mode: "insensitive" } },
+    ];
+  }
+
+  if (ct === "KNITWEAR") {
+    return [
+      { category: "TOPS", title: { contains: "свитер", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "джемпер", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "кардиган", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "knit", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "sweater", mode: "insensitive" } },
     ];
   }
 
