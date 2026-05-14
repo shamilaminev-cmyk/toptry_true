@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { useAppState } from '../store';
 import { ICONS, CURRENCY } from '../constants';
 import { withApiOrigin } from '../utils/withApiOrigin';
 
 const LookDetails = () => {
   const { id } = useParams();
+  const location = useLocation();
   const { looks: localLooks, products, actions, user } = useAppState();
   const [isTryingOn, setIsTryingOn] = useState(false);
   const [showResult, setShowResult] = useState(false);
@@ -15,6 +16,8 @@ const LookDetails = () => {
   const [commentText, setCommentText] = useState('');
   const [commentBusy, setCommentBusy] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
+  const commentsRef = useRef<HTMLElement | null>(null);
+  const commentInputRef = useRef<HTMLInputElement | null>(null);
 
   const quickComments = [
     'Очень удачно',
@@ -55,6 +58,18 @@ const LookDetails = () => {
       }
     })();
   }, [id]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('comments') !== '1') return;
+
+    window.setTimeout(() => {
+      commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      commentInputRef.current?.focus();
+    }, 120);
+  }, [loading, location.search, id]);
 
   if (loading) return <div className="p-10 text-center text-zinc-400">Загрузка...</div>;
   if (!look) return <div className="p-10 text-center">Образ не найден</div>;
@@ -364,7 +379,7 @@ const LookDetails = () => {
           </div>
         </section>
 
-        <section className="space-y-4">
+        <section ref={commentsRef} className="space-y-4 scroll-mt-24">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Комментарии</h2>
 
           {comments.length === 0 ? (
@@ -407,6 +422,7 @@ const LookDetails = () => {
 
               <div className="flex gap-2">
                 <input
+                  ref={commentInputRef}
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   placeholder="Написать комментарий..."

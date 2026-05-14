@@ -1,14 +1,16 @@
 import React from 'react';
 import { useAppState } from '../store';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ICONS } from '../constants';
 import { withApiOrigin } from '../utils/withApiOrigin';
 
 const Looks = () => {
   const { looks, actions, user } = useAppState();
+  const navigate = useNavigate();
   const [tab, setTab] = React.useState<'feed' | 'mine'>('feed');
   const [feedLooks, setFeedLooks] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const [likedPulseIds, setLikedPulseIds] = React.useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
     if (tab !== 'feed') return;
@@ -38,6 +40,39 @@ const Looks = () => {
   }, [tab, user?.id]);
 
   const visibleLooks = tab === 'mine' ? looks : feedLooks;
+
+  const handleLikeFromFeed = async (lookId: string) => {
+    setLikedPulseIds((prev) => ({ ...prev, [lookId]: true }));
+    window.setTimeout(() => {
+      setLikedPulseIds((prev) => ({ ...prev, [lookId]: false }));
+    }, 520);
+
+    try {
+      const resp = await fetch(`/api/looks/${encodeURIComponent(lookId)}/like`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) return;
+
+      setFeedLooks((prev) =>
+        prev.map((l) =>
+          String(l.id) === String(lookId)
+            ? { ...l, likes: data?.likes ?? ((l.likes || 0) + 1), viewerLiked: true }
+            : l
+        )
+      );
+
+      actions.likeLook(lookId);
+    } catch {
+      // ignore
+    }
+  };
+
+  const openComments = (lookId: string) => {
+    navigate(`/look/${lookId}?comments=1`);
+  };
 
   return (
     <div className="pb-12">
@@ -116,11 +151,26 @@ const Looks = () => {
                   <button
                     onClick={(e) => {
                       e.preventDefault();
-                      actions.likeLook(look.id);
+                      handleLikeFromFeed(String(look.id));
                     }}
-                    className="bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-lg"
+                    className={`bg-white/85 backdrop-blur-sm p-2 rounded-full shadow-lg transition-all duration-300 ${
+                      likedPulseIds[String(look.id)] ? 'scale-125 bg-zinc-900 text-white ring-4 ring-white/70' : ''
+                    }`}
+                    aria-label="Лайкнуть образ"
                   >
-                    <ICONS.Heart className="w-4 h-4" />
+                    <ICONS.Heart className={`w-4 h-4 transition-transform duration-300 ${
+                      likedPulseIds[String(look.id)] ? 'scale-125' : ''
+                    }`} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openComments(String(look.id));
+                    }}
+                    className="bg-white/85 backdrop-blur-sm p-2 rounded-full shadow-lg transition-all duration-300 hover:scale-110"
+                    aria-label="Открыть комментарии"
+                  >
+                    <ICONS.MessageCircle className="w-4 h-4" />
                   </button>
                 </div>
               </Link>
@@ -140,9 +190,12 @@ const Looks = () => {
                       {look.authorName || 'toptry'}
                     </span>
                   </div>
-                  <span className="text-[9px] text-zinc-400 font-bold uppercase">
-                    {look.likes || 0} ❤️
-                  </span>
+                  <button
+                    onClick={() => openComments(String(look.id))}
+                    className="text-[9px] text-zinc-400 font-bold uppercase hover:text-zinc-900 transition-colors"
+                  >
+                    {look.likes || 0} ❤️ · {look.comments || 0} 💬
+                  </button>
                 </div>
               </div>
             </div>
