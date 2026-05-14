@@ -1869,8 +1869,8 @@ function normalizeCatalogSizes(raw) {
 
   const shoeSizes = Array.from(
     new Set(
-      (s.match(/\b(3[5-9]|4[0-6])\b/g) || [])
-        .map((v) => String(v).trim())
+      (s.match(/\b(3[5-9]|4[0-6])(?:[.,]5)?\b/g) || [])
+        .map((v) => String(v).trim().replace(",", "."))
     )
   );
 
@@ -2772,6 +2772,76 @@ app.post("/api/admin/catalog/enrich-taxonomy", async (req, res) => {
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/enrich-taxonomy error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
+app.post("/api/admin/catalog/backfill-sizes", async (req, res) => {
+  try {
+    const merchant =
+      typeof req.query.merchant === "string" && req.query.merchant.trim()
+        ? req.query.merchant.trim().toLowerCase()
+        : "";
+
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit || "50000"), 10) || 50000, 1), 100000);
+
+    const where = {
+      isActive: true,
+      ...(merchant ? { merchant } : {}),
+    };
+
+    const rows = await prisma.catalogProduct.findMany({
+      where,
+      select: {
+        id: true,
+        category: true,
+        rawPayload: true,
+        title: true,
+        brand: true,
+      },
+      take: limit,
+      orderBy: { updatedAt: "desc" },
+    });
+
+    let updated = 0;
+    const byCategory = {};
+
+    for (const row of rows) {
+      const raw = row.rawPayload || {};
+      const rawText = [
+        raw.param,
+        raw.size,
+        raw.sizes,
+        raw.available_sizes,
+        raw.categoryId,
+        raw.market_category,
+        raw.typePrefix,
+        row.title,
+        row.brand,
+      ].filter(Boolean).join(" ");
+
+      const sizes = buildCatalogSizes(raw, row.category, rawText);
+
+      await prisma.catalogProduct.update({
+        where: { id: row.id },
+        data: sizes,
+      });
+
+      updated++;
+      const c = String(row.category || "OTHER");
+      byCategory[c] = (byCategory[c] || 0) + 1;
+    }
+
+    return res.json({
+      ok: true,
+      merchant: merchant || null,
+      scanned: rows.length,
+      updated,
+      byCategory,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/backfill-sizes error", e);
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
