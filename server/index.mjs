@@ -2556,6 +2556,99 @@ async function isUsableCatalogImageUrl(url) {
 }
 
 
+
+function uniqueStrings(values) {
+  return Array.from(new Set((values || []).map((v) => String(v || "").trim()).filter(Boolean)));
+}
+
+function inferCatalogTaxonomy(product) {
+  const haystack = [
+    product?.title,
+    product?.brand,
+    product?.category,
+    product?.gender,
+    JSON.stringify(product?.rawPayload || {}),
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  const category = String(product?.category || "").trim().toUpperCase();
+
+  let taxonomyGroup = "OTHER";
+  let taxonomySubgroup = "";
+
+  if (category === "SHOES") {
+    taxonomyGroup = "SHOES";
+    if (/балетк|ballet/.test(haystack)) taxonomySubgroup = "BALLET";
+    else if (/сапог|ботфорт|tall boot/.test(haystack)) taxonomySubgroup = "TALL_BOOTS";
+    else if (/кед|canvas|plimsoll/.test(haystack)) taxonomySubgroup = "SNEAKERS_CASUAL";
+    else if (/кроссов|sneaker|runner|running|trainer|trail/.test(haystack)) taxonomySubgroup = "SNEAKERS";
+    else if (/лофер|loafer|мокас/.test(haystack)) taxonomySubgroup = "LOAFERS";
+    else if (/сандал|босонож|сланц|шл[её]п|sand/.test(haystack)) taxonomySubgroup = "SANDALS";
+    else if (/туф|oxford|дерби|монк|brogue|formal shoe/.test(haystack)) taxonomySubgroup = "SHOES_CLASSIC";
+    else if (/ботин|boot|chelsea|chukka/.test(haystack)) taxonomySubgroup = "BOOTS";
+  } else if (["TOPS", "BOTTOMS", "JACKETS", "DRESS"].includes(category)) {
+    taxonomyGroup = "CLOTHING";
+    if (category === "DRESS" || /плать|dress/.test(haystack)) taxonomySubgroup = "DRESSES";
+    else if (/жакет|пиджак|blazer/.test(haystack)) taxonomySubgroup = "BLAZERS";
+    else if (/поло|polo/.test(haystack)) taxonomySubgroup = "POLO";
+    else if (/худи|hoodie|свитшот|sweatshirt|толстов/.test(haystack)) taxonomySubgroup = "HOODIES";
+    else if (/свитер|джемпер|кардиган|knit|sweater/.test(haystack)) taxonomySubgroup = "KNITWEAR";
+    else if (/рубаш|блуз|shirt|blouse/.test(haystack)) taxonomySubgroup = "SHIRTS";
+    else if (/футбол|майк|t-shirt|tee/.test(haystack)) taxonomySubgroup = "TSHIRTS";
+    else if (/юбк|skirt/.test(haystack)) taxonomySubgroup = "SKIRTS";
+    else if (/джинс|denim|jeans/.test(haystack)) taxonomySubgroup = "DENIM";
+    else if (/брюк|штан|trouser|pants/.test(haystack)) taxonomySubgroup = "TROUSERS";
+    else if (category === "JACKETS" || /куртк|пальто|пухов|парка|бомбер|coat|jacket/.test(haystack)) taxonomySubgroup = "OUTERWEAR";
+    else if (category === "TOPS") taxonomySubgroup = "TOPS";
+  } else if (category === "ACCESSORIES") {
+    if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошелек|wallet/.test(haystack)) {
+      taxonomyGroup = "BAGS";
+      taxonomySubgroup = "BAGS";
+    } else {
+      taxonomyGroup = "ACCESSORIES";
+      taxonomySubgroup = "ACCESSORIES";
+    }
+  }
+
+  const styleTags = [];
+  if (/classic|оксфорд|дерби|лофер|пальто|рубаш|пиджак|жакет/.test(haystack)) styleTags.push("classic");
+  if (/sport|running|trail|training|трениров|кроссов/.test(haystack)) styleTags.push("sport");
+  if (/casual|hoodie|худи|джинс|футбол|sneaker|кед/.test(haystack)) styleTags.push("casual");
+  if (/premium|luxury|кожа|leather|шерсть|wool|cashmere|кашемир/.test(haystack)) styleTags.push("premium");
+
+  const occasionTags = [];
+  if (/office|офис|classic|дерби|оксфорд|рубаш|пиджак|жакет/.test(haystack)) occasionTags.push("office");
+  if (/running|trail|sport|training|трениров/.test(haystack)) occasionTags.push("sport");
+  if (/casual|джинс|футбол|худи|sneaker|кед/.test(haystack)) occasionTags.push("casual");
+  if (/evening|вечер|premium|luxury/.test(haystack)) occasionTags.push("evening");
+
+  const seasonTags = [];
+  if (/winter|зим|пухов|шерсть|wool/.test(haystack)) seasonTags.push("winter");
+  if (/summer|летн|сандал|босонож|shorts|шорт/.test(haystack)) seasonTags.push("summer");
+  if (/демисез|spring|autumn|fall|осень|весна/.test(haystack)) seasonTags.push("midseason");
+
+  let colorFamily = null;
+  if (/black|черн|чёрн/.test(haystack)) colorFamily = "black";
+  else if (/white|бел/.test(haystack)) colorFamily = "white";
+  else if (/gray|grey|сер/.test(haystack)) colorFamily = "gray";
+  else if (/blue|син|голуб/.test(haystack)) colorFamily = "blue";
+  else if (/brown|корич|beige|беж/.test(haystack)) colorFamily = "brown";
+  else if (/green|зел/.test(haystack)) colorFamily = "green";
+  else if (/red|крас|бордов/.test(haystack)) colorFamily = "red";
+  else if (/pink|роз/.test(haystack)) colorFamily = "pink";
+
+  return {
+    taxonomyGroup,
+    taxonomySubgroup,
+    taxonomySource: "rules_v1",
+    taxonomyEnrichedAt: new Date(),
+    styleTags: uniqueStrings(styleTags),
+    occasionTags: uniqueStrings(occasionTags),
+    seasonTags: uniqueStrings(seasonTags),
+    colorFamily,
+  };
+}
+
+
 const catalogImportJobs = new Map();
 
 function startCatalogImportJob(merchant) {
@@ -2670,6 +2763,105 @@ app.get("/api/admin/catalog/import-jobs", (_req, res) => {
   return res.json({
     jobs: Array.from(catalogImportJobs.values()),
   });
+});
+
+
+
+app.post("/api/admin/catalog/enrich-taxonomy", async (req, res) => {
+  try {
+    const merchant =
+      typeof req.query.merchant === "string" && req.query.merchant.trim()
+        ? req.query.merchant.trim().toLowerCase()
+        : "";
+
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit || "50000"), 10) || 50000, 1), 100000);
+
+    const where = {
+      isActive: true,
+      ...(merchant ? { merchant } : {}),
+    };
+
+    const items = await prisma.catalogProduct.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        brand: true,
+        category: true,
+        gender: true,
+        rawPayload: true,
+      },
+      take: limit,
+      orderBy: { updatedAt: "desc" },
+    });
+
+    let updated = 0;
+    const byGroup = {};
+    const bySubgroup = {};
+    const byColor = {};
+
+    for (const item of items) {
+      const taxonomy = inferCatalogTaxonomy(item);
+
+      await prisma.catalogProduct.update({
+        where: { id: item.id },
+        data: taxonomy,
+      });
+
+      updated++;
+      byGroup[taxonomy.taxonomyGroup || ""] = (byGroup[taxonomy.taxonomyGroup || ""] || 0) + 1;
+      bySubgroup[taxonomy.taxonomySubgroup || ""] = (bySubgroup[taxonomy.taxonomySubgroup || ""] || 0) + 1;
+      byColor[taxonomy.colorFamily || ""] = (byColor[taxonomy.colorFamily || ""] || 0) + 1;
+    }
+
+    return res.json({
+      ok: true,
+      merchant: merchant || null,
+      scanned: items.length,
+      updated,
+      byGroup,
+      bySubgroup,
+      byColor,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/enrich-taxonomy error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.get("/api/admin/catalog/taxonomy-stats", async (req, res) => {
+  try {
+    const merchant =
+      typeof req.query.merchant === "string" && req.query.merchant.trim()
+        ? req.query.merchant.trim().toLowerCase()
+        : "";
+
+    const where = {
+      isActive: true,
+      ...(merchant ? { merchant } : {}),
+    };
+
+    const [groups, subgroups, colors, total, enriched] = await Promise.all([
+      prisma.catalogProduct.groupBy({ by: ["taxonomyGroup"], where, _count: { _all: true } }),
+      prisma.catalogProduct.groupBy({ by: ["taxonomySubgroup"], where, _count: { _all: true } }),
+      prisma.catalogProduct.groupBy({ by: ["colorFamily"], where, _count: { _all: true } }),
+      prisma.catalogProduct.count({ where }),
+      prisma.catalogProduct.count({ where: { ...where, taxonomyEnrichedAt: { not: null } } }),
+    ]);
+
+    return res.json({
+      ok: true,
+      merchant: merchant || null,
+      total,
+      enriched,
+      groups,
+      subgroups,
+      colors,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/taxonomy-stats error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
 });
 
 

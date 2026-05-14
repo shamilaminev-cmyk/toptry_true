@@ -166,6 +166,15 @@ model CatalogProduct {
   rawPayload    Json?
 
   createdAt     DateTime @default(now())
+  taxonomyGroup      String?
+  taxonomySubgroup   String?
+  taxonomySource     String?
+  taxonomyEnrichedAt DateTime?
+  styleTags          String[] @default([])
+  occasionTags       String[] @default([])
+  seasonTags         String[] @default([])
+  colorFamily        String?
+
   updatedAt     DateTime @updatedAt
 
   @@unique([merchant, externalId])
