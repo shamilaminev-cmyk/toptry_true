@@ -688,22 +688,6 @@ const Catalog = () => {
               ))}
             </select>
 
-            <select
-              value={draftSize}
-              onChange={(e) => {
-                const next = e.target.value;
-                setDraftSize(next);
-                if (next !== 'MY') setDraftSizeLoose(false);
-              }}
-              className="w-full h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900"
-            >
-              <option value="">Размер</option>
-              {['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-
-            {(isShoesCategory || isClothingCategory) && (
             <div className="grid grid-cols-2 gap-2">
               <input
                 inputMode="numeric"
@@ -764,7 +748,6 @@ const Catalog = () => {
                 ± 1 размер
               </button>
             </div>
-            )}
 
             {(isShoesCategory || isClothingCategory) && (
               <div className="flex flex-wrap gap-2">
