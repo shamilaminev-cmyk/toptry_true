@@ -1933,7 +1933,7 @@ function normalizeCatalogGender(raw) {
 function normalizeCatalogCategory(raw) {
   const s = String(raw || "").toLowerCase();
 
-  if (/(кроссов|кед|ботин|сапог|туфл|shoe|sneaker|loafer|sandals|сандал|сланц|шлеп)/i.test(s)) {
+  if (/(кроссов|кед|ботин|ботильон|сапог|угг|туфл|балетк|лофер|мокас|босонож|shoe|sneaker|loafer|sandals|сандал|сланц|шл[её]п|домашняя обувь)/i.test(s)) {
     return "SHOES";
   }
 
@@ -2570,7 +2570,12 @@ function inferCatalogTaxonomy(product) {
     JSON.stringify(product?.rawPayload || {}),
   ].filter(Boolean).join(" ").toLowerCase();
 
-  const category = String(product?.category || "").trim().toUpperCase();
+  const originalCategory = String(product?.category || "").trim().toUpperCase();
+  const inferredCategory = originalCategory === "OTHER"
+    ? normalizeCatalogCategory(haystack)
+    : originalCategory;
+
+  const category = inferredCategory;
 
   let taxonomyGroup = "OTHER";
   let taxonomySubgroup = "";
@@ -2578,13 +2583,13 @@ function inferCatalogTaxonomy(product) {
   if (category === "SHOES") {
     taxonomyGroup = "SHOES";
     if (/балетк|ballet/.test(haystack)) taxonomySubgroup = "BALLET";
-    else if (/сапог|ботфорт|tall boot/.test(haystack)) taxonomySubgroup = "TALL_BOOTS";
+    else if (/сапог|ботфорт|угг|tall boot|ugg/.test(haystack)) taxonomySubgroup = "TALL_BOOTS";
     else if (/кед|canvas|plimsoll/.test(haystack)) taxonomySubgroup = "SNEAKERS_CASUAL";
     else if (/кроссов|sneaker|runner|running|trainer|trail/.test(haystack)) taxonomySubgroup = "SNEAKERS";
     else if (/лофер|loafer|мокас/.test(haystack)) taxonomySubgroup = "LOAFERS";
     else if (/сандал|босонож|сланц|шл[её]п|sand/.test(haystack)) taxonomySubgroup = "SANDALS";
     else if (/туф|oxford|дерби|монк|brogue|formal shoe/.test(haystack)) taxonomySubgroup = "SHOES_CLASSIC";
-    else if (/ботин|boot|chelsea|chukka/.test(haystack)) taxonomySubgroup = "BOOTS";
+    else if (/ботин|ботильон|boot|chelsea|chukka/.test(haystack)) taxonomySubgroup = "BOOTS";
   } else if (["TOPS", "BOTTOMS", "JACKETS", "DRESS"].includes(category)) {
     taxonomyGroup = "CLOTHING";
     if (category === "DRESS" || /плать|dress/.test(haystack)) taxonomySubgroup = "DRESSES";
@@ -2636,10 +2641,16 @@ function inferCatalogTaxonomy(product) {
   else if (/red|крас|бордов/.test(haystack)) colorFamily = "red";
   else if (/pink|роз/.test(haystack)) colorFamily = "pink";
 
+  const categoryPatch =
+    originalCategory === "OTHER" && ["SHOES", "TOPS", "BOTTOMS", "JACKETS", "DRESS", "ACCESSORIES"].includes(category)
+      ? { category }
+      : {};
+
   return {
+    ...categoryPatch,
     taxonomyGroup,
     taxonomySubgroup,
-    taxonomySource: "rules_v1",
+    taxonomySource: "rules_v2",
     taxonomyEnrichedAt: new Date(),
     styleTags: uniqueStrings(styleTags),
     occasionTags: uniqueStrings(occasionTags),
