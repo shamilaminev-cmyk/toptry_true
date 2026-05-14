@@ -67,12 +67,14 @@ const Catalog = () => {
   const [draftSizeLoose, setDraftSizeLoose] = useState(false);
 
 
-  const isShoesCategory = displayCategory === 'SHOES';
+  const effectiveSizeCategory = filtersOpen ? draftDisplayCategory : displayCategory;
+
+  const isShoesCategory = effectiveSizeCategory === 'SHOES';
   const isClothingCategory =
-    displayCategory === 'TOPS' ||
-    displayCategory === 'BOTTOMS' ||
-    displayCategory === 'OUTERWEAR' ||
-    displayCategory === 'DRESSES';
+    effectiveSizeCategory === 'TOPS' ||
+    effectiveSizeCategory === 'BOTTOMS' ||
+    effectiveSizeCategory === 'OUTERWEAR' ||
+    effectiveSizeCategory === 'DRESSES';
 
   const visibleSizeOptions = isShoesCategory ? SHOE_SIZES : CLOTHING_SIZES;
 
@@ -664,7 +666,38 @@ const Catalog = () => {
                 return (
                   <button
                     key={String(tab.id || 'all')}
-                    onClick={() => setDraftDisplayCategory(tab.id)}
+                    onClick={() => {
+                      const nextCategory = tab.id;
+                      setDraftDisplayCategory(nextCategory);
+
+                      setDraftSize((current) => {
+                        if (!current || current === 'MY') return current;
+
+                        const nextIsShoes = nextCategory === 'SHOES';
+                        const nextIsClothing =
+                          nextCategory === 'TOPS' ||
+                          nextCategory === 'BOTTOMS' ||
+                          nextCategory === 'OUTERWEAR' ||
+                          nextCategory === 'DRESSES';
+
+                        if (!nextIsShoes && !nextIsClothing) {
+                          setDraftSizeLoose(false);
+                          return '';
+                        }
+
+                        if (nextIsShoes && !SHOE_SIZES.includes(current)) {
+                          setDraftSizeLoose(false);
+                          return '';
+                        }
+
+                        if (nextIsClothing && !CLOTHING_SIZES.includes(current)) {
+                          setDraftSizeLoose(false);
+                          return '';
+                        }
+
+                        return current;
+                      });
+                    }}
                     className={`flex-shrink-0 h-11 px-5 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
                       active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
                     }`}
