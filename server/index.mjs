@@ -1933,7 +1933,7 @@ function normalizeCatalogGender(raw) {
 function normalizeCatalogCategory(raw) {
   const s = String(raw || "").toLowerCase();
 
-  if (/(кроссов|кед|ботин|ботильон|сапог|угг|туфл|балетк|лофер|мокас|босонож|shoe|sneaker|loafer|sandals|сандал|сланц|шл[её]п|домашняя обувь)/i.test(s)) {
+  if (/(кроссов|кед|ботин|ботильон|сапог|угг|туфл|балетк|лофер|мокас|босонож|эспадриль|shoe|sneaker|loafer|sandals|сандал|сланц|шл[её]п|домашняя обувь|espadrille)/i.test(s)) {
     return "SHOES";
   }
 
@@ -2584,10 +2584,10 @@ function inferCatalogTaxonomy(product) {
     taxonomyGroup = "SHOES";
     if (/балетк|ballet/.test(haystack)) taxonomySubgroup = "BALLET";
     else if (/сапог|ботфорт|угг|tall boot|ugg/.test(haystack)) taxonomySubgroup = "TALL_BOOTS";
-    else if (/кед|canvas|plimsoll/.test(haystack)) taxonomySubgroup = "SNEAKERS_CASUAL";
     else if (/кроссов|sneaker|runner|running|trainer|trail/.test(haystack)) taxonomySubgroup = "SNEAKERS";
+    else if (/кед|canvas|plimsoll/.test(haystack)) taxonomySubgroup = "SNEAKERS_CASUAL";
     else if (/лофер|loafer|мокас/.test(haystack)) taxonomySubgroup = "LOAFERS";
-    else if (/сандал|босонож|сланц|шл[её]п|sand/.test(haystack)) taxonomySubgroup = "SANDALS";
+    else if (/сандал|босонож|эспадриль|сланц|шл[её]п|sand|espadrille/.test(haystack)) taxonomySubgroup = "SANDALS";
     else if (/туф|oxford|дерби|монк|brogue|formal shoe/.test(haystack)) taxonomySubgroup = "SHOES_CLASSIC";
     else if (/ботин|ботильон|boot|chelsea|chukka/.test(haystack)) taxonomySubgroup = "BOOTS";
   } else if (["TOPS", "BOTTOMS", "JACKETS", "DRESS"].includes(category)) {
