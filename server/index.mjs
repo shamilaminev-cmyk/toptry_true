@@ -1727,8 +1727,383 @@ app.delete("/api/wardrobe/item/:id", requireAuth, async (req, res) => {
 });
 
 // ---------- LOOKS / SOCIAL ----------
-// ... (ниже оставь без изменений, если хочешь — я продолжу весь файл до конца)
-// В твоём файле дальше идёт весь блок looks/comments/follow/feed — он совместим с этим CORS.
+
+function publicAuthorName(user) {
+  const name = String(user?.username || "").trim();
+  return name || "Пользователь TopTry";
+}
+
+async function mapLookForApi(row, viewerUserId = "") {
+  const author = row?.user || (row?.userId
+    ? await prisma.user.findUnique({
+        where: { id: row.userId },
+        select: { id: true, username: true, avatarUrl: true },
+      }).catch(() => null)
+    : null);
+
+  let viewerLiked = false;
+  if (viewerUserId && row?.id) {
+    const like = await prisma.like.findUnique({
+      where: { userId_lookId: { userId: viewerUserId, lookId: row.id } },
+      select: { id: true },
+    }).catch(() => null);
+    viewerLiked = !!like;
+  }
+
+  return {
+    id: row.id,
+    userId: row.userId,
+    title: row.title,
+    items: row.itemIds || [],
+    itemIds: row.itemIds || [],
+    sourceItems: row.sourceItems || [],
+    resultImageUrl: row.resultImageKey ? `/media/${row.resultImageKey}` : "",
+    isPublic: !!row.isPublic,
+    likes: row.likesCount || 0,
+    comments: row.commentsCount || 0,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt ? row.updatedAt.toISOString() : row.createdAt.toISOString(),
+    priceBuyNowRUB: row.priceBuyNowRUB || 0,
+    buyLinks: row.buyLinks || [],
+    aiDescription: row.aiDescription || null,
+    userDescription: row.userDescription || null,
+    authorName: publicAuthorName(author),
+    authorAvatar: author?.avatarUrl || "",
+    viewerLiked,
+  };
+}
+
+async function getLookVisibleToViewer(lookId, viewerUserId = "") {
+  const row = await prisma.look.findUnique({
+    where: { id: lookId },
+    include: {
+      user: { select: { id: true, username: true, avatarUrl: true } },
+    },
+  });
+
+  if (!row) return null;
+  if (row.isPublic || (viewerUserId && row.userId === viewerUserId)) return row;
+  return null;
+}
+
+app.get("/api/looks/public", async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit || "24"), 10) || 24, 1), 100);
+    const offset = Math.max(parseInt(String(req.query.offset || "0"), 10) || 0, 0);
+    const viewerUserId = req.auth?.userId || "";
+
+    const [rows, total] = await Promise.all([
+      prisma.look.findMany({
+        where: { isPublic: true },
+        include: {
+          user: { select: { id: true, username: true, avatarUrl: true } },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.look.count({ where: { isPublic: true } }),
+    ]);
+
+    const looks = await Promise.all(rows.map((r) => mapLookForApi(r, viewerUserId)));
+
+    return res.json({
+      looks,
+      total,
+      limit,
+      offset,
+      hasMore: offset + looks.length < total,
+    });
+  } catch (err) {
+    console.error("[toptry] /api/looks/public error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.get("/api/looks/my", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+
+    const rows = await prisma.look.findMany({
+      where: { userId },
+      include: {
+        user: { select: { id: true, username: true, avatarUrl: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const looks = await Promise.all(rows.map((r) => mapLookForApi(r, userId)));
+    return res.json({ looks });
+  } catch (err) {
+    console.error("[toptry] /api/looks/my error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.get("/api/looks/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const viewerUserId = req.auth?.userId || "";
+    const row = await getLookVisibleToViewer(id, viewerUserId);
+
+    if (!row) return res.status(404).json({ error: "Look not found" });
+
+    const look = await mapLookForApi(row, viewerUserId);
+    return res.json({ look });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id get error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.post("/api/looks/:id/publish", requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const userId = req.auth.userId;
+
+    const existing = await prisma.look.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+
+    if (!existing) return res.status(404).json({ error: "Look not found" });
+
+    const row = await prisma.look.update({
+      where: { id },
+      data: { isPublic: true },
+      include: {
+        user: { select: { id: true, username: true, avatarUrl: true } },
+      },
+    });
+
+    return res.json({ ok: true, look: await mapLookForApi(row, userId) });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/publish error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.post("/api/looks/:id/unpublish", requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const userId = req.auth.userId;
+
+    const existing = await prisma.look.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+
+    if (!existing) return res.status(404).json({ error: "Look not found" });
+
+    const row = await prisma.look.update({
+      where: { id },
+      data: { isPublic: false },
+      include: {
+        user: { select: { id: true, username: true, avatarUrl: true } },
+      },
+    });
+
+    return res.json({ ok: true, look: await mapLookForApi(row, userId) });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/unpublish error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.post("/api/looks/:id/like", requireAuth, async (req, res) => {
+  try {
+    const lookId = String(req.params.id || "");
+    const userId = req.auth.userId;
+
+    const look = await getLookVisibleToViewer(lookId, userId);
+    if (!look) return res.status(404).json({ error: "Look not found" });
+
+    const existing = await prisma.like.findUnique({
+      where: { userId_lookId: { userId, lookId } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      await prisma.$transaction([
+        prisma.like.create({
+          data: {
+            id: `like-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            userId,
+            lookId,
+          },
+        }),
+        prisma.look.update({
+          where: { id: lookId },
+          data: { likesCount: { increment: 1 } },
+        }),
+      ]);
+    }
+
+    const fresh = await prisma.look.findUnique({ where: { id: lookId }, select: { likesCount: true } });
+    return res.json({ ok: true, liked: true, likes: fresh?.likesCount || 0 });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/like error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.delete("/api/looks/:id/like", requireAuth, async (req, res) => {
+  try {
+    const lookId = String(req.params.id || "");
+    const userId = req.auth.userId;
+
+    const existing = await prisma.like.findUnique({
+      where: { userId_lookId: { userId, lookId } },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await prisma.$transaction([
+        prisma.like.delete({ where: { id: existing.id } }),
+        prisma.look.update({
+          where: { id: lookId },
+          data: { likesCount: { decrement: 1 } },
+        }),
+      ]);
+    }
+
+    const fresh = await prisma.look.findUnique({ where: { id: lookId }, select: { likesCount: true } });
+    return res.json({ ok: true, liked: false, likes: Math.max(0, fresh?.likesCount || 0) });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/like delete error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.post("/api/looks/:id/react", requireAuth, async (req, res) => {
+  try {
+    const reaction = String(req.body?.reaction || "").trim();
+    if (reaction !== "like") {
+      return res.json({ ok: true, likes: 0, wantTryCount: 0, wouldBuyCount: 0 });
+    }
+
+    const lookId = String(req.params.id || "");
+    const userId = req.auth.userId;
+    const look = await getLookVisibleToViewer(lookId, userId);
+    if (!look) return res.status(404).json({ error: "Look not found" });
+
+    const existing = await prisma.like.findUnique({
+      where: { userId_lookId: { userId, lookId } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      await prisma.$transaction([
+        prisma.like.create({
+          data: {
+            id: `like-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            userId,
+            lookId,
+          },
+        }),
+        prisma.look.update({
+          where: { id: lookId },
+          data: { likesCount: { increment: 1 } },
+        }),
+      ]);
+    }
+
+    const fresh = await prisma.look.findUnique({ where: { id: lookId }, select: { likesCount: true } });
+    return res.json({ ok: true, likes: fresh?.likesCount || 0, wantTryCount: 0, wouldBuyCount: 0 });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/react error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.post("/api/looks/:id/save", requireAuth, async (_req, res) => {
+  return res.json({ ok: true, saves: 0 });
+});
+
+app.get("/api/looks/:id/comments", async (req, res) => {
+  try {
+    const lookId = String(req.params.id || "");
+    const viewerUserId = req.auth?.userId || "";
+    const look = await getLookVisibleToViewer(lookId, viewerUserId);
+
+    if (!look) return res.status(404).json({ error: "Look not found" });
+
+    const rows = await prisma.comment.findMany({
+      where: { lookId },
+      include: {
+        user: { select: { id: true, username: true, avatarUrl: true } },
+      },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+    });
+
+    const comments = rows.map((c) => ({
+      id: c.id,
+      lookId: c.lookId,
+      userId: c.userId,
+      text: c.text,
+      createdAt: c.createdAt.toISOString(),
+      authorName: publicAuthorName(c.user),
+      authorAvatar: c.user?.avatarUrl || "",
+    }));
+
+    return res.json({ comments });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/comments get error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.post("/api/looks/:id/comments", requireAuth, async (req, res) => {
+  try {
+    const lookId = String(req.params.id || "");
+    const userId = req.auth.userId;
+    const text = String(req.body?.text || "").trim();
+
+    if (!text) return res.status(400).json({ error: "Comment text is required" });
+    if (text.length > 1000) return res.status(400).json({ error: "Comment is too long" });
+
+    const look = await getLookVisibleToViewer(lookId, userId);
+    if (!look) return res.status(404).json({ error: "Look not found" });
+
+    const comment = await prisma.$transaction(async (tx) => {
+      const c = await tx.comment.create({
+        data: {
+          id: `comment-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          userId,
+          lookId,
+          text,
+        },
+        include: {
+          user: { select: { id: true, username: true, avatarUrl: true } },
+        },
+      });
+
+      await tx.look.update({
+        where: { id: lookId },
+        data: { commentsCount: { increment: 1 } },
+      });
+
+      return c;
+    });
+
+    return res.json({
+      ok: true,
+      comment: {
+        id: comment.id,
+        lookId: comment.lookId,
+        userId: comment.userId,
+        text: comment.text,
+        createdAt: comment.createdAt.toISOString(),
+        authorName: publicAuthorName(comment.user),
+        authorAvatar: comment.user?.avatarUrl || "",
+      },
+    });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/comments post error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
 
 
 

@@ -14,6 +14,7 @@ const LookDetails = () => {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [commentBusy, setCommentBusy] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
 
   const quickComments = [
     'Очень удачно',
@@ -80,6 +81,7 @@ const LookDetails = () => {
     try {
       const resp = await fetch(`/api/looks/${encodeURIComponent(String(id))}/comments`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: commentText.trim() }),
       });
@@ -95,6 +97,35 @@ const LookDetails = () => {
       }
     } finally {
       setCommentBusy(false);
+    }
+  };
+
+  const handlePublishToggle = async () => {
+    if (!user?.id || !look?.id) return;
+
+    setPublishBusy(true);
+    try {
+      const endpoint = look.isPublic ? "unpublish" : "publish";
+      const resp = await fetch(`/api/looks/${encodeURIComponent(String(look.id))}/${endpoint}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        showToast(data?.error || 'Не удалось обновить публикацию');
+        return;
+      }
+
+      if (data?.look) {
+        setLook({ ...data.look, createdAt: new Date(data.look.createdAt) });
+      } else {
+        setLook((prev: any) => prev ? { ...prev, isPublic: !prev.isPublic } : prev);
+      }
+
+      showToast(endpoint === "publish" ? 'Образ опубликован' : 'Образ скрыт из ленты');
+    } finally {
+      setPublishBusy(false);
     }
   };
 
@@ -190,17 +221,39 @@ const LookDetails = () => {
       </div>
 
       <div className="p-6 space-y-8">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold uppercase tracking-tight">{look.title}</h1>
             <div className="flex items-center gap-2 mt-1">
-              <img src={withApiOrigin(look.authorAvatar)} alt="" className="w-5 h-5 rounded-full" />
+              {look.authorAvatar ? (
+                <img src={withApiOrigin(look.authorAvatar)} alt="" className="w-5 h-5 rounded-full object-cover" />
+              ) : (
+                <span className="w-5 h-5 rounded-full bg-zinc-100 inline-block" />
+              )}
               <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
-                {look.authorName}
+                {look.authorName || 'Пользователь TopTry'}
               </span>
+              {look.isPublic ? (
+                <span className="text-[9px] bg-zinc-900 text-white px-2 py-1 rounded-full font-bold uppercase tracking-widest">
+                  Опубликовано
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="flex gap-4 flex-wrap justify-end">
+            {isOwnLook && (
+              <button
+                onClick={handlePublishToggle}
+                disabled={publishBusy}
+                className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border ${
+                  look.isPublic
+                    ? 'border-zinc-300 text-zinc-500'
+                    : 'border-zinc-900 bg-zinc-900 text-white'
+                } ${publishBusy ? 'opacity-60 pointer-events-none' : ''}`}
+              >
+                {look.isPublic ? 'Скрыть' : 'Опубликовать'}
+              </button>
+            )}
             <button onClick={() => actions.reactToLook(look.id, 'like')} className="flex items-center gap-1.5 font-bold">
               <ICONS.Heart className="w-6 h-6" /> {look.likes}
             </button>
