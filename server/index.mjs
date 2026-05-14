@@ -2776,9 +2776,13 @@ app.post("/api/admin/catalog/enrich-taxonomy", async (req, res) => {
 
     const limit = Math.min(Math.max(parseInt(String(req.query.limit || "50000"), 10) || 50000, 1), 100000);
 
+    const force =
+      String(req.query.force || "").trim() === "1";
+
     const where = {
       isActive: true,
       ...(merchant ? { merchant } : {}),
+      ...(force ? {} : { taxonomyEnrichedAt: null }),
     };
 
     const items = await prisma.catalogProduct.findMany({
