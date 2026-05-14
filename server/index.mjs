@@ -1994,9 +1994,80 @@ function normalizeCatalogDisplayCategory(raw) {
   return "ACCESSORIES";
 }
 
+function getCatalogClothingTypePredicates(clothingType) {
+  const ct = String(clothingType || "").trim().toUpperCase();
+  if (!ct) return null;
+
+  if (ct === "FEMALE_CLOTHING") return [{ gender: "FEMALE" }];
+  if (ct === "MALE_CLOTHING") return [{ gender: "MALE" }];
+
+  if (ct === "DRESSES") return [{ category: "DRESS" }];
+  if (ct === "TOPS") return [{ category: "TOPS" }];
+  if (ct === "OUTERWEAR") return [{ category: "JACKETS" }];
+
+  if (ct === "SKIRTS") {
+    return [
+      { category: "BOTTOMS", title: { contains: "юб", mode: "insensitive" } },
+      { category: "BOTTOMS", title: { contains: "skirt", mode: "insensitive" } },
+    ];
+  }
+
+  if (ct === "TROUSERS") {
+    return [
+      { category: "BOTTOMS", title: { contains: "брюк", mode: "insensitive" } },
+      { category: "BOTTOMS", title: { contains: "штан", mode: "insensitive" } },
+      { category: "BOTTOMS", title: { contains: "trouser", mode: "insensitive" } },
+      { category: "BOTTOMS", title: { contains: "pants", mode: "insensitive" } },
+    ];
+  }
+
+  if (ct === "DENIM") {
+    return [
+      { title: { contains: "джинс", mode: "insensitive" } },
+      { title: { contains: "denim", mode: "insensitive" } },
+      { title: { contains: "jeans", mode: "insensitive" } },
+    ];
+  }
+
+  if (ct === "TSHIRTS") {
+    return [
+      { category: "TOPS", title: { contains: "футбол", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "майк", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "поло", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "t-shirt", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "tee", mode: "insensitive" } },
+    ];
+  }
+
+  if (ct === "SHIRTS") {
+    return [
+      { category: "TOPS", title: { contains: "рубаш", mode: "insensitive" } },
+      { category: "TOPS", title: { contains: "shirt", mode: "insensitive" } },
+    ];
+  }
+
+  if (ct === "SUITS") {
+    return [
+      { title: { contains: "костюм", mode: "insensitive" } },
+      { title: { contains: "suit", mode: "insensitive" } },
+    ];
+  }
+
+  return null;
+}
+
 function getCatalogDisplayCategoryPredicates(displayCategory) {
   const dc = String(displayCategory || "").trim().toUpperCase();
   if (!dc) return null;
+
+  if (dc === "CLOTHING") {
+    return [
+      { category: "TOPS" },
+      { category: "BOTTOMS" },
+      { category: "JACKETS" },
+      { category: "DRESS" },
+    ];
+  }
 
   if (dc === "TOPS") {
     return [{ category: "TOPS" }];
@@ -2042,6 +2113,7 @@ function buildCatalogDbWhere({
   brand,
   priceMin,
   priceMax,
+  clothingType,
   size,
   sizeTop,
   sizeBottom,
@@ -2065,6 +2137,11 @@ function buildCatalogDbWhere({
   const displayPredicates = getCatalogDisplayCategoryPredicates(displayCategory);
   if (displayPredicates?.length) {
     and.push({ OR: displayPredicates });
+  }
+
+  const clothingTypePredicates = getCatalogClothingTypePredicates(clothingType);
+  if (String(displayCategory || "").trim().toUpperCase() === "CLOTHING" && clothingTypePredicates?.length) {
+    and.push({ OR: clothingTypePredicates });
   }
 
   const brandNeedle = String(brand || "").trim();
@@ -3477,6 +3554,10 @@ app.get("/api/catalog/brands", async (req, res) => {
       typeof req.query.q === "string" && req.query.q.trim()
         ? req.query.q.trim()
         : "";
+    const clothingType =
+      typeof req.query.clothingType === "string" && req.query.clothingType.trim()
+        ? req.query.clothingType.trim().toUpperCase()
+        : "";
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
 
@@ -3490,6 +3571,7 @@ app.get("/api/catalog/brands", async (req, res) => {
       brand: "",
       priceMin: "",
       priceMax: "",
+      clothingType,
       size: "",
       sizeTop: "",
       sizeBottom: "",
@@ -3543,6 +3625,10 @@ app.get("/api/catalog/products", async (req, res) => {
     const q =
       typeof req.query.q === "string" && req.query.q.trim()
         ? req.query.q.trim()
+        : "";
+    const clothingType =
+      typeof req.query.clothingType === "string" && req.query.clothingType.trim()
+        ? req.query.clothingType.trim().toUpperCase()
         : "";
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
@@ -3639,6 +3725,7 @@ app.get("/api/catalog/products", async (req, res) => {
       brand,
       priceMin,
       priceMax,
+      clothingType,
       size: rawSize === "MY" ? "" : rawSize,
       sizeTop: effectiveMySizeTop,
       sizeBottom: effectiveMySizeBottom,

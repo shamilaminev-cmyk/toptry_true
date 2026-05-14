@@ -7,13 +7,24 @@ import { Gender } from '../types';
 import { CURRENCY, ICONS } from '../constants';
 
 type DisplayCategory =
-  | 'TOPS'
-  | 'BOTTOMS'
-  | 'OUTERWEAR'
-  | 'DRESSES'
+  | 'CLOTHING'
   | 'SHOES'
   | 'BAGS'
   | 'ACCESSORIES';
+
+type ClothingType =
+  | ''
+  | 'FEMALE_CLOTHING'
+  | 'MALE_CLOTHING'
+  | 'DRESSES'
+  | 'TOPS'
+  | 'TSHIRTS'
+  | 'SHIRTS'
+  | 'SKIRTS'
+  | 'TROUSERS'
+  | 'DENIM'
+  | 'OUTERWEAR'
+  | 'SUITS';
 
 const GENDER_TABS: Array<{ id: '' | Gender; label: string }> = [
   { id: '', label: 'Все' },
@@ -23,14 +34,42 @@ const GENDER_TABS: Array<{ id: '' | Gender; label: string }> = [
 
 const CATEGORY_TABS: Array<{ id: '' | DisplayCategory; label: string }> = [
   { id: '', label: 'Все' },
-  { id: 'TOPS', label: 'Верх' },
-  { id: 'BOTTOMS', label: 'Низ' },
-  { id: 'OUTERWEAR', label: 'Верхняя одежда' },
-  { id: 'DRESSES', label: 'Платья' },
+  { id: 'CLOTHING', label: 'Одежда' },
   { id: 'SHOES', label: 'Обувь' },
   { id: 'BAGS', label: 'Сумки' },
   { id: 'ACCESSORIES', label: 'Аксессуары' },
 ];
+
+const CLOTHING_TABS_MIXED: Array<{ id: ClothingType; label: string }> = [
+  { id: 'FEMALE_CLOTHING', label: 'Женская одежда' },
+  { id: 'MALE_CLOTHING', label: 'Мужская одежда' },
+];
+
+const CLOTHING_TABS_FEMALE: Array<{ id: ClothingType; label: string }> = [
+  { id: '', label: 'Все' },
+  { id: 'DRESSES', label: 'Платья' },
+  { id: 'TOPS', label: 'Топы' },
+  { id: 'SKIRTS', label: 'Юбки' },
+  { id: 'TROUSERS', label: 'Брюки' },
+  { id: 'DENIM', label: 'Деним' },
+  { id: 'OUTERWEAR', label: 'Верхняя одежда' },
+];
+
+const CLOTHING_TABS_MALE: Array<{ id: ClothingType; label: string }> = [
+  { id: '', label: 'Все' },
+  { id: 'TSHIRTS', label: 'Футболки' },
+  { id: 'SHIRTS', label: 'Рубашки' },
+  { id: 'TROUSERS', label: 'Брюки' },
+  { id: 'DENIM', label: 'Деним' },
+  { id: 'OUTERWEAR', label: 'Верхняя одежда' },
+  { id: 'SUITS', label: 'Костюмы' },
+];
+
+const getClothingTabs = (gender: '' | Gender): Array<{ id: ClothingType; label: string }> => {
+  if (gender === Gender.FEMALE) return CLOTHING_TABS_FEMALE;
+  if (gender === Gender.MALE) return CLOTHING_TABS_MALE;
+  return CLOTHING_TABS_MIXED;
+};
 
 const IMG_FALLBACK = "";
 const PAGE_SIZE = 24;
@@ -47,6 +86,7 @@ const Catalog = () => {
   const [gender, setGender] = useState<'' | Gender>('');
   const [draftGender, setDraftGender] = useState<'' | Gender>('');
   const [displayCategory, setDisplayCategory] = useState<'' | DisplayCategory>('');
+  const [clothingType, setClothingType] = useState<ClothingType>('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [discountOnly, setDiscountOnly] = useState(false);
@@ -57,6 +97,7 @@ const Catalog = () => {
   const [sort, setSort] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftDisplayCategory, setDraftDisplayCategory] = useState<'' | DisplayCategory>('');
+  const [draftClothingType, setDraftClothingType] = useState<ClothingType>('');
   const [draftDiscountOnly, setDraftDiscountOnly] = useState(false);
   const [draftBrand, setDraftBrand] = useState('');
   const [draftPriceMin, setDraftPriceMin] = useState('');
@@ -70,11 +111,7 @@ const Catalog = () => {
   const effectiveSizeCategory = filtersOpen ? draftDisplayCategory : displayCategory;
 
   const isShoesCategory = effectiveSizeCategory === 'SHOES';
-  const isClothingCategory =
-    effectiveSizeCategory === 'TOPS' ||
-    effectiveSizeCategory === 'BOTTOMS' ||
-    effectiveSizeCategory === 'OUTERWEAR' ||
-    effectiveSizeCategory === 'DRESSES';
+  const isClothingCategory = effectiveSizeCategory === 'CLOTHING';
 
   const visibleSizeOptions = isShoesCategory ? SHOE_SIZES : CLOTHING_SIZES;
 
@@ -112,6 +149,7 @@ const Catalog = () => {
       sort?: string;
       size?: string;
       sizeLoose?: boolean;
+      clothingType?: string;
     } = null;
 
     if (!hasHashFilters) {
@@ -140,6 +178,9 @@ const Catalog = () => {
     const priceMaxParam = hasHashFilters ? (hashParams.get('priceMax') || '') : (saved?.priceMax || '');
     const sortParam = hasHashFilters ? (hashParams.get('sort') || '') : (saved?.sort || '');
     const sizeParam = hasHashFilters ? (hashParams.get('size') || '') : (saved?.size || '');
+    const clothingTypeParam = String(
+      hasHashFilters ? (hashParams.get('clothingType') || '') : (saved?.clothingType || '')
+    ).toUpperCase() as ClothingType;
     const sizeLooseParam = sizeParam === 'MY' && (hasHashFilters ? hashParams.get('sizeLoose') === '1' : Boolean(saved?.sizeLoose));
 
     setSearch(q);
@@ -162,6 +203,8 @@ const Catalog = () => {
     setDraftSize(sizeParam);
     setSizeLoose(sizeLooseParam);
     setDraftSizeLoose(sizeLooseParam);
+    setClothingType(clothingTypeParam);
+    setDraftClothingType(clothingTypeParam);
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
@@ -198,7 +241,8 @@ const Catalog = () => {
     setDraftPriceMax(priceMax);
     setDraftSize(size);
     setDraftSizeLoose(size === 'MY' ? sizeLoose : false);
-  }, [filtersOpen, gender, displayCategory, discountOnly, brand, priceMin, priceMax, size, sizeLoose]);
+    setDraftClothingType(clothingType);
+  }, [filtersOpen, gender, displayCategory, clothingType, discountOnly, brand, priceMin, priceMax, size, sizeLoose]);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +252,10 @@ const Catalog = () => {
         const params = new URLSearchParams();
         if (gender) params.set('gender', gender);
         if (displayCategory) params.set('displayCategory', displayCategory);
+    if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
+        if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
+    if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
+        if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
         if (debouncedSearch) params.set('q', debouncedSearch);
         if (discountOnly) params.set('discountOnly', '1');
 
@@ -239,7 +287,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, debouncedSearch, discountOnly, brand]);
+  }, [gender, displayCategory, clothingType, debouncedSearch, discountOnly, brand]);
 
   const fetchCatalog = async (nextOffset: number, append: boolean) => {
     const params = new URLSearchParams();
@@ -327,7 +375,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
+  }, [gender, displayCategory, clothingType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
 
   useEffect(() => {
     try {
@@ -335,6 +383,7 @@ const Catalog = () => {
         q: debouncedSearch,
         gender,
         displayCategory,
+        clothingType: displayCategory === 'CLOTHING' ? clothingType : '',
         discountOnly,
         brand,
         priceMin,
@@ -345,7 +394,7 @@ const Catalog = () => {
       };
       window.sessionStorage.setItem(CATALOG_FILTERS_STORAGE_KEY, JSON.stringify(payload));
     } catch {}
-  }, [debouncedSearch, gender, displayCategory, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
+  }, [debouncedSearch, gender, displayCategory, clothingType, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -402,6 +451,8 @@ const Catalog = () => {
     setDraftGender('');
     setDisplayCategory('');
     setDraftDisplayCategory('');
+    setClothingType('');
+    setDraftClothingType('');
     setSearch('');
     setDebouncedSearch('');
     setDiscountOnly(false);
@@ -426,6 +477,7 @@ const Catalog = () => {
   const clearDraftFilters = () => {
     setDraftGender('');
     setDraftDisplayCategory('');
+    setDraftClothingType('');
     setDraftDiscountOnly(false);
     setDraftBrand('');
     setDraftPriceMin('');
@@ -446,7 +498,8 @@ const Catalog = () => {
         const params = new URLSearchParams()
 
         if (draftGender) params.set('gender', draftGender)
-        if (draftDisplayCategory) params.set('category', draftDisplayCategory)
+        if (draftDisplayCategory) params.set('displayCategory', draftDisplayCategory)
+        if (draftDisplayCategory === 'CLOTHING' && draftClothingType) params.set('clothingType', draftClothingType)
         if (draftBrand) params.set('brand', draftBrand)
         if (draftDiscountOnly) params.set('discountOnly', '1')
         if (draftPriceMin) params.set('priceMin', draftPriceMin)
@@ -482,6 +535,7 @@ const Catalog = () => {
     filtersOpen,
     draftGender,
     draftDisplayCategory,
+    draftClothingType,
     draftBrand,
     draftDiscountOnly,
     draftPriceMin,
@@ -494,6 +548,7 @@ const Catalog = () => {
   const applyDrawerFilters = () => {
     setGender(draftGender);
     setDisplayCategory(draftDisplayCategory);
+    setClothingType(draftDisplayCategory === 'CLOTHING' ? draftClothingType : '');
     setDiscountOnly(draftDiscountOnly);
     setBrand(draftBrand);
     setPriceMin(draftPriceMin);
@@ -519,13 +574,13 @@ const Catalog = () => {
   const filteredCountLabel = useMemo(() => total, [total]);
   const activeFiltersCount = useMemo(
     () =>
-      [gender, displayCategory, debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
-    [gender, displayCategory, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]
+      [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+    [gender, displayCategory, clothingType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]
   );
   const draftActiveFiltersCount = useMemo(
     () =>
-      [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSize === 'MY' && draftSizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
-    [draftGender, draftDisplayCategory, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSizeLoose]
+      [draftGender, draftDisplayCategory, draftDisplayCategory === 'CLOTHING' ? draftClothingType : '', debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSize === 'MY' && draftSizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+    [draftGender, draftDisplayCategory, draftClothingType, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSizeLoose]
   );
   const applyButtonLabel = useMemo(() => {
     if (loading) return 'Загружаем...';
@@ -569,6 +624,7 @@ const Catalog = () => {
               setDraftPriceMax(priceMax);
               setDraftSize(size);
               setDraftSizeLoose(size === 'MY' ? sizeLoose : false);
+              setDraftClothingType(clothingType);
               setFiltersOpen(true);
             }}
             className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 flex items-center justify-between"
@@ -607,7 +663,7 @@ const Catalog = () => {
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           Найдено: {filteredCountLabel}
         </p>
-        {(gender || displayCategory || search || discountOnly || brand || priceMin || priceMax || sort || size || (size === 'MY' && sizeLoose)) && (
+        {(gender || displayCategory || clothingType || search || discountOnly || brand || priceMin || priceMax || sort || size || (size === 'MY' && sizeLoose)) && (
           <button
             onClick={clearFilters}
             className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 underline underline-offset-4"
@@ -649,7 +705,10 @@ const Catalog = () => {
                 return (
                   <button
                     key={String(tab.id || 'all')}
-                    onClick={() => setDraftGender(tab.id)}
+                    onClick={() => {
+                      setDraftGender(tab.id);
+                      setDraftClothingType('');
+                    }}
                     className={`flex-shrink-0 h-11 px-5 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
                       active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
                     }`}
@@ -669,16 +728,13 @@ const Catalog = () => {
                     onClick={() => {
                       const nextCategory = tab.id;
                       setDraftDisplayCategory(nextCategory);
+                      if (nextCategory !== 'CLOTHING') setDraftClothingType('');
 
                       setDraftSize((current) => {
                         if (!current || current === 'MY') return current;
 
                         const nextIsShoes = nextCategory === 'SHOES';
-                        const nextIsClothing =
-                          nextCategory === 'TOPS' ||
-                          nextCategory === 'BOTTOMS' ||
-                          nextCategory === 'OUTERWEAR' ||
-                          nextCategory === 'DRESSES';
+                        const nextIsClothing = nextCategory === 'CLOTHING';
 
                         if (!nextIsShoes && !nextIsClothing) {
                           setDraftSizeLoose(false);
@@ -707,6 +763,26 @@ const Catalog = () => {
                 );
               })}
             </div>
+
+            {draftDisplayCategory === 'CLOTHING' && (
+              <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
+                {getClothingTabs(draftGender).map((tab) => {
+                  const active = draftClothingType === tab.id;
+                  return (
+                    <button
+                      key={String(tab.id || 'all-clothing')}
+                      onClick={() => setDraftClothingType(tab.id)}
+                      className={`flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                        active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
 
             <select
               value={draftBrand}
