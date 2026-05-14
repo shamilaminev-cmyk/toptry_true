@@ -356,6 +356,8 @@ const Catalog = () => {
 
     if (gender) params.set('gender', gender);
     if (displayCategory) params.set('displayCategory', displayCategory);
+    if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
+    if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
     if (debouncedSearch) params.set('q', debouncedSearch);
     if (discountOnly) params.set('discountOnly', '1');
     if (brand) params.set('brand', brand);
@@ -397,6 +399,8 @@ const Catalog = () => {
 
         if (gender) params.set('gender', gender);
         if (displayCategory) params.set('displayCategory', displayCategory);
+    if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
+    if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
         if (debouncedSearch) params.set('q', debouncedSearch);
         if (discountOnly) params.set('discountOnly', '1');
     if (brand) params.set('brand', brand);
@@ -463,6 +467,8 @@ const Catalog = () => {
     if (debouncedSearch) params.set('q', debouncedSearch);
     if (gender) params.set('gender', gender);
     if (displayCategory) params.set('displayCategory', displayCategory);
+    if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
+    if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
     if (discountOnly) params.set('discountOnly', '1');
     if (brand) params.set('brand', brand);
     if (priceMin) params.set('priceMin', priceMin);
@@ -482,6 +488,8 @@ const Catalog = () => {
     debouncedSearch,
     gender,
     displayCategory,
+    clothingType,
+    shoeType,
     discountOnly,
     brand,
     priceMin,
@@ -601,6 +609,7 @@ const Catalog = () => {
     draftGender,
     draftDisplayCategory,
     draftClothingType,
+    draftShoeType,
     draftBrand,
     draftDiscountOnly,
     draftPriceMin,
@@ -641,7 +650,7 @@ const Catalog = () => {
   const activeFiltersCount = useMemo(
     () =>
       [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', displayCategory === 'SHOES' ? shoeType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
-    [gender, displayCategory, clothingType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]
+    [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]
   );
   const draftActiveFiltersCount = useMemo(
     () =>
