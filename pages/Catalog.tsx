@@ -36,6 +36,11 @@ const IMG_FALLBACK = "";
 const PAGE_SIZE = 24;
 const CATALOG_FILTERS_STORAGE_KEY = 'toptry.catalog.filters.v1';
 
+
+const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+const SHOE_SIZES = ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'];
+
+
 const Catalog = () => {
   const { wardrobe, actions, user } = useAppState() as any;
 
@@ -60,6 +65,17 @@ const Catalog = () => {
   const [draftSize, setDraftSize] = useState('');
   const [sizeLoose, setSizeLoose] = useState(false);
   const [draftSizeLoose, setDraftSizeLoose] = useState(false);
+
+
+  const isShoesCategory = displayCategory === 'SHOES';
+  const isClothingCategory =
+    displayCategory === 'TOPS' ||
+    displayCategory === 'BOTTOMS' ||
+    displayCategory === 'OUTERWEAR' ||
+    displayCategory === 'DRESSES';
+
+  const visibleSizeOptions = isShoesCategory ? SHOE_SIZES : CLOTHING_SIZES;
+
 
   const [draftTotal, setDraftTotal] = useState<number | null>(null)
   const [items, setItems] = useState<any[]>([]);
@@ -687,6 +703,7 @@ const Catalog = () => {
               ))}
             </select>
 
+            {(isShoesCategory || isClothingCategory) && (
             <div className="grid grid-cols-2 gap-2">
               <input
                 inputMode="numeric"
@@ -747,6 +764,32 @@ const Catalog = () => {
                 ± 1 размер
               </button>
             </div>
+            )}
+
+            {(isShoesCategory || isClothingCategory) && (
+              <div className="flex flex-wrap gap-2">
+                {visibleSizeOptions.map((s) => {
+                  const active = draftSize === s;
+
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => {
+                        setDraftSize((v) => v === s ? '' : s);
+                        setDraftSizeLoose(false);
+                      }}
+                      className={`h-11 min-w-[52px] px-4 inline-flex items-center justify-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                        active
+                          ? 'bg-zinc-900 text-white border-zinc-900 shadow-md'
+                          : 'bg-white border-zinc-200 text-zinc-500'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="sticky bottom-0 -mx-5 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] bg-white border-t border-zinc-100 grid grid-cols-2 gap-2">
               <button
@@ -783,6 +826,14 @@ const Catalog = () => {
                       <div className="absolute top-4 left-4 z-10 bg-zinc-900 text-white px-2.5 py-1.5 rounded-full shadow-md">
                         <span className="text-[9px] font-black uppercase tracking-[0.12em]">
                           -{p.discountPercent}%
+                        </span>
+                      </div>
+                    )}
+
+                    {size === 'MY' && (
+                      <div className="absolute top-4 right-4 z-10 bg-white/95 backdrop-blur border border-zinc-200 text-zinc-900 px-2.5 py-1.5 rounded-full shadow-sm">
+                        <span className="text-[9px] font-black uppercase tracking-[0.12em]">
+                          Есть ваш размер
                         </span>
                       </div>
                     )}
