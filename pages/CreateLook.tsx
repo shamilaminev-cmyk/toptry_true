@@ -22,6 +22,7 @@ const CreateLook = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [genStep, setGenStep] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [qualityMode, setQualityMode] = useState<'fast' | 'quality'>('quality');
   const selfie = user?.selfieUrl || user?.avatarUrl;
   const selectedItems = wardrobe.filter((i) => selectedIds.has(i.id));
 
