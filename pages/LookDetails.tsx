@@ -189,8 +189,9 @@ const LookDetails = () => {
   };
 
   return (
-    <div className="pb-12">
-      <div className="relative aspect-[3/4] bg-zinc-100">
+    <div className="pb-12 md:px-6 md:py-6">
+      <div className="md:grid md:grid-cols-[minmax(0,560px)_minmax(360px,1fr)] md:gap-8 md:items-start md:max-w-6xl md:mx-auto">
+        <div className="relative aspect-[3/4] bg-zinc-100 md:sticky md:top-24 md:h-[calc(100vh-180px)] md:min-h-[560px] md:max-h-[820px] md:aspect-auto md:rounded-[32px] md:overflow-hidden md:border md:border-zinc-100">
         <img
           src={
             showResult
@@ -198,7 +199,7 @@ const LookDetails = () => {
               : withApiOrigin(look.resultImageUrl)
           }
           alt=""
-          className={`w-full h-full object-cover transition-all duration-1000 ${
+          className={`w-full h-full object-cover md:object-contain transition-all duration-1000 ${
             isTryingOn ? 'blur-xl' : 'blur-0'
           }`}
         />
@@ -233,9 +234,9 @@ const LookDetails = () => {
             ></path>
           </svg>
         </Link>
-      </div>
+        </div>
 
-      <div className="p-6 space-y-8">
+        <div className="p-6 space-y-8 md:p-0 md:pb-24">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold uppercase tracking-tight">{look.title}</h1>
@@ -449,6 +450,7 @@ const LookDetails = () => {
           >
             <ICONS.Share className="w-4 h-4" /> Поделиться этим образом
           </button>
+        </div>
         </div>
       </div>
     </div>
