@@ -700,26 +700,6 @@ const Catalog = () => {
             </div>
 
             <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
-              {GENDER_TABS.map((tab) => {
-                const active = draftGender === tab.id;
-                return (
-                  <button
-                    key={String(tab.id || 'all')}
-                    onClick={() => {
-                      setDraftGender(tab.id);
-                      setDraftClothingType('');
-                    }}
-                    className={`flex-shrink-0 h-11 px-5 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
-                      active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
               {CATEGORY_TABS.map((tab) => {
                 const active = draftDisplayCategory === tab.id;
                 return (
