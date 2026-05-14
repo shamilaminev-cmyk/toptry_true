@@ -4,6 +4,21 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ICONS } from '../constants';
 import { withApiOrigin } from '../utils/withApiOrigin';
 
+const CommentIcon: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 17 0Z" />
+  </svg>
+);
+
 const Looks = () => {
   const { looks, actions, user } = useAppState();
   const navigate = useNavigate();
@@ -170,7 +185,7 @@ const Looks = () => {
                     className="bg-white/85 backdrop-blur-sm p-2 rounded-full shadow-lg transition-all duration-300 hover:scale-110"
                     aria-label="Открыть комментарии"
                   >
-                    <ICONS.MessageCircle className="w-4 h-4" />
+                    <CommentIcon className="w-4 h-4" />
                   </button>
                 </div>
               </Link>
