@@ -166,11 +166,11 @@ const Looks = () => {
             return (
               <article
                 key={look.id}
-                className="group md:grid md:grid-cols-[minmax(0,560px)_minmax(360px,1fr)] md:gap-8 md:items-start"
+                className="group md:grid md:grid-cols-2 md:gap-8 md:items-start"
               >
                 <Link
                   to={`/look/${look.id}`}
-                  className="block relative aspect-[3/4] rounded-[32px] overflow-hidden bg-zinc-100 md:h-[calc(100vh-220px)] md:min-h-[560px] md:max-h-[760px] md:aspect-auto md:border md:border-zinc-100"
+                  className="block relative aspect-[3/4] rounded-[32px] overflow-hidden bg-zinc-100 md:h-[calc(100vh-220px)] md:min-h-[560px] md:max-h-[760px] md:aspect-auto md:border md:border-zinc-100 md:max-w-[560px] md:ml-auto"
                 >
                   <img
                     src={withApiOrigin(look.resultImageUrl)}
