@@ -19,6 +19,12 @@ const CommentIcon: React.FC<{ className?: string }> = ({ className = '' }) => (
   </svg>
 );
 
+const formatPriceRUB = (value: any) => {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n) || n <= 0) return '0 ₽';
+  return `${Math.round(n).toLocaleString('ru-RU')} ₽`;
+};
+
 const Looks = () => {
   const { looks, actions, user } = useAppState();
   const navigate = useNavigate();
@@ -150,71 +156,181 @@ const Looks = () => {
       )}
 
       {visibleLooks.length > 0 && (
-        <div className="p-4 grid grid-cols-2 gap-4">
-          {visibleLooks.map((look: any) => (
-            <div key={look.id} className="space-y-2 group">
-              <Link
-                to={`/look/${look.id}`}
-                className="block relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-100"
-              >
-                <img
-                  src={withApiOrigin(look.resultImageUrl)}
-                  alt=""
-                  className="w-full h-full object-cover transition-all duration-700"
-                />
-                <div className="absolute top-3 right-3 flex flex-col gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleLikeFromFeed(String(look.id));
-                    }}
-                    className={`bg-white/85 backdrop-blur-sm p-2 rounded-full shadow-lg transition-all duration-300 ${
-                      likedPulseIds[String(look.id)] ? 'scale-125 bg-zinc-900 text-white ring-4 ring-white/70' : ''
-                    }`}
-                    aria-label="Лайкнуть образ"
-                  >
-                    <ICONS.Heart className={`w-4 h-4 transition-transform duration-300 ${
-                      likedPulseIds[String(look.id)] ? 'scale-125' : ''
-                    }`} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      openComments(String(look.id));
-                    }}
-                    className="bg-white/85 backdrop-blur-sm p-2 rounded-full shadow-lg transition-all duration-300 hover:scale-110"
-                    aria-label="Открыть комментарии"
-                  >
-                    <CommentIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </Link>
+        <div className="px-4 py-5 space-y-8 md:px-6 md:py-8 md:max-w-6xl md:mx-auto">
+          {visibleLooks.map((look: any) => {
+            const sourceItems = Array.isArray(look.sourceItems) ? look.sourceItems : [];
+            const totalPrice =
+              Number(look.priceBuyNowRUB || 0) ||
+              sourceItems.reduce((sum: number, item: any) => sum + (Number(item?.price || 0) || 0), 0);
 
-              <div className="px-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider truncate">
-                  {look.title || 'Образ'}
-                </p>
-                <div className="flex items-center justify-between mt-1">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <img
-                      src={withApiOrigin(look.authorAvatar || user?.avatarUrl || user?.selfieUrl || '')}
-                      alt=""
-                      className="w-4 h-4 rounded-full bg-zinc-100"
-                    />
-                    <span className="text-[9px] text-zinc-400 font-bold uppercase truncate">
-                      {look.authorName || 'toptry'}
-                    </span>
+            return (
+              <article
+                key={look.id}
+                className="group md:grid md:grid-cols-[minmax(0,560px)_minmax(360px,1fr)] md:gap-8 md:items-start"
+              >
+                <Link
+                  to={`/look/${look.id}`}
+                  className="block relative aspect-[3/4] rounded-[32px] overflow-hidden bg-zinc-100 md:h-[calc(100vh-220px)] md:min-h-[560px] md:max-h-[760px] md:aspect-auto md:border md:border-zinc-100"
+                >
+                  <img
+                    src={withApiOrigin(look.resultImageUrl)}
+                    alt=""
+                    className="w-full h-full object-cover md:object-contain transition-all duration-700"
+                  />
+                  <div className="absolute top-4 right-4 flex flex-col gap-2 md:flex-row">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleLikeFromFeed(String(look.id));
+                      }}
+                      className={`bg-white/85 backdrop-blur-sm p-2 rounded-full shadow-lg transition-all duration-300 ${
+                        likedPulseIds[String(look.id)] ? 'scale-125 bg-zinc-900 text-white ring-4 ring-white/70' : ''
+                      }`}
+                      aria-label="Лайкнуть образ"
+                    >
+                      <ICONS.Heart className={`w-4 h-4 transition-transform duration-300 ${
+                        likedPulseIds[String(look.id)] ? 'scale-125' : ''
+                      }`} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        openComments(String(look.id));
+                      }}
+                      className="bg-white/85 backdrop-blur-sm p-2 rounded-full shadow-lg transition-all duration-300 hover:scale-110"
+                      aria-label="Открыть комментарии"
+                    >
+                      <CommentIcon className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => openComments(String(look.id))}
-                    className="text-[9px] text-zinc-400 font-bold uppercase hover:text-zinc-900 transition-colors"
-                  >
-                    {look.likes || 0} ❤️ · {look.comments || 0} 💬
-                  </button>
+                </Link>
+
+                <div className="pt-4 md:pt-2 md:sticky md:top-28 md:space-y-8">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl md:text-3xl font-black uppercase tracking-tight leading-none">
+                        {look.title || 'Сгенерированный образ'}
+                      </h2>
+                      <div className="flex items-center gap-2 mt-3">
+                        {(look.authorAvatar || user?.avatarUrl || user?.selfieUrl) ? (
+                          <img
+                            src={withApiOrigin(look.authorAvatar || user?.avatarUrl || user?.selfieUrl || '')}
+                            alt=""
+                            className="w-5 h-5 rounded-full bg-zinc-100 object-cover object-top"
+                          />
+                        ) : (
+                          <span className="w-5 h-5 rounded-full bg-zinc-100 inline-block" />
+                        )}
+                        <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
+                          {look.authorName || 'Пользователь TopTry'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-sm font-bold whitespace-nowrap">
+                      <button
+                        onClick={() => handleLikeFromFeed(String(look.id))}
+                        className="flex items-center gap-1.5 transition-transform hover:scale-110"
+                      >
+                        <ICONS.Heart className="w-5 h-5" /> {look.likes || 0}
+                      </button>
+                      <button
+                        onClick={() => openComments(String(look.id))}
+                        className="flex items-center gap-1.5 transition-transform hover:scale-110"
+                      >
+                        <CommentIcon className="w-5 h-5" /> {look.comments || 0}
+                      </button>
+                    </div>
+                  </div>
+
+                  {sourceItems.length > 0 && (
+                    <section className="hidden md:block space-y-4">
+                      <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-400">
+                        Вещи в образе
+                      </h3>
+                      <div className="space-y-3">
+                        {sourceItems.slice(0, 3).map((item: any, idx: number) => {
+                          const buyUrl = item?.affiliateUrl || item?.productUrl || '';
+                          const imageUrl = Array.isArray(item?.images) ? item.images[0] : item?.imageUrl;
+
+                          return (
+                            <div
+                              key={item?.id || idx}
+                              className="flex items-center gap-4 bg-zinc-50 p-3 rounded-2xl border border-zinc-100"
+                            >
+                              <div className="w-14 h-14 bg-white rounded-xl p-2 border border-zinc-200 shrink-0">
+                                {imageUrl ? (
+                                  <img
+                                    src={withApiOrigin(imageUrl)}
+                                    alt=""
+                                    className="w-full h-full object-contain mix-blend-multiply"
+                                  />
+                                ) : null}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-bold uppercase tracking-tight truncate">
+                                  {item?.title || 'Вещь'}
+                                </h4>
+                                <p className="text-sm font-bold mt-0.5">
+                                  {formatPriceRUB(item?.price)}
+                                </p>
+                              </div>
+                              {buyUrl ? (
+                                <a
+                                  href={buyUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="bg-zinc-900 text-white px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                                >
+                                  Купить
+                                </a>
+                              ) : (
+                                <span className="bg-zinc-200 text-zinc-400 px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest">
+                                  Нет ссылки
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
+
+                  <div className="hidden md:flex items-center justify-between gap-4 bg-zinc-900 text-white rounded-3xl p-4">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.25em] text-white/50 font-bold">
+                        Купить всё
+                      </p>
+                      <p className="text-lg font-black">{formatPriceRUB(totalPrice)}</p>
+                    </div>
+                    <Link
+                      to={`/look/${look.id}`}
+                      className="bg-white text-zinc-900 px-7 py-3 rounded-full text-xs font-black uppercase tracking-widest"
+                    >
+                      Открыть
+                    </Link>
+                  </div>
+
+                  <div className="md:hidden px-1 mt-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider truncate">
+                      {look.title || 'Образ'}
+                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[9px] text-zinc-400 font-bold uppercase truncate">
+                        {look.authorName || 'Пользователь TopTry'}
+                      </span>
+                      <button
+                        onClick={() => openComments(String(look.id))}
+                        className="text-[9px] text-zinc-400 font-bold uppercase hover:text-zinc-900 transition-colors"
+                      >
+                        {look.likes || 0} ❤️ · {look.comments || 0} 💬
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
 
