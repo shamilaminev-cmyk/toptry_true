@@ -5,7 +5,6 @@ import { patchFetchForApi } from './fetchPatch';
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AppProvider, useAppState } from './store';
 import { ICONS } from './constants';
-import Home from './pages/Home';
 import Catalog from './pages/Catalog';
 import Wardrobe from './pages/Wardrobe';
 import Looks from './pages/Looks';
@@ -69,7 +68,7 @@ const Header = () => {
   const { user } = useAppState();
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-zinc-100 px-4 py-4 flex items-center justify-between">
-      <Link to="/" className="flex items-center gap-2">
+      <Link to="/looks" className="flex items-center gap-2">
         {/* ✅ Новый логотип через компонент (берёт /branding/logo.png) */}
         <Logo className="h-8 w-auto object-contain block" alt="toptry" />
 
@@ -110,11 +109,10 @@ const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
       {/* Mobile Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 md:bottom-4">
         <div className="mx-auto w-full bg-white border-t border-zinc-100 px-4 py-2 flex items-center justify-between h-20 md:max-w-md md:rounded-3xl md:border md:border-zinc-200 md:shadow-xl">
-        <NavItem to="/" icon={ICONS.Home} label="Главная" />
+        <NavItem to="/looks" icon={ICONS.Looks} label="Лента" />
         <NavItem to="/catalog" icon={ICONS.Catalog} label="Каталог" />
         <NavItem to="/create-look" icon={ICONS.Plus} label="Создать" highlight />
-        <NavItem to="/wardrobe" icon={ICONS.Wardrobe} label="Шкаф" />
-        <NavItem to="/looks" icon={ICONS.Looks} label="Лента" />        </div>
+        <NavItem to="/wardrobe" icon={ICONS.Wardrobe} label="Шкаф" />        </div>
       </nav>
     </div>
   );
@@ -124,7 +122,7 @@ const AppRoutes = () => {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Looks />} />
         <Route path="/catalog" element={<Catalog />} />
         <Route path="/wardrobe" element={<Wardrobe />} />
         <Route path="/create-look" element={<CreateLook />} />
