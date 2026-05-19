@@ -41,7 +41,7 @@ const Home: React.FC = () => {
   return (
     <div className="pb-28">
       <section className="px-5 pt-8 md:pt-14 md:px-8 md:max-w-6xl md:mx-auto">
-        <div className="rounded-[36px] bg-zinc-950 text-white overflow-hidden md:grid md:grid-cols-[1.05fr_0.95fr] md:min-h-[460px]">
+        <div className="rounded-[36px] bg-zinc-950 text-white overflow-hidden lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[460px]">
           <div className="p-7 md:p-12 flex flex-col justify-between gap-10">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/45">
@@ -71,18 +71,40 @@ const Home: React.FC = () => {
             </div>
           </div>
 
-          <div className="relative min-h-[360px] bg-white/5">
-            {previewLooks[0]?.resultImageUrl ? (
-              <img
-                src={withApiOrigin(previewLooks[0].resultImageUrl)}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover md:object-contain"
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-white/20 text-7xl font-black">
-                toptry
+          <div className="relative min-h-[340px] sm:min-h-[420px] lg:min-h-0 bg-white/5 overflow-hidden">
+            <div className="absolute inset-6 sm:inset-10 rounded-[32px] bg-gradient-to-br from-white/15 to-white/5 border border-white/10" />
+
+            <div className="absolute inset-0 flex items-center justify-center p-8">
+              <div className="w-full max-w-sm rounded-[32px] bg-white text-zinc-950 shadow-2xl p-5 rotate-[-2deg]">
+                <div className="aspect-[3/4] rounded-[24px] bg-zinc-100 flex items-center justify-center overflow-hidden">
+                  <div className="text-center px-6">
+                    <div className="text-6xl font-black leading-none">AI</div>
+                    <div className="mt-3 text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">
+                      примерка
+                    </div>
+                    <div className="mt-6 grid grid-cols-3 gap-2">
+                      <span className="h-16 rounded-2xl bg-zinc-200" />
+                      <span className="h-16 rounded-2xl bg-zinc-900" />
+                      <span className="h-16 rounded-2xl bg-zinc-300" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
+                      Образ готов
+                    </p>
+                    <p className="mt-1 text-sm font-black uppercase">
+                      3 вещи подобраны
+                    </p>
+                  </div>
+                  <span className="w-12 h-12 rounded-full bg-zinc-950 text-white flex items-center justify-center text-xl">
+                    ✓
+                  </span>
+                </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </section>
