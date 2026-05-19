@@ -97,6 +97,46 @@ const Looks = () => {
 
   return (
     <div className="pb-12">
+      <style id="toptry-feed-desktop-css">{`
+        @media (min-width: 900px) {
+          .toptry-feed-list {
+            max-width: 1180px;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 32px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 48px;
+          }
+          .toptry-feed-card {
+            display: grid;
+            grid-template-columns: minmax(420px, 560px) minmax(360px, 1fr);
+            gap: 32px;
+            align-items: start;
+          }
+          .toptry-feed-image-link {
+            height: min(760px, calc(100vh - 220px));
+            min-height: 560px;
+            max-width: 560px;
+            margin-left: auto;
+            aspect-ratio: auto;
+          }
+          .toptry-feed-image {
+            object-fit: contain;
+          }
+          .toptry-feed-side {
+            display: flex !important;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: min(760px, calc(100vh - 220px));
+            position: sticky;
+            top: 112px;
+          }
+          .toptry-feed-mobile-meta {
+            display: none !important;
+          }
+        }
+      `}</style>
       <div className="p-4 sticky top-0 bg-white z-40 border-b border-zinc-100 space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold uppercase tracking-tighter">
@@ -156,7 +196,7 @@ const Looks = () => {
       )}
 
       {visibleLooks.length > 0 && (
-        <div className="px-4 py-5 space-y-8 md:px-6 md:py-8 md:max-w-6xl md:mx-auto">
+        <div className="toptry-feed-list px-4 py-5 space-y-8 md:px-6 md:py-8 md:max-w-6xl md:mx-auto">
           {visibleLooks.map((look: any) => {
             const sourceItems = Array.isArray(look.sourceItems) ? look.sourceItems : [];
             const totalPrice =
@@ -166,16 +206,16 @@ const Looks = () => {
             return (
               <article
                 key={look.id}
-                className="group md:grid md:grid-cols-2 md:gap-8 md:items-start"
+                className="toptry-feed-card group md:grid md:grid-cols-2 md:gap-8 md:items-start"
               >
                 <Link
                   to={`/look/${look.id}`}
-                  className="block relative aspect-[3/4] rounded-[32px] overflow-hidden bg-zinc-100 md:h-[calc(100vh-220px)] md:min-h-[560px] md:max-h-[760px] md:aspect-auto md:border md:border-zinc-100 md:max-w-[560px] md:ml-auto"
+                  className="toptry-feed-image-link block relative aspect-[3/4] rounded-[32px] overflow-hidden bg-zinc-100 md:h-[calc(100vh-220px)] md:min-h-[560px] md:max-h-[760px] md:aspect-auto md:border md:border-zinc-100 md:max-w-[560px] md:ml-auto"
                 >
                   <img
                     src={withApiOrigin(look.resultImageUrl)}
                     alt=""
-                    className="w-full h-full object-cover md:object-contain transition-all duration-700"
+                    className="toptry-feed-image w-full h-full object-cover md:object-contain transition-all duration-700"
                   />
                   <div className="absolute top-4 right-4 flex flex-col gap-2 md:flex-row">
                     <button
@@ -205,7 +245,7 @@ const Looks = () => {
                   </div>
                 </Link>
 
-                <div className="pt-4 md:pt-2 md:sticky md:top-28 md:space-y-8">
+                <div className="toptry-feed-side pt-4 md:pt-2 md:sticky md:top-28 md:space-y-8">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h2 className="text-xl md:text-3xl font-black uppercase tracking-tight leading-none">
@@ -311,7 +351,7 @@ const Looks = () => {
                     </Link>
                   </div>
 
-                  <div className="md:hidden px-1 mt-2">
+                  <div className="toptry-feed-mobile-meta md:hidden px-1 mt-2">
                     <p className="text-[10px] font-bold uppercase tracking-wider truncate">
                       {look.title || 'Образ'}
                     </p>
