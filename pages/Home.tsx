@@ -40,70 +40,50 @@ const Home: React.FC = () => {
 
   return (
     <div className="pb-28">
-      <section className="px-5 pt-8 md:pt-14 md:px-8 md:max-w-6xl md:mx-auto">
-        <div className="rounded-[36px] bg-zinc-950 text-white overflow-hidden lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[460px]">
-          <div className="p-7 md:p-12 flex flex-col justify-between gap-10">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/45">
-                AI virtual fitting
+      <section className="px-5 pt-8 md:pt-14 md:px-8 md:max-w-7xl md:mx-auto">
+        <div className="relative overflow-hidden rounded-[36px] border border-zinc-200 bg-[#f5f5f5]">
+          <div className="grid lg:grid-cols-[520px_minmax(0,1fr)] items-center">
+            <div className="relative z-10 p-7 md:p-12 lg:p-14">
+              <p className="mb-6 text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">
+                AI VIRTUAL FITTING
               </p>
-              <h1 className="mt-5 text-4xl md:text-6xl font-black tracking-tight leading-[0.95]">
-                Примерьте образ до покупки
+
+              <h1 className="max-w-[560px] text-4xl leading-[0.94] tracking-[-0.055em] text-zinc-950 md:text-6xl lg:text-7xl font-black">
+                Посмотри на себя.
+                <br />
+                Потом решай.
               </h1>
-              <p className="mt-5 text-sm md:text-base text-white/60 max-w-xl leading-relaxed">
-                TopTry помогает выбрать вещи из каталога, собрать образ и увидеть, как он выглядит на вас.
+
+              <p className="mt-7 max-w-[500px] text-base md:text-lg leading-8 text-zinc-600">
+                Примеряйте вещи на своём AI-аватаре, сравнивайте образы
+                и принимайте решение до покупки.
               </p>
-            </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                to={user ? '/create-look' : '/auth'}
-                className="bg-white text-zinc-950 rounded-full px-7 py-4 text-xs font-black uppercase tracking-[0.22em] text-center"
-              >
-                Создать образ
-              </Link>
-              <Link
-                to="/catalog"
-                className="bg-white/10 text-white rounded-full px-7 py-4 text-xs font-black uppercase tracking-[0.22em] text-center"
-              >
-                Открыть каталог
-              </Link>
-            </div>
-          </div>
+              <div className="mt-9 flex flex-col sm:flex-row gap-3">
+                <Link
+                  to={user ? '/create-look' : '/auth'}
+                  className="bg-zinc-950 text-white rounded-full px-7 py-4 text-xs font-black uppercase tracking-[0.22em] text-center transition hover:opacity-90"
+                >
+                  Создать образ
+                </Link>
 
-          <div className="relative min-h-[340px] sm:min-h-[420px] lg:min-h-0 bg-white/5 overflow-hidden">
-            <div className="absolute inset-6 sm:inset-10 rounded-[32px] bg-gradient-to-br from-white/15 to-white/5 border border-white/10" />
-
-            <div className="absolute inset-0 flex items-center justify-center p-8">
-              <div className="w-full max-w-sm rounded-[32px] bg-white text-zinc-950 shadow-2xl p-5 rotate-[-2deg]">
-                <div className="aspect-[3/4] rounded-[24px] bg-zinc-100 flex items-center justify-center overflow-hidden">
-                  <div className="text-center px-6">
-                    <div className="text-6xl font-black leading-none">AI</div>
-                    <div className="mt-3 text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">
-                      примерка
-                    </div>
-                    <div className="mt-6 grid grid-cols-3 gap-2">
-                      <span className="h-16 rounded-2xl bg-zinc-200" />
-                      <span className="h-16 rounded-2xl bg-zinc-900" />
-                      <span className="h-16 rounded-2xl bg-zinc-300" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
-                      Образ готов
-                    </p>
-                    <p className="mt-1 text-sm font-black uppercase">
-                      3 вещи подобраны
-                    </p>
-                  </div>
-                  <span className="w-12 h-12 rounded-full bg-zinc-950 text-white flex items-center justify-center text-xl">
-                    ✓
-                  </span>
-                </div>
+                <Link
+                  to="/catalog"
+                  className="bg-white text-zinc-950 border border-zinc-200 rounded-full px-7 py-4 text-xs font-black uppercase tracking-[0.22em] text-center transition hover:bg-zinc-100"
+                >
+                  Открыть каталог
+                </Link>
               </div>
+            </div>
+
+            <div className="relative min-h-[360px] sm:min-h-[480px] lg:min-h-[680px]">
+              <img
+                src="/hero-toptry-v2.webp"
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-[#f5f5f5] via-transparent to-transparent lg:hidden" />
+              <div className="hidden lg:block absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-[#f5f5f5] to-transparent" />
             </div>
           </div>
         </div>
