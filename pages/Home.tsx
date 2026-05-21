@@ -40,21 +40,21 @@ const Home: React.FC = () => {
 
   return (
     <div className="pb-56">
-      <section className="px-5 pt-3 md:pt-5 md:px-8 md:max-w-7xl md:mx-auto">
-        <div className="relative overflow-hidden rounded-[32px] border border-zinc-200 bg-[#f5f5f5]">
+      <section className="px-4 pt-3 md:pt-5 md:px-8 md:max-w-7xl md:mx-auto">
+        <div className="relative overflow-hidden rounded-[28px] md:rounded-[32px] border border-zinc-200 bg-[#f5f5f5]">
           <div className="grid lg:grid-cols-[470px_minmax(0,1fr)] items-center">
             <div className="relative z-10 p-6 md:p-8 lg:p-9">
               <p className="mb-4 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-400">
                 Виртуальная примерочная
               </p>
 
-              <h1 className="max-w-[500px] text-4xl leading-[0.96] tracking-[-0.05em] text-zinc-950 md:text-6xl lg:text-[58px] font-black">
+              <h1 className="max-w-[500px] text-[38px] leading-[0.98] tracking-[-0.05em] text-zinc-950 sm:text-5xl md:text-6xl lg:text-[58px] font-black">
                 Посмотри на себя.
                 <br />
                 Потом решай.
               </h1>
 
-              <p className="mt-5 max-w-[455px] text-base md:text-[16px] leading-8 text-zinc-600">
+              <p className="mt-5 max-w-[455px] text-[16px] md:text-[16px] leading-8 text-zinc-600">
                 Примеряйте вещи на своём аватаре, сравнивайте варианты
                 и заказывайте только то, в чём уверены.
               </p>
@@ -77,11 +77,11 @@ const Home: React.FC = () => {
 
             </div>
 
-            <div className="relative min-h-[280px] sm:min-h-[370px] lg:min-h-[480px]">
+            <div className="relative min-h-[170px] sm:min-h-[300px] md:min-h-[370px] lg:min-h-[480px]">
               <img
                 src="/hero-toptry-v4.webp"
                 alt=""
-                className="absolute inset-0 h-full w-full object-cover object-center"
+                className="absolute inset-0 h-full w-full object-cover object-[55%_center]"
               />
               <div className="absolute inset-0 bg-gradient-to-b from-[#f5f5f5] via-transparent to-transparent lg:hidden" />
               <div className="hidden lg:block absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-[#f5f5f5] to-transparent" />
@@ -90,7 +90,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="px-5 mt-5 md:px-8 md:max-w-6xl md:mx-auto">
+      <section className="px-4 mt-5 md:px-8 md:max-w-6xl md:mx-auto">
         <div className="grid md:grid-cols-3 gap-3">
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">01</p>
@@ -112,7 +112,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="px-5 mt-6 md:px-8 md:max-w-6xl md:mx-auto grid md:grid-cols-3 gap-4">
+      <section className="px-4 mt-6 md:px-8 md:max-w-6xl md:mx-auto grid md:grid-cols-3 gap-4">
         <Link to="/create-look" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Plus className="w-7 h-7" />
           <h2 className="mt-5 text-lg font-black">AI-образ</h2>
