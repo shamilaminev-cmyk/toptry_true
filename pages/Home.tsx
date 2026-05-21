@@ -79,7 +79,7 @@ const Home: React.FC = () => {
 
             <div className="relative min-h-[280px] sm:min-h-[370px] lg:min-h-[480px]">
               <img
-                src="/hero-toptry-v2.webp"
+                src="/hero-toptry-v4.webp"
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover object-center"
               />
