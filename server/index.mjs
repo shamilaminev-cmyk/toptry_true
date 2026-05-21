@@ -60,18 +60,72 @@ function normalizeBaseUrl(v) {
   return s.endsWith("/") ? s.slice(0, -1) : s;
 }
 
-async function proxyJsonPost(upstreamUrl, bodyObj) {
+const AI_GATEWAY_URL = normalizeBaseUrl(process.env.AI_GATEWAY_URL || process.env.AI_PROXY_URL || "");
+const AI_GATEWAY_SECRET = String(process.env.AI_GATEWAY_SECRET || process.env.PROXY_SHARED_SECRET || "").trim();
+
+async function proxyJsonPost(upstreamUrl, bodyObj, extraHeaders = {}) {
   const resp = await fetch(upstreamUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       accept: "application/json",
+      ...extraHeaders,
     },
     body: JSON.stringify(bodyObj ?? {}),
   });
 
   const text = await resp.text(); // ВАЖНО: не трогаем ответ
   return { resp, text };
+}
+
+function assertInternalAiRequest(req, res) {
+  const expected = AI_GATEWAY_SECRET;
+  if (!expected) {
+    return true;
+  }
+
+  const got = String(req.headers["x-toptry-internal-secret"] || "").trim();
+  if (got && crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {
+    return true;
+  }
+
+  res.status(403).json({ error: "Forbidden" });
+  return false;
+}
+
+async function callAiGatewayTryon(payload) {
+  if (!AI_GATEWAY_URL) return null;
+
+  const upstream = `${AI_GATEWAY_URL}/internal/ai/tryon`;
+  const headers = AI_GATEWAY_SECRET
+    ? { "x-toptry-internal-secret": AI_GATEWAY_SECRET }
+    : {};
+
+  const resp = await fetch(upstream, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(payload || {}),
+  });
+
+  const text = await resp.text();
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {}
+
+  if (!resp.ok) {
+    throw new Error(`AI gateway ${resp.status}: ${(data?.error || text || "").slice(0, 500)}`);
+  }
+
+  if (!data?.imageDataUrl) {
+    throw new Error("AI gateway returned no imageDataUrl");
+  }
+
+  return data.imageDataUrl;
 }
 
 const app = express();
@@ -844,6 +898,129 @@ async function generateImageWithRetry(ai, payload, { primaryModel, fallbackModel
   throw lastError || new Error("Gemini image generation failed");
 }
 
+async function generateTryOnImageDataUrl({ selfieDataUrl, itemImageUrls, aspectRatio, reqForAbsUrl = null }) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured on the server");
+  }
+
+  if (!selfieDataUrl || !Array.isArray(itemImageUrls) || itemImageUrls.length === 0) {
+    const err = new Error("selfieDataUrl and itemImageUrls[] are required");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (itemImageUrls.length > 5) {
+    const err = new Error("Maximum 5 items per try-on in MVP");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const selfieAbs = reqForAbsUrl ? absUrlFromReq(reqForAbsUrl, selfieDataUrl) : selfieDataUrl;
+  const itemsAbs = reqForAbsUrl ? itemImageUrls.map((u) => absUrlFromReq(reqForAbsUrl, u)) : itemImageUrls;
+
+  console.log("[toptry] using Gemini quality try-on", {
+    itemCount: itemsAbs.length,
+  });
+
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+  console.log("[debug ai/tryon] before imageToBase64", {
+    selfieAbsPrefix: typeof selfieAbs === "string" ? selfieAbs.slice(0, 64) : null,
+    itemsAbsCount: Array.isArray(itemsAbs) ? itemsAbs.length : null,
+    firstItemAbsPrefix: Array.isArray(itemsAbs) && itemsAbs[0] ? String(itemsAbs[0]).slice(0, 64) : null,
+  });
+
+  const selfie = await imageToBase64(selfieAbs);
+
+  console.log("[debug ai/tryon] selfie prepared", {
+    mimeType: selfie?.mimeType || null,
+    base64Len: selfie?.base64 ? String(selfie.base64).length : null,
+  });
+
+  const itemParts = await Promise.all(
+    itemsAbs.map(async (url, idx) => {
+      console.log("[debug ai/tryon] preparing item", {
+        idx,
+        prefix: typeof url === "string" ? url.slice(0, 64) : null,
+      });
+      const img = await imageToBase64(url);
+      console.log("[debug ai/tryon] item prepared", {
+        idx,
+        mimeType: img?.mimeType || null,
+        base64Len: img?.base64 ? String(img.base64).length : null,
+      });
+      return { inlineData: { data: img.base64, mimeType: img.mimeType } };
+    })
+  );
+
+  const prompt = `Act as a professional fashion photographer and AI stylist.
+I am providing a selfie of a person and images of ${itemsAbs.length} clothing items.
+Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.
+The person should have the same face as in the selfie.
+Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.
+Result should be front view, clean neutral background.
+Avoid brand logos and text.`;
+
+  const response = await generateImageWithRetry(
+    ai,
+    {
+      contents: {
+        parts: [
+          { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
+          ...itemParts,
+          { text: prompt },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: aspectRatio || "3:4",
+          imageSize: "1K",
+        },
+      },
+    },
+    {
+      primaryModel: process.env.GEMINI_MODEL_IMAGE || "gemini-3-pro-image-preview",
+      fallbackModel: process.env.GEMINI_MODEL_IMAGE_FALLBACK || "gemini-2.5-flash-image",
+      retries: Number(process.env.GEMINI_IMAGE_RETRIES || 1),
+    }
+  );
+
+  console.log("[debug ai/tryon] Gemini response meta", {
+    candidates: Array.isArray(response?.candidates) ? response.candidates.length : null,
+    parts: Array.isArray(response?.candidates?.[0]?.content?.parts) ? response.candidates[0].content.parts.length : null,
+    finishReason: response?.candidates?.[0]?.finishReason || null,
+  });
+
+  const parts = response?.candidates?.[0]?.content?.parts || [];
+  for (const part of parts) {
+    if (part?.inlineData?.data) {
+      const mt = part.inlineData.mimeType || "image/png";
+      return `data:${mt};base64,${part.inlineData.data}`;
+    }
+  }
+
+  throw new Error("Gemini did not return an image");
+}
+
+app.post("/internal/ai/tryon", async (req, res) => {
+  try {
+    if (!assertInternalAiRequest(req, res)) return;
+
+    const { selfieDataUrl, itemImageUrls, aspectRatio } = req.body || {};
+    const imageDataUrl = await generateTryOnImageDataUrl({
+      selfieDataUrl,
+      itemImageUrls,
+      aspectRatio,
+      reqForAbsUrl: null,
+    });
+
+    return res.json({ imageDataUrl });
+  } catch (err) {
+    console.error("[toptry] /internal/ai/tryon error", err?.stack || err);
+    return res.status(err?.statusCode || 500).json({ error: err?.message || "AI gateway error" });
+  }
+});
+
 
 app.post("/api/looks/create", requireAuth, async (req, res) => {
   try {
@@ -857,12 +1034,6 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
         ? String(req.body.itemImageUrls[0]).slice(0, 32)
         : null,
     });
-    if (!GEMINI_API_KEY) {
-      return res
-        .status(500)
-        .json({ error: "GEMINI_API_KEY is not configured on the server" });
-    }
-
     const b = req.body || {};
     const selfieDataUrl = b.selfieDataUrl;
     const itemImageUrls = b.itemImageUrls;
@@ -887,7 +1058,18 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
 
     let imageDataUrl = "";
 
-    if (useOpenAI) {
+    if (AI_GATEWAY_URL) {
+      console.log("[toptry] using AI gateway try-on", {
+        upstream: AI_GATEWAY_URL,
+        itemCount: itemsAbs.length,
+      });
+
+      imageDataUrl = await callAiGatewayTryon({
+        selfieDataUrl: selfieAbs,
+        itemImageUrls: itemsAbs,
+        aspectRatio,
+      });
+    } else if (useOpenAI) {
       console.log("[toptry] using OpenAI strict fast try-on", {
         itemCount: itemsAbs.length,
       });
@@ -903,96 +1085,12 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
 
       imageDataUrl = `data:image/png;base64,${b64}`;
     } else {
-      console.log("[toptry] using Gemini quality try-on", {
-        itemCount: itemsAbs.length,
+      imageDataUrl = await generateTryOnImageDataUrl({
+        selfieDataUrl: selfieAbs,
+        itemImageUrls: itemsAbs,
+        aspectRatio,
+        reqForAbsUrl: null,
       });
-
-      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
-      console.log("[debug looks/create] before imageToBase64", {
-        selfieAbsPrefix: typeof selfieAbs === "string" ? selfieAbs.slice(0, 64) : null,
-        itemsAbsCount: Array.isArray(itemsAbs) ? itemsAbs.length : null,
-        firstItemAbsPrefix: Array.isArray(itemsAbs) && itemsAbs[0] ? String(itemsAbs[0]).slice(0, 64) : null,
-      });
-
-      const selfie = await imageToBase64(selfieAbs);
-
-      console.log("[debug looks/create] selfie prepared", {
-        mimeType: selfie?.mimeType || null,
-        base64Len: selfie?.base64 ? String(selfie.base64).length : null,
-      });
-
-      const itemParts = await Promise.all(
-        itemsAbs.map(async (url, idx) => {
-          console.log("[debug looks/create] preparing item", {
-            idx,
-            prefix: typeof url === "string" ? url.slice(0, 64) : null,
-          });
-          const img = await imageToBase64(url);
-          console.log("[debug looks/create] item prepared", {
-            idx,
-            mimeType: img?.mimeType || null,
-            base64Len: img?.base64 ? String(img.base64).length : null,
-          });
-          return { inlineData: { data: img.base64, mimeType: img.mimeType } };
-        })
-      );
-
-      console.log("[debug looks/create] before Gemini", {
-        itemParts: itemParts.length,
-      });
-
-      const prompt = `Act as a professional fashion photographer and AI stylist.
-I am providing a selfie of a person and images of ${itemsAbs.length} clothing items.
-Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.
-The person should have the same face as in the selfie.
-Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.
-Result should be front view, clean neutral background.
-Avoid brand logos and text.`;
-
-      const response = await generateImageWithRetry(
-        ai,
-        {
-          contents: {
-            parts: [
-              { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
-              ...itemParts,
-              { text: prompt },
-            ],
-          },
-          config: {
-            imageConfig: {
-              aspectRatio: aspectRatio || "3:4",
-              imageSize: "1K",
-            },
-          },
-        },
-        {
-          primaryModel: process.env.GEMINI_MODEL_IMAGE || "gemini-3-pro-image-preview",
-          fallbackModel: process.env.GEMINI_MODEL_IMAGE_FALLBACK || "gemini-2.5-flash-image",
-          retries: Number(process.env.GEMINI_IMAGE_RETRIES || 1),
-        }
-      );
-
-      console.log("[debug looks/create] Gemini response meta", {
-        candidates: Array.isArray(response?.candidates) ? response.candidates.length : null,
-        parts: Array.isArray(response?.candidates?.[0]?.content?.parts) ? response.candidates[0].content.parts.length : null,
-        finishReason: response?.candidates?.[0]?.finishReason || null,
-      });
-
-      const parts = (response && response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) || [];
-      for (const part of parts) {
-        if (part && part.inlineData && part.inlineData.data) {
-          const mt = (part.inlineData.mimeType || "image/png");
-          imageDataUrl = "data:" + mt + ";base64," + part.inlineData.data;
-          break;
-        }
-      }
-
-      if (!imageDataUrl) {
-        console.error("[debug looks/create] Gemini returned no image", JSON.stringify(response, null, 2));
-        return res.status(502).json({ error: "Gemini did not return an image" });
-      }
     }
 
     const userId = req.auth.userId;
@@ -1053,79 +1151,29 @@ Avoid brand logos and text.`;
 
 app.post("/api/tryon", async (req, res) => {
   try {
-    if (!GEMINI_API_KEY) {
-      return res
-        .status(500)
-        .json({ error: "GEMINI_API_KEY is not configured on the server" });
-    }
-
     const { selfieDataUrl, itemImageUrls, aspectRatio } = req.body || {};
-    if (
-      !selfieDataUrl ||
-      !Array.isArray(itemImageUrls) ||
-      itemImageUrls.length === 0
-    ) {
-      return res
-        .status(400)
-        .json({ error: "selfieDataUrl and itemImageUrls[] are required" });
-    }
-    if (itemImageUrls.length > 5) {
-      return res.status(400).json({ error: "Maximum 5 items per try-on in MVP" });
-    }
-
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
-    const selfie = await imageToBase64(selfieDataUrl);
-    const itemParts = await Promise.all(
-      itemImageUrls.map(async (url) => {
-        const img = await imageToBase64(url);
-        return { inlineData: { data: img.base64, mimeType: img.mimeType } };
-      })
-    );
-
-    const prompt = `Act as a professional fashion photographer and AI stylist.
-I am providing a selfie of a person and images of ${itemImageUrls.length} clothing items.
-Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.
-The person should have the same face as in the selfie.
-Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.
-Result should be front view, clean neutral background.
-Avoid brand logos and text.`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
-      contents: {
-        parts: [
-          { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
-          ...itemParts,
-          { text: prompt },
-        ],
-      },
-      config: {
-        imageConfig: {
-          aspectRatio: aspectRatio || "3:4",
-          imageSize: "1K",
-        },
-      },
-    });
 
     let imageDataUrl = "";
-    const parts = response?.candidates?.[0]?.content?.parts || [];
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        const mt = part.inlineData.mimeType || "image/png";
-        imageDataUrl = `data:${mt};base64,${part.inlineData.data}`;
-        break;
-      }
+
+    if (AI_GATEWAY_URL) {
+      imageDataUrl = await callAiGatewayTryon({
+        selfieDataUrl,
+        itemImageUrls,
+        aspectRatio,
+      });
+    } else {
+      imageDataUrl = await generateTryOnImageDataUrl({
+        selfieDataUrl,
+        itemImageUrls,
+        aspectRatio,
+        reqForAbsUrl: null,
+      });
     }
 
-    if (!imageDataUrl) {
-      return res.status(502).json({ error: "Gemini did not return an image" });
-    }
-
-    res.json({ imageDataUrl });
+    return res.json({ imageDataUrl });
   } catch (err) {
     console.error("[toptry] /api/tryon error", err);
-    res.status(500).json({ error: err?.message || "Unknown server error" });
+    res.status(err?.statusCode || 500).json({ error: err?.message || "Unknown server error" });
   }
 });
 
@@ -1134,12 +1182,15 @@ Avoid brand logos and text.`;
  */
 app.post("/api/wardrobe/extract", async (req, res) => {
   try {
-    const AI_PROXY_URL = normalizeBaseUrl(process.env.AI_PROXY_URL);
+    const AI_PROXY_URL = AI_GATEWAY_URL;
 
     if (AI_PROXY_URL) {
       try {
         const upstream = `${AI_PROXY_URL}/api/wardrobe/extract`;
-        const { resp, text } = await proxyJsonPost(upstream, req.body);
+        const headers = AI_GATEWAY_SECRET
+          ? { "x-toptry-internal-secret": AI_GATEWAY_SECRET }
+          : {};
+        const { resp, text } = await proxyJsonPost(upstream, req.body, headers);
         const ct = resp.headers.get("content-type");
         if (ct) res.setHeader("content-type", ct);
         res.status(resp.status).send(text);
