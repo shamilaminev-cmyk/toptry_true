@@ -40,26 +40,26 @@ const Home: React.FC = () => {
 
   return (
     <div className="pb-56">
-      <section className="px-4 pt-3 md:pt-5 md:px-8 md:max-w-7xl md:mx-auto">
+      <section className="px-4 pt-2 md:pt-5 md:px-8 md:max-w-7xl md:mx-auto">
         <div className="relative overflow-hidden rounded-[28px] md:rounded-[32px] border border-zinc-200 bg-[#f5f5f5]">
           <div className="grid lg:grid-cols-[470px_minmax(0,1fr)] items-center">
-            <div className="relative z-10 p-6 md:p-8 lg:p-9">
-              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-400">
+            <div className="relative z-10 p-5 md:p-8 lg:p-9">
+              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-400">
                 Виртуальная примерочная
               </p>
 
-              <h1 className="max-w-[500px] text-[38px] leading-[0.98] tracking-[-0.05em] text-zinc-950 sm:text-5xl md:text-6xl lg:text-[58px] font-black">
+              <h1 className="max-w-[500px] text-[35px] leading-[0.98] tracking-[-0.05em] text-zinc-950 sm:text-5xl md:text-6xl lg:text-[58px] font-black">
                 Посмотри на себя.
                 <br />
                 Потом решай.
               </h1>
 
-              <p className="mt-5 max-w-[455px] text-[16px] md:text-[16px] leading-8 text-zinc-600">
+              <p className="mt-4 max-w-[455px] text-[15px] md:text-[16px] leading-7 md:leading-8 text-zinc-600">
                 Примеряйте вещи на своём аватаре, сравнивайте варианты
                 и заказывайте только то, в чём уверены.
               </p>
 
-              <div className="mt-6 flex flex-col sm:flex-row gap-3">
+              <div className="mt-5 flex flex-col sm:flex-row gap-3">
                 <Link
                   to={user ? '/create-look' : '/auth'}
                   className="bg-zinc-950 text-white rounded-full px-7 py-4 text-sm font-black text-center transition hover:opacity-90"
@@ -77,7 +77,7 @@ const Home: React.FC = () => {
 
             </div>
 
-            <div className="relative min-h-[170px] sm:min-h-[300px] md:min-h-[370px] lg:min-h-[480px]">
+            <div className="relative min-h-[135px] sm:min-h-[260px] md:min-h-[370px] lg:min-h-[480px]">
               <img
                 src="/hero-toptry-v4.webp"
                 alt=""
@@ -90,7 +90,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="px-4 mt-5 md:px-8 md:max-w-6xl md:mx-auto">
+      <section className="px-4 mt-4 md:px-8 md:max-w-6xl md:mx-auto">
         <div className="grid md:grid-cols-3 gap-3">
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">01</p>
