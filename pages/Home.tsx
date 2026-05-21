@@ -39,72 +39,87 @@ const Home: React.FC = () => {
   }, [feedLooks, looks]);
 
   return (
-    <div className="pb-28">
-      <section className="px-5 pt-8 md:pt-14 md:px-8 md:max-w-7xl md:mx-auto">
-        <div className="relative overflow-hidden rounded-[36px] border border-zinc-200 bg-[#f5f5f5]">
-          <div className="grid lg:grid-cols-[520px_minmax(0,1fr)] items-center">
-            <div className="relative z-10 p-7 md:p-12 lg:p-14">
-              <p className="mb-6 text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">
-                AI VIRTUAL FITTING
+    <div className="pb-36">
+      <section className="px-5 pt-6 md:pt-10 md:px-8 md:max-w-7xl md:mx-auto">
+        <div className="relative overflow-hidden rounded-[34px] border border-zinc-200 bg-[#f5f5f5]">
+          <div className="grid lg:grid-cols-[500px_minmax(0,1fr)] items-center">
+            <div className="relative z-10 p-7 md:p-10 lg:p-12">
+              <p className="mb-5 text-[10px] font-black uppercase tracking-[0.26em] text-zinc-400">
+                Виртуальная примерочная
               </p>
 
-              <h1 className="max-w-[560px] text-4xl leading-[0.94] tracking-[-0.055em] text-zinc-950 md:text-6xl lg:text-7xl font-black">
+              <h1 className="max-w-[520px] text-4xl leading-[0.96] tracking-[-0.05em] text-zinc-950 md:text-6xl lg:text-[68px] font-black">
                 Посмотри на себя.
                 <br />
                 Потом решай.
               </h1>
 
-              <p className="mt-7 max-w-[500px] text-base md:text-lg leading-8 text-zinc-600">
+              <p className="mt-6 max-w-[470px] text-base md:text-lg leading-8 text-zinc-600">
                 Примеряйте вещи на своём AI-аватаре, сравнивайте образы
                 и принимайте решение до покупки.
               </p>
 
-              <div className="mt-9 flex flex-col sm:flex-row gap-3">
+              <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <Link
                   to={user ? '/create-look' : '/auth'}
-                  className="bg-zinc-950 text-white rounded-full px-7 py-4 text-xs font-black uppercase tracking-[0.22em] text-center transition hover:opacity-90"
+                  className="bg-zinc-950 text-white rounded-full px-7 py-4 text-sm font-black text-center transition hover:opacity-90"
                 >
                   Создать образ
                 </Link>
 
                 <Link
                   to="/catalog"
-                  className="bg-white text-zinc-950 border border-zinc-200 rounded-full px-7 py-4 text-xs font-black uppercase tracking-[0.22em] text-center transition hover:bg-zinc-100"
+                  className="bg-white text-zinc-950 border border-zinc-200 rounded-full px-7 py-4 text-sm font-black text-center transition hover:bg-zinc-100"
                 >
                   Открыть каталог
                 </Link>
               </div>
+
+              <div className="mt-8 grid grid-cols-3 gap-2 max-w-[430px]">
+                <div className="rounded-2xl bg-white/75 border border-white px-3 py-3">
+                  <p className="text-[11px] font-black text-zinc-950">1. Примерьте</p>
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">на своём аватаре</p>
+                </div>
+                <div className="rounded-2xl bg-white/75 border border-white px-3 py-3">
+                  <p className="text-[11px] font-black text-zinc-950">2. Сравните</p>
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">несколько образов</p>
+                </div>
+                <div className="rounded-2xl bg-white/75 border border-white px-3 py-3">
+                  <p className="text-[11px] font-black text-zinc-950">3. Решите</p>
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">до покупки</p>
+                </div>
+              </div>
             </div>
 
-            <div className="relative min-h-[360px] sm:min-h-[480px] lg:min-h-[680px]">
+            <div className="relative min-h-[330px] sm:min-h-[430px] lg:min-h-[600px]">
               <img
                 src="/hero-toptry-v2.webp"
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover object-center"
               />
               <div className="absolute inset-0 bg-gradient-to-b from-[#f5f5f5] via-transparent to-transparent lg:hidden" />
-              <div className="hidden lg:block absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-[#f5f5f5] to-transparent" />
+              <div className="hidden lg:block absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-[#f5f5f5] to-transparent" />
             </div>
           </div>
         </div>
       </section>
 
-      <section className="px-5 mt-8 md:px-8 md:max-w-6xl md:mx-auto grid md:grid-cols-3 gap-4">
-        <Link to="/create-look" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm">
+      <section className="px-5 mt-7 md:px-8 md:max-w-6xl md:mx-auto grid md:grid-cols-3 gap-4">
+        <Link to="/create-look" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Plus className="w-7 h-7" />
-          <h2 className="mt-5 text-lg font-black uppercase">AI-образ</h2>
-          <p className="mt-2 text-sm text-zinc-500">Соберите look из вещей и примерьте его на себе.</p>
+          <h2 className="mt-5 text-lg font-black">AI-образ</h2>
+          <p className="mt-2 text-sm text-zinc-500">Соберите образ из вещей и примерьте его на себе.</p>
         </Link>
 
-        <Link to="/catalog" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm">
+        <Link to="/catalog" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Catalog className="w-7 h-7" />
-          <h2 className="mt-5 text-lg font-black uppercase">Каталог</h2>
+          <h2 className="mt-5 text-lg font-black">Каталог</h2>
           <p className="mt-2 text-sm text-zinc-500">Выбирайте одежду, обувь и аксессуары из каталога.</p>
         </Link>
 
-        <Link to="/looks" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm">
+        <Link to="/looks" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Looks className="w-7 h-7" />
-          <h2 className="mt-5 text-lg font-black uppercase">Лента</h2>
+          <h2 className="mt-5 text-lg font-black">Лента</h2>
           <p className="mt-2 text-sm text-zinc-500">Смотрите опубликованные образы и сохраняйте идеи.</p>
         </Link>
       </section>
@@ -146,7 +161,7 @@ const Home: React.FC = () => {
       <section className="px-5 mt-10 md:px-8 md:max-w-6xl md:mx-auto">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">Social</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">Лента</p>
             <h2 className="mt-2 text-2xl font-black uppercase">Образы из ленты</h2>
           </div>
           <Link to="/looks" className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">
