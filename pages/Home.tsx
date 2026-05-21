@@ -55,8 +55,8 @@ const Home: React.FC = () => {
               </h1>
 
               <p className="mt-6 max-w-[470px] text-base md:text-lg leading-8 text-zinc-600">
-                Примеряйте вещи на своём AI-аватаре, сравнивайте образы
-                и принимайте решение до покупки.
+                Примеряйте вещи на своём аватаре, сравнивайте варианты
+                и заказывайте только то, в чём уверены.
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
@@ -75,18 +75,18 @@ const Home: React.FC = () => {
                 </Link>
               </div>
 
-              <div className="mt-8 grid grid-cols-3 gap-2 max-w-[430px]">
-                <div className="rounded-2xl bg-white/75 border border-white px-3 py-3">
+              <div className="mt-8 grid grid-cols-3 gap-2 max-w-[470px]">
+                <div className="rounded-2xl bg-white/75 border border-white px-4 py-3">
                   <p className="text-[11px] font-black text-zinc-950">1. Примерьте</p>
                   <p className="mt-1 text-[11px] leading-4 text-zinc-500">на своём аватаре</p>
                 </div>
-                <div className="rounded-2xl bg-white/75 border border-white px-3 py-3">
+                <div className="rounded-2xl bg-white/75 border border-white px-4 py-3">
                   <p className="text-[11px] font-black text-zinc-950">2. Сравните</p>
-                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">несколько образов</p>
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">варианты</p>
                 </div>
-                <div className="rounded-2xl bg-white/75 border border-white px-3 py-3">
-                  <p className="text-[11px] font-black text-zinc-950">3. Решите</p>
-                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">до покупки</p>
+                <div className="rounded-2xl bg-white/75 border border-white px-4 py-3">
+                  <p className="text-[11px] font-black text-zinc-950">3. Выберите</p>
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">то, что подходит</p>
                 </div>
               </div>
             </div>
