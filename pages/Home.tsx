@@ -83,7 +83,6 @@ const Home: React.FC = () => {
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover object-[55%_center]"
               />
-              <div className="absolute inset-0 bg-gradient-to-b from-[#f5f5f5] via-transparent to-transparent lg:hidden" />
               <div className="hidden lg:block absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-[#f5f5f5] to-transparent" />
             </div>
           </div>
