@@ -39,27 +39,27 @@ const Home: React.FC = () => {
   }, [feedLooks, looks]);
 
   return (
-    <div className="pb-36">
-      <section className="px-5 pt-6 md:pt-10 md:px-8 md:max-w-7xl md:mx-auto">
+    <div className="pb-44">
+      <section className="px-5 pt-5 md:pt-8 md:px-8 md:max-w-7xl md:mx-auto">
         <div className="relative overflow-hidden rounded-[34px] border border-zinc-200 bg-[#f5f5f5]">
-          <div className="grid lg:grid-cols-[500px_minmax(0,1fr)] items-center">
-            <div className="relative z-10 p-7 md:p-10 lg:p-12">
-              <p className="mb-5 text-[10px] font-black uppercase tracking-[0.26em] text-zinc-400">
+          <div className="grid lg:grid-cols-[470px_minmax(0,1fr)] items-center">
+            <div className="relative z-10 p-7 md:p-9 lg:p-10">
+              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-400">
                 Виртуальная примерочная
               </p>
 
-              <h1 className="max-w-[520px] text-4xl leading-[0.96] tracking-[-0.05em] text-zinc-950 md:text-6xl lg:text-[68px] font-black">
+              <h1 className="max-w-[500px] text-4xl leading-[0.96] tracking-[-0.05em] text-zinc-950 md:text-6xl lg:text-[62px] font-black">
                 Посмотри на себя.
                 <br />
                 Потом решай.
               </h1>
 
-              <p className="mt-6 max-w-[470px] text-base md:text-lg leading-8 text-zinc-600">
+              <p className="mt-5 max-w-[455px] text-base md:text-[17px] leading-8 text-zinc-600">
                 Примеряйте вещи на своём аватаре, сравнивайте варианты
                 и заказывайте только то, в чём уверены.
               </p>
 
-              <div className="mt-8 flex flex-col sm:flex-row gap-3">
+              <div className="mt-7 flex flex-col sm:flex-row gap-3">
                 <Link
                   to={user ? '/create-look' : '/auth'}
                   className="bg-zinc-950 text-white rounded-full px-7 py-4 text-sm font-black text-center transition hover:opacity-90"
@@ -75,23 +75,9 @@ const Home: React.FC = () => {
                 </Link>
               </div>
 
-              <div className="mt-8 grid grid-cols-3 gap-2 max-w-[470px]">
-                <div className="rounded-2xl bg-white/75 border border-white px-4 py-3">
-                  <p className="text-[11px] font-black text-zinc-950">1. Примерьте</p>
-                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">на своём аватаре</p>
-                </div>
-                <div className="rounded-2xl bg-white/75 border border-white px-4 py-3">
-                  <p className="text-[11px] font-black text-zinc-950">2. Сравните</p>
-                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">варианты</p>
-                </div>
-                <div className="rounded-2xl bg-white/75 border border-white px-4 py-3">
-                  <p className="text-[11px] font-black text-zinc-950">3. Выберите</p>
-                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">то, что подходит</p>
-                </div>
-              </div>
             </div>
 
-            <div className="relative min-h-[330px] sm:min-h-[430px] lg:min-h-[600px]">
+            <div className="relative min-h-[300px] sm:min-h-[390px] lg:min-h-[520px]">
               <img
                 src="/hero-toptry-v2.webp"
                 alt=""
@@ -104,7 +90,29 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="px-5 mt-7 md:px-8 md:max-w-6xl md:mx-auto grid md:grid-cols-3 gap-4">
+      <section className="px-5 mt-6 md:px-8 md:max-w-6xl md:mx-auto">
+        <div className="grid md:grid-cols-3 gap-3">
+          <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">01</p>
+            <h2 className="mt-3 text-base font-black">Примерьте на себе</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Загрузите аватар и посмотрите, как вещь выглядит именно на вас.</p>
+          </div>
+
+          <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">02</p>
+            <h2 className="mt-3 text-base font-black">Сравните варианты</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Соберите несколько образов и спокойно сравните их между собой.</p>
+          </div>
+
+          <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">03</p>
+            <h2 className="mt-3 text-base font-black">Выберите уверенно</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Заказывайте только те вещи, которые прошли вашу личную проверку.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="px-5 mt-6 md:px-8 md:max-w-6xl md:mx-auto grid md:grid-cols-3 gap-4">
         <Link to="/create-look" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Plus className="w-7 h-7" />
           <h2 className="mt-5 text-lg font-black">AI-образ</h2>
@@ -124,7 +132,7 @@ const Home: React.FC = () => {
         </Link>
       </section>
 
-      <section className="px-5 mt-10 md:px-8 md:max-w-6xl md:mx-auto">
+      <section className="px-5 mt-12 md:px-8 md:max-w-6xl md:mx-auto">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">Каталог</p>
@@ -158,7 +166,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="px-5 mt-10 md:px-8 md:max-w-6xl md:mx-auto">
+      <section className="px-5 mt-12 md:px-8 md:max-w-6xl md:mx-auto">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">Лента</p>
