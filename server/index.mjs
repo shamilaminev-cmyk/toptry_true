@@ -4110,6 +4110,34 @@ app.get("/api/catalog/image", async (req, res) => {
     }
   } catch (e) {
     console.error("[toptry] /api/catalog/image error", e);
+
+    const rawUrl = String(req.query.url || "").trim();
+
+    // MVP fallback: if backend proxy cannot fetch/transform an allowed upstream image
+    // because a merchant CDN resets Node/Docker connections, let the browser load it directly.
+    // This prevents empty catalog cards for otherwise valid image URLs.
+    if (rawUrl && /^https?:\/\//i.test(rawUrl)) {
+      try {
+        const parsed = new URL(rawUrl);
+        const allowedHosts = new Set([
+          "sportcourt.ru",
+          "www.sportcourt.ru",
+          "cdn.sportmaster.ru",
+          "www.rendez-vous.ru",
+          "goods.thecultt.com",
+          "thecultt.com",
+          "www.thecultt.com",
+          "remington.fashion",
+          "www.remington.fashion",
+        ]);
+
+        if (allowedHosts.has(parsed.hostname)) {
+          res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
+          return res.redirect(302, parsed.toString());
+        }
+      } catch {}
+    }
+
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
@@ -4369,6 +4397,34 @@ app.get("/api/catalog/image", async (req, res) => {
     }
   } catch (e) {
     console.error("[toptry] /api/catalog/image error", e);
+
+    const rawUrl = String(req.query.url || "").trim();
+
+    // MVP fallback: if backend proxy cannot fetch/transform an allowed upstream image
+    // because a merchant CDN resets Node/Docker connections, let the browser load it directly.
+    // This prevents empty catalog cards for otherwise valid image URLs.
+    if (rawUrl && /^https?:\/\//i.test(rawUrl)) {
+      try {
+        const parsed = new URL(rawUrl);
+        const allowedHosts = new Set([
+          "sportcourt.ru",
+          "www.sportcourt.ru",
+          "cdn.sportmaster.ru",
+          "www.rendez-vous.ru",
+          "goods.thecultt.com",
+          "thecultt.com",
+          "www.thecultt.com",
+          "remington.fashion",
+          "www.remington.fashion",
+        ]);
+
+        if (allowedHosts.has(parsed.hostname)) {
+          res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
+          return res.redirect(302, parsed.toString());
+        }
+      } catch {}
+    }
+
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
