@@ -2393,6 +2393,39 @@ function toPrice(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+
+const SAFE_CATALOG_ACTIVE_GROUPS = ["SHOES", "CLOTHING", "BAGS"];
+
+async function restoreSafeCatalogActiveProducts(merchant) {
+  const m = String(merchant || "").trim().toLowerCase();
+  if (!m) return { count: 0 };
+
+  const result = await prisma.catalogProduct.updateMany({
+    where: {
+      merchant: m,
+      isActive: false,
+      price: { gt: 0 },
+      taxonomyGroup: { in: SAFE_CATALOG_ACTIVE_GROUPS },
+      AND: [
+        { imageUrl: { not: null } },
+        { imageUrl: { not: "" } },
+      ],
+    },
+    data: { isActive: true },
+  });
+
+  if (result.count > 0) {
+    console.log("[toptry] catalog import restored safe active products", {
+      merchant: m,
+      restored: result.count,
+      groups: SAFE_CATALOG_ACTIVE_GROUPS,
+    });
+  }
+
+  return result;
+}
+
+
 function normalizeCatalogCurrency(value) {
   const s = String(value || "").trim().toUpperCase();
   if (!s || s === "RUR") return "RUB";
@@ -3538,6 +3571,8 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
       }
     }
 
+    const restoredSafe = await restoreSafeCatalogActiveProducts("sportcourt");
+
     return res.json({
       ok: true,
       merchant: "sportcourt",
@@ -3545,7 +3580,8 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
       created,
       updated,
       skipped,
-      active: created + updated,
+      restoredSafe: restoredSafe.count || 0,
+      active: created + updated + (restoredSafe.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/sportcourt error", e);
@@ -3699,6 +3735,8 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       }
     }
 
+    const restoredSafe = await restoreSafeCatalogActiveProducts("sportmaster");
+
     return res.json({
       ok: true,
       merchant: "sportmaster",
@@ -3706,7 +3744,8 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       created,
       updated,
       skipped,
-      active: created + updated,
+      restoredSafe: restoredSafe.count || 0,
+      active: created + updated + (restoredSafe.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/sportmaster error", e);
@@ -3876,6 +3915,8 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
       }
     }
 
+    const restoredSafe = await restoreSafeCatalogActiveProducts("remington");
+
     return res.json({
       ok: true,
       merchant: "remington",
@@ -3883,7 +3924,8 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
       created,
       updated,
       skipped,
-      active: created + updated,
+      restoredSafe: restoredSafe.count || 0,
+      active: created + updated + (restoredSafe.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/remington error", e);
@@ -4034,6 +4076,8 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       }
     }
 
+    const restoredSafe = await restoreSafeCatalogActiveProducts("rendezvous");
+
     return res.json({
       ok: true,
       merchant: "rendezvous",
@@ -4041,7 +4085,8 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       created,
       updated,
       skipped,
-      active: created + updated,
+      restoredSafe: restoredSafe.count || 0,
+      active: created + updated + (restoredSafe.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/rendezvous error", e);
@@ -4478,6 +4523,8 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
       }
     }
 
+    const restoredSafe = await restoreSafeCatalogActiveProducts("thecultt");
+
     return res.json({
       ok: true,
       merchant: "thecultt",
@@ -4485,7 +4532,8 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
       created,
       updated,
       skipped,
-      active: created + updated,
+      restoredSafe: restoredSafe.count || 0,
+      active: created + updated + (restoredSafe.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/thecultt error", e);
