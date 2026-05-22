@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
@@ -35,6 +37,47 @@ if (!GEMINI_API_KEY) {
 }
 
 const AVATAR_BG_REMOVER_URL = process.env.AVATAR_BG_REMOVER_URL || "";
+
+const CATALOG_IMAGE_CACHE_DIR =
+  process.env.CATALOG_IMAGE_CACHE_DIR || "/data/catalog-image-cache";
+
+function getCatalogImageCachePath(rawUrl, requestedWidth) {
+  const key = crypto
+    .createHash("sha256")
+    .update(`${String(rawUrl || "").trim()}|w=${Number(requestedWidth || 0)}`)
+    .digest("hex");
+
+  return {
+    key,
+    dir: path.join(CATALOG_IMAGE_CACHE_DIR, key.slice(0, 2), key.slice(2, 4)),
+    filePath: path.join(CATALOG_IMAGE_CACHE_DIR, key.slice(0, 2), key.slice(2, 4), `${key}.webp`),
+  };
+}
+
+async function readCatalogImageCache(rawUrl, requestedWidth) {
+  if (!requestedWidth || requestedWidth <= 0) return null;
+
+  const cache = getCatalogImageCachePath(rawUrl, requestedWidth);
+
+  try {
+    const buf = await fs.readFile(cache.filePath);
+    return { ...cache, buffer: buf };
+  } catch {
+    return { ...cache, buffer: null };
+  }
+}
+
+async function writeCatalogImageCache(cache, buffer) {
+  if (!cache?.filePath || !buffer?.length) return;
+
+  try {
+    await fs.mkdir(cache.dir, { recursive: true });
+    await fs.writeFile(cache.filePath, buffer);
+  } catch (e) {
+    console.warn("[toptry] catalog image cache write failed", e?.message || e);
+  }
+}
+
 
 async function bgRemoveToPng(srcBuf) {
   if (!AVATAR_BG_REMOVER_URL) {
@@ -4107,6 +4150,18 @@ app.get("/api/catalog/image", async (req, res) => {
       return res.status(403).json({ error: "host is not allowed" });
     }
 
+    const catalogImageCache =
+      requestedWidth > 0
+        ? await readCatalogImageCache(parsed.toString(), requestedWidth)
+        : null;
+
+    if (catalogImageCache?.buffer?.length) {
+      res.setHeader("Content-Type", "image/webp");
+      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800");
+      res.setHeader("X-TopTry-Image-Cache", "hit");
+      return res.send(catalogImageCache.buffer);
+    }
+
     const upstreamHeaders = {
       "user-agent": "Mozilla/5.0 TopTryCatalogProxy",
       "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
@@ -4156,8 +4211,13 @@ app.get("/api/catalog/image", async (req, res) => {
         .webp({ quality: 76 })
         .toBuffer();
 
+      if (catalogImageCache && requestedWidth > 0) {
+        await writeCatalogImageCache(catalogImageCache, output);
+      }
+
       res.setHeader("Content-Type", "image/webp");
       res.setHeader("Cache-Control", cacheControl);
+      res.setHeader("X-TopTry-Image-Cache", catalogImageCache ? "miss-store" : "bypass");
       return res.send(output);
     } catch (transformErr) {
       console.warn("[toptry] /api/catalog/image thumbnail fallback:", transformErr?.message || transformErr);
@@ -4395,6 +4455,18 @@ app.get("/api/catalog/image", async (req, res) => {
       return res.status(403).json({ error: "host is not allowed" });
     }
 
+    const catalogImageCache =
+      requestedWidth > 0
+        ? await readCatalogImageCache(parsed.toString(), requestedWidth)
+        : null;
+
+    if (catalogImageCache?.buffer?.length) {
+      res.setHeader("Content-Type", "image/webp");
+      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800");
+      res.setHeader("X-TopTry-Image-Cache", "hit");
+      return res.send(catalogImageCache.buffer);
+    }
+
     const upstreamHeaders = {
       "user-agent": "Mozilla/5.0 TopTryCatalogProxy",
       "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
@@ -4444,8 +4516,13 @@ app.get("/api/catalog/image", async (req, res) => {
         .webp({ quality: 76 })
         .toBuffer();
 
+      if (catalogImageCache && requestedWidth > 0) {
+        await writeCatalogImageCache(catalogImageCache, output);
+      }
+
       res.setHeader("Content-Type", "image/webp");
       res.setHeader("Cache-Control", cacheControl);
+      res.setHeader("X-TopTry-Image-Cache", catalogImageCache ? "miss-store" : "bypass");
       return res.send(output);
     } catch (transformErr) {
       console.warn("[toptry] /api/catalog/image thumbnail fallback:", transformErr?.message || transformErr);
