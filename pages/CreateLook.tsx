@@ -217,7 +217,7 @@ const CreateLook = () => {
                   qualityMode === 'fast' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500'
                 }`}
               >
-                Fast / OpenAI
+                Быстро
               </button>
               <button
                 type="button"
@@ -226,7 +226,7 @@ const CreateLook = () => {
                   qualityMode === 'quality' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500'
                 }`}
               >
-                HQ / Gemini
+                Качество
               </button>
             </div>
 
@@ -259,9 +259,6 @@ const CreateLook = () => {
             </div>
             <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-[0.2em] mt-6 animate-pulse">
               {STAGES[genStep]}
-            </p>
-            <p className="text-[10px] text-zinc-300 font-black uppercase tracking-[0.3em]">
-              {qualityMode === 'fast' ? 'FAST PREVIEW · OPENAI' : 'HQ GENERATION · GEMINI'}
             </p>
           </div>
         </div>

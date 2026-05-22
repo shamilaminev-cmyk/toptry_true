@@ -1085,7 +1085,7 @@ const Wardrobe = () => {
             <div className="relative z-10 space-y-2">
               <h3 className="text-xl font-bold uppercase tracking-widest">Стилизовать образ</h3>
               <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest leading-relaxed">
-                Используйте Gemini 3 для виртуальной примерки ваших вещей.
+                Соберите образ из своих вещей и примерьте его на аватаре.
               </p>
             </div>
             <button
