@@ -138,6 +138,68 @@ function assertInternalAiRequest(req, res) {
   return false;
 }
 
+
+function getPublicApiOriginForInternalUrls() {
+  return String(
+    process.env.PUBLIC_API_ORIGIN ||
+    process.env.VITE_API_ORIGIN ||
+    "https://api.toptry.ru"
+  ).replace(/\/+$/, "");
+}
+
+function isExternalCatalogImageUrlForProxy(url) {
+  try {
+    const u = new URL(String(url || "").trim());
+    const host = u.hostname.toLowerCase();
+
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+
+    // TopTry URLs are already stable and should not be wrapped again.
+    if (host === "api.toptry.ru" || host === "toptry.ru" || host.endsWith(".toptry.ru")) {
+      return false;
+    }
+
+    return new Set([
+      "sportcourt.ru",
+      "www.sportcourt.ru",
+      "cdn.sportmaster.ru",
+      "www.rendez-vous.ru",
+      "static.rendez-vous.ru",
+      "goods.thecultt.com",
+      "thecultt.com",
+      "www.thecultt.com",
+      "remington.fashion",
+      "www.remington.fashion",
+    ]).has(host);
+  } catch {
+    return false;
+  }
+}
+
+function toAiGatewayStableImageUrl(url) {
+  const s = String(url || "").trim();
+
+  if (!s) return s;
+  if (s.startsWith("data:")) return s;
+  if (!isExternalCatalogImageUrlForProxy(s)) return s;
+
+  const apiOrigin = getPublicApiOriginForInternalUrls();
+  return `${apiOrigin}/api/catalog/image?url=${encodeURIComponent(s)}&w=900`;
+}
+
+function toAiGatewayStableImageUrls(urls) {
+  return (Array.isArray(urls) ? urls : []).map(toAiGatewayStableImageUrl);
+}
+
+function prepareAiGatewayTryonPayload(payload) {
+  const p = payload || {};
+  return {
+    ...p,
+    itemImageUrls: toAiGatewayStableImageUrls(p.itemImageUrls),
+  };
+}
+
+
 async function callAiGatewayTryon(payload) {
   if (!AI_GATEWAY_URL) return null;
 
@@ -146,6 +208,15 @@ async function callAiGatewayTryon(payload) {
     ? { "x-toptry-internal-secret": AI_GATEWAY_SECRET }
     : {};
 
+  const stablePayload = prepareAiGatewayTryonPayload(payload);
+
+  console.log("[toptry] AI gateway payload prepared", {
+    itemCount: Array.isArray(stablePayload.itemImageUrls) ? stablePayload.itemImageUrls.length : 0,
+    firstItemPrefix: stablePayload.itemImageUrls?.[0]
+      ? String(stablePayload.itemImageUrls[0]).slice(0, 96)
+      : null,
+  });
+
   const resp = await fetch(upstream, {
     method: "POST",
     headers: {
@@ -153,7 +224,7 @@ async function callAiGatewayTryon(payload) {
       accept: "application/json",
       ...headers,
     },
-    body: JSON.stringify(payload || {}),
+    body: JSON.stringify(stablePayload || {}),
   });
 
   const text = await resp.text();
