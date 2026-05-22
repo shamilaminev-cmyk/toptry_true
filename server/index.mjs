@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import http from "node:http";
+import https from "node:https";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
@@ -3932,6 +3934,83 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
 
 
 
+
+function fetchUrlBufferViaNode(url, { headers = {}, timeoutMs = 20000, maxBytes = 12 * 1024 * 1024 } = {}) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (e) {
+      reject(e);
+      return;
+    }
+
+    const client = parsed.protocol === "http:" ? http : https;
+
+    const req = client.request(parsed, {
+      method: "GET",
+      headers,
+      timeout: timeoutMs,
+    }, (resp) => {
+      const status = resp.statusCode || 0;
+      const responseHeaders = resp.headers || {};
+      const chunks = [];
+      let total = 0;
+
+      resp.on("data", (chunk) => {
+        total += chunk.length;
+        if (total > maxBytes) {
+          req.destroy(new Error(`upstream image too large: ${total}`));
+          return;
+        }
+        chunks.push(chunk);
+      });
+
+      resp.on("end", () => {
+        resolve({
+          ok: status >= 200 && status < 300,
+          status,
+          headers: responseHeaders,
+          buffer: Buffer.concat(chunks),
+        });
+      });
+
+      resp.on("error", reject);
+    });
+
+    req.on("timeout", () => {
+      req.destroy(new Error(`upstream image timeout after ${timeoutMs}ms`));
+    });
+
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+async function fetchCatalogImageBuffer(url, headers) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      return await fetchUrlBufferViaNode(url, {
+        headers,
+        timeoutMs: attempt === 1 ? 15000 : 25000,
+        maxBytes: 12 * 1024 * 1024,
+      });
+    } catch (e) {
+      lastError = e;
+      console.warn("[toptry] catalog image upstream retry", {
+        attempt,
+        url: String(url).slice(0, 180),
+        error: e?.message || String(e),
+      });
+      await new Promise((r) => setTimeout(r, 400 * attempt));
+    }
+  }
+
+  throw lastError || new Error("catalog image upstream fetch failed");
+}
+
 app.get("/api/catalog/image", async (req, res) => {
   try {
     const rawUrl = String(req.query.url || "").trim();
@@ -3971,26 +4050,31 @@ app.get("/api/catalog/image", async (req, res) => {
       return res.status(403).json({ error: "host is not allowed" });
     }
 
-    const upstream = await fetch(parsed.toString(), {
-      headers: {
-        "user-agent": "Mozilla/5.0 TopTryCatalogProxy",
-        "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        "referer": "https://toptry.ru/",
-      },
-    });
+    const upstreamHeaders = {
+      "user-agent": "Mozilla/5.0 TopTryCatalogProxy",
+      "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      "referer": "https://toptry.ru/",
+      "connection": "close",
+    };
+
+    const upstream = await fetchCatalogImageBuffer(parsed.toString(), upstreamHeaders);
 
     if (!upstream.ok) {
       return res.status(upstream.status).send("upstream image fetch failed");
     }
 
-    const upstreamCt = String(upstream.headers.get("content-type") || "image/jpeg").toLowerCase();
-    const upstreamCc = upstream.headers.get("cache-control") || "public, max-age=3600";
+    const getHeader = (name) => {
+      const v = upstream.headers?.[name.toLowerCase()] ?? upstream.headers?.[name];
+      return Array.isArray(v) ? v.join(", ") : v;
+    };
+
+    const upstreamCt = String(getHeader("content-type") || "image/jpeg").toLowerCase();
+    const upstreamCc = getHeader("cache-control") || "public, max-age=3600";
     const cacheControl = requestedWidth > 0
       ? "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800"
       : upstreamCc;
 
-    const ab = await upstream.arrayBuffer();
-    const input = Buffer.from(ab);
+    const input = upstream.buffer;
 
     const shouldBypassTransform =
       requestedWidth <= 0 ||
@@ -4225,26 +4309,31 @@ app.get("/api/catalog/image", async (req, res) => {
       return res.status(403).json({ error: "host is not allowed" });
     }
 
-    const upstream = await fetch(parsed.toString(), {
-      headers: {
-        "user-agent": "Mozilla/5.0 TopTryCatalogProxy",
-        "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        "referer": "https://toptry.ru/",
-      },
-    });
+    const upstreamHeaders = {
+      "user-agent": "Mozilla/5.0 TopTryCatalogProxy",
+      "accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      "referer": "https://toptry.ru/",
+      "connection": "close",
+    };
+
+    const upstream = await fetchCatalogImageBuffer(parsed.toString(), upstreamHeaders);
 
     if (!upstream.ok) {
       return res.status(upstream.status).send("upstream image fetch failed");
     }
 
-    const upstreamCt = String(upstream.headers.get("content-type") || "image/jpeg").toLowerCase();
-    const upstreamCc = upstream.headers.get("cache-control") || "public, max-age=3600";
+    const getHeader = (name) => {
+      const v = upstream.headers?.[name.toLowerCase()] ?? upstream.headers?.[name];
+      return Array.isArray(v) ? v.join(", ") : v;
+    };
+
+    const upstreamCt = String(getHeader("content-type") || "image/jpeg").toLowerCase();
+    const upstreamCc = getHeader("cache-control") || "public, max-age=3600";
     const cacheControl = requestedWidth > 0
       ? "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800"
       : upstreamCc;
 
-    const ab = await upstream.arrayBuffer();
-    const input = Buffer.from(ab);
+    const input = upstream.buffer;
 
     const shouldBypassTransform =
       requestedWidth <= 0 ||
