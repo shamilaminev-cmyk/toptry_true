@@ -3264,8 +3264,11 @@ app.post("/api/admin/catalog/enrich-taxonomy", async (req, res) => {
     const force =
       String(req.query.force || "").trim() === "1";
 
+    const includeInactive =
+      String(req.query.includeInactive || "").trim() === "1";
+
     const where = {
-      isActive: true,
+      ...(includeInactive ? {} : { isActive: true }),
       ...(merchant ? { merchant } : {}),
       ...(force ? {} : { taxonomyEnrichedAt: null }),
     };
