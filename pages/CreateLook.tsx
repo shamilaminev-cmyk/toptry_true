@@ -22,7 +22,7 @@ const CreateLook = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [genStep, setGenStep] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [qualityMode, setQualityMode] = useState<'fast' | 'quality'>('quality');
+  const qualityMode: 'quality' = 'quality';
   const selfie = user?.selfieUrl || user?.avatarUrl;
   const selectedItems = wardrobe.filter((i) => selectedIds.has(i.id));
 
@@ -209,27 +209,6 @@ const CreateLook = () => {
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2 mr-3">
-              <button
-                type="button"
-                onClick={() => setQualityMode('fast')}
-                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
-                  qualityMode === 'fast' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500'
-                }`}
-              >
-                Быстро
-              </button>
-              <button
-                type="button"
-                onClick={() => setQualityMode('quality')}
-                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
-                  qualityMode === 'quality' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500'
-                }`}
-              >
-                Качество
-              </button>
-            </div>
-
             <button 
               onClick={handleGenerate}
               disabled={selectedIds.size < 1}
