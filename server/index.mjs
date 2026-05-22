@@ -3935,7 +3935,7 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
 
 
 
-function fetchUrlBufferViaNode(url, { headers = {}, timeoutMs = 20000, maxBytes = 12 * 1024 * 1024 } = {}) {
+function fetchUrlBufferViaNode(url, { headers = {}, timeoutMs = 20000, maxBytes = 12 * 1024 * 1024, maxRedirects = 4 } = {}) {
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -3954,6 +3954,19 @@ function fetchUrlBufferViaNode(url, { headers = {}, timeoutMs = 20000, maxBytes 
     }, (resp) => {
       const status = resp.statusCode || 0;
       const responseHeaders = resp.headers || {};
+
+      if (status >= 300 && status < 400 && responseHeaders.location && maxRedirects > 0) {
+        const nextUrl = new URL(responseHeaders.location, parsed).toString();
+        resp.resume();
+        fetchUrlBufferViaNode(nextUrl, {
+          headers,
+          timeoutMs,
+          maxBytes,
+          maxRedirects: maxRedirects - 1,
+        }).then(resolve, reject);
+        return;
+      }
+
       const chunks = [];
       let total = 0;
 
@@ -4124,6 +4137,7 @@ app.get("/api/catalog/image", async (req, res) => {
           "www.sportcourt.ru",
           "cdn.sportmaster.ru",
           "www.rendez-vous.ru",
+          "static.rendez-vous.ru",
           "goods.thecultt.com",
           "thecultt.com",
           "www.thecultt.com",
@@ -4411,6 +4425,7 @@ app.get("/api/catalog/image", async (req, res) => {
           "www.sportcourt.ru",
           "cdn.sportmaster.ru",
           "www.rendez-vous.ru",
+          "static.rendez-vous.ru",
           "goods.thecultt.com",
           "thecultt.com",
           "www.thecultt.com",
