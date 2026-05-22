@@ -4001,23 +4001,67 @@ function fetchUrlBufferViaNode(url, { headers = {}, timeoutMs = 20000, maxBytes 
 }
 
 async function fetchCatalogImageBuffer(url, headers) {
+  const originalUrl = String(url);
+  const candidates = [originalUrl];
+
+  try {
+    const u = new URL(originalUrl);
+
+    if (
+      (u.hostname === "sportcourt.ru" || u.hostname === "www.sportcourt.ru") &&
+      u.pathname.includes("/content/models/large/")
+    ) {
+      const noSize = new URL(u.toString());
+      noSize.pathname = noSize.pathname.replace("/content/models/large/", "/content/models/");
+
+      const small = new URL(u.toString());
+      small.pathname = small.pathname.replace("/content/models/large/", "/content/models/small/");
+
+      candidates.push(noSize.toString(), small.toString());
+    }
+  } catch {}
+
   let lastError;
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      return await fetchUrlBufferViaNode(url, {
-        headers,
-        timeoutMs: attempt === 1 ? 15000 : 25000,
-        maxBytes: 12 * 1024 * 1024,
-      });
-    } catch (e) {
-      lastError = e;
-      console.warn("[toptry] catalog image upstream retry", {
-        attempt,
-        url: String(url).slice(0, 180),
-        error: e?.message || String(e),
-      });
-      await new Promise((r) => setTimeout(r, 400 * attempt));
+  for (const candidateUrl of candidates) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const result = await fetchUrlBufferViaNode(candidateUrl, {
+          headers,
+          timeoutMs: attempt === 1 ? 15000 : 25000,
+          maxBytes: 12 * 1024 * 1024,
+        });
+
+        const getHeader = (name) => {
+          const v = result?.headers?.[name.toLowerCase()] ?? result?.headers?.[name];
+          return Array.isArray(v) ? v.join(", ") : v;
+        };
+
+        const ct = String(getHeader("content-type") || "").toLowerCase();
+
+        if (result.ok && ct && !ct.startsWith("image/")) {
+          throw new Error(`upstream returned non-image content-type: ${ct}`);
+        }
+
+        if (candidateUrl !== originalUrl) {
+          console.log("[toptry] catalog image variant OK", {
+            original: originalUrl.slice(0, 180),
+            variant: candidateUrl.slice(0, 180),
+            contentType: ct || null,
+            bytes: result?.buffer?.length || 0,
+          });
+        }
+
+        return result;
+      } catch (e) {
+        lastError = e;
+        console.warn("[toptry] catalog image upstream retry", {
+          attempt,
+          url: candidateUrl.slice(0, 180),
+          error: e?.message || String(e),
+        });
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
     }
   }
 
