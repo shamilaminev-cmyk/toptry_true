@@ -3865,7 +3865,8 @@ function buildCatalogAiReviewPrompt(products) {
 - Ремни → taxonomyGroup=ACCESSORIES, taxonomySubgroup=BELTS, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
 - Носки → taxonomyGroup=ACCESSORIES, taxonomySubgroup=SOCKS, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
 - Угги / высокие сапоги / tall boots → taxonomySubgroup=TALL_BOOTS.
-- Поло → taxonomySubgroup=POLO.
+- Джемпер-поло / свитер-поло / кардиган-поло / водолазка-поло → taxonomySubgroup=KNITWEAR.
+- Футболка-поло / рубашка-поло / классическое поло → taxonomySubgroup=POLO.
 - Футболка / t-shirt / tee → taxonomySubgroup=TSHIRTS.
 - Рубашка / shirt button-down → taxonomySubgroup=SHIRTS.
 - Худи / толстовка / свитшот → taxonomySubgroup=HOODIES.
@@ -4015,7 +4016,14 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
 
   item.rejectReasons = Array.isArray(item.rejectReasons) ? item.rejectReasons.map(String) : [];
 
-  if (/поло|\bpolo\b/i.test(title)) {
+  const knitPoloRe = /(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)[\s\-]+поло|поло[\s\-]+(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)/i;
+  const classicPoloRe = /(футболк|рубашк|shirt|t-?shirt|tee)[\s\-]+поло|поло[\s\-]+(футболк|рубашк|shirt|t-?shirt|tee)|^поло\b|\bpolo\b/i;
+
+  if (knitPoloRe.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "KNITWEAR";
+    item.isTryOnRelevant = true;
+  } else if (classicPoloRe.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "POLO";
     item.isTryOnRelevant = true;
