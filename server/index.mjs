@@ -2439,6 +2439,40 @@ async function restoreSafeCatalogActiveProducts(merchant) {
 }
 
 
+async function deactivateBlockedCatalogProducts(merchant) {
+  const m = String(merchant || "").trim().toLowerCase();
+  if (!m) return { count: 0 };
+
+  const result = await prisma.catalogProduct.updateMany({
+    where: {
+      merchant: m,
+      isActive: true,
+      OR: [
+        { title: { contains: "плават", mode: "insensitive" } },
+        { title: { contains: "плавки", mode: "insensitive" } },
+        { title: { contains: "купаль", mode: "insensitive" } },
+        { title: { contains: "бикини", mode: "insensitive" } },
+        { title: { contains: "пляж", mode: "insensitive" } },
+        { title: { contains: "swim", mode: "insensitive" } },
+        { title: { contains: "beach", mode: "insensitive" } },
+      ],
+    },
+    data: { isActive: false },
+  });
+
+  if (result.count > 0) {
+    console.log("[toptry] catalog import deactivated blocked products", {
+      merchant: m,
+      deactivated: result.count,
+      reason: "swimwear/beach",
+    });
+  }
+
+  return result;
+}
+
+
+
 function normalizeCatalogCurrency(value) {
   const s = String(value || "").trim().toUpperCase();
   if (!s || s === "RUR") return "RUB";
@@ -3585,6 +3619,7 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
     }
 
     const restoredSafe = await restoreSafeCatalogActiveProducts("sportcourt");
+    const deactivatedBlocked = await deactivateBlockedCatalogProducts("sportcourt");
 
     return res.json({
       ok: true,
@@ -3594,7 +3629,8 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
       updated,
       skipped,
       restoredSafe: restoredSafe.count || 0,
-      active: created + updated + (restoredSafe.count || 0),
+      deactivatedBlocked: deactivatedBlocked.count || 0,
+      active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/sportcourt error", e);
@@ -3749,6 +3785,7 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
     }
 
     const restoredSafe = await restoreSafeCatalogActiveProducts("sportmaster");
+    const deactivatedBlocked = await deactivateBlockedCatalogProducts("sportmaster");
 
     return res.json({
       ok: true,
@@ -3758,7 +3795,8 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       updated,
       skipped,
       restoredSafe: restoredSafe.count || 0,
-      active: created + updated + (restoredSafe.count || 0),
+      deactivatedBlocked: deactivatedBlocked.count || 0,
+      active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/sportmaster error", e);
@@ -3929,6 +3967,7 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
     }
 
     const restoredSafe = await restoreSafeCatalogActiveProducts("remington");
+    const deactivatedBlocked = await deactivateBlockedCatalogProducts("remington");
 
     return res.json({
       ok: true,
@@ -3938,7 +3977,8 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
       updated,
       skipped,
       restoredSafe: restoredSafe.count || 0,
-      active: created + updated + (restoredSafe.count || 0),
+      deactivatedBlocked: deactivatedBlocked.count || 0,
+      active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/remington error", e);
@@ -4090,6 +4130,7 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
     }
 
     const restoredSafe = await restoreSafeCatalogActiveProducts("rendezvous");
+    const deactivatedBlocked = await deactivateBlockedCatalogProducts("rendezvous");
 
     return res.json({
       ok: true,
@@ -4099,7 +4140,8 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       updated,
       skipped,
       restoredSafe: restoredSafe.count || 0,
-      active: created + updated + (restoredSafe.count || 0),
+      deactivatedBlocked: deactivatedBlocked.count || 0,
+      active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/rendezvous error", e);
@@ -4537,6 +4579,7 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
     }
 
     const restoredSafe = await restoreSafeCatalogActiveProducts("thecultt");
+    const deactivatedBlocked = await deactivateBlockedCatalogProducts("thecultt");
 
     return res.json({
       ok: true,
@@ -4546,7 +4589,8 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
       updated,
       skipped,
       restoredSafe: restoredSafe.count || 0,
-      active: created + updated + (restoredSafe.count || 0),
+      deactivatedBlocked: deactivatedBlocked.count || 0,
+      active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/thecultt error", e);
