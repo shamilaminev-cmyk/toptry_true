@@ -3869,7 +3869,43 @@ ${JSON.stringify(products, null, 2)}
 `;
 }
 
-async function runGeminiCatalogTextReview(products) {
+
+async function callAiGatewayCatalogTextReview(products) {
+  if (!AI_GATEWAY_URL) return null;
+
+  const upstream = `${AI_GATEWAY_URL}/internal/ai/catalog-review-text`;
+  const headers = AI_GATEWAY_SECRET
+    ? { "x-toptry-internal-secret": AI_GATEWAY_SECRET }
+    : {};
+
+  const { resp, text } = await proxyJsonPost(upstream, { products }, headers);
+
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {}
+
+  if (!resp.ok) {
+    throw new Error(`AI gateway catalog review ${resp.status}: ${(data?.error || text || "").slice(0, 800)}`);
+  }
+
+  if (!data?.parsed) {
+    throw new Error("AI gateway catalog review returned no parsed result");
+  }
+
+  return {
+    model: data.model || "ai-gateway",
+    parsed: data.parsed,
+    rawText: data.rawText || "",
+  };
+}
+
+
+async function runGeminiCatalogTextReview(products, { allowGateway = true } = {}) {
+  if (allowGateway && AI_GATEWAY_URL) {
+    return await callAiGatewayCatalogTextReview(products);
+  }
+
   const model =
     process.env.GEMINI_CATALOG_MODEL ||
     process.env.GEMINI_MODEL_TEXT ||
@@ -3903,6 +3939,33 @@ async function runGeminiCatalogTextReview(products) {
     rawText: responseText,
   };
 }
+
+
+app.post("/internal/ai/catalog-review-text", async (req, res) => {
+  try {
+    if (!assertInternalAiRequest(req, res)) return;
+
+    const products = Array.isArray(req.body?.products) ? req.body.products : [];
+    if (!products.length) {
+      return res.status(400).json({ error: "products[] is required" });
+    }
+
+    const safeProducts = products.slice(0, 100);
+    const result = await runGeminiCatalogTextReview(safeProducts, { allowGateway: false });
+
+    return res.json({
+      model: result.model,
+      parsed: result.parsed,
+      rawText: result.rawText || "",
+    });
+  } catch (e) {
+    console.error("[toptry] /internal/ai/catalog-review-text error", e);
+    return res.status(500).json({
+      error: e?.message || "internal catalog AI review failed",
+    });
+  }
+});
+
 
 app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
   try {
