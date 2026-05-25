@@ -4131,11 +4131,13 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
     const includeInactive = String(req.query.includeInactive || "") === "1";
     const focus = String(req.query.focus || "").trim().toLowerCase();
     const q = String(req.query.q || "").trim();
+    const skipReviewed = String(req.query.skipReviewed || "") === "1";
 
     const where = {
       ...(merchant ? { merchant } : {}),
       ...(includeInactive ? {} : { isActive: true }),
       ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
+      ...(skipReviewed ? { aiReviews: { none: {} } } : {}),
       price: { gt: 0 },
       AND: [
         { imageUrl: { not: null } },
@@ -4212,6 +4214,7 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
         ok: true,
         merchant: merchant || null,
         q: q || null,
+        skipReviewed,
         limit,
         reviewed: 0,
         saved: 0,
@@ -4296,6 +4299,7 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
       merchant: merchant || null,
       focus: focus || null,
       q: q || null,
+      skipReviewed,
       model,
       limit,
       reviewed: products.length,
