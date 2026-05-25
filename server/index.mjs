@@ -3865,6 +3865,7 @@ function buildCatalogAiReviewPrompt(products) {
 - Ремни → taxonomyGroup=ACCESSORIES, taxonomySubgroup=BELTS, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
 - Носки → taxonomyGroup=ACCESSORIES, taxonomySubgroup=SOCKS, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
 - Угги / высокие сапоги / tall boots → taxonomySubgroup=TALL_BOOTS.
+- Ботинки / boots / boot → taxonomySubgroup=BOOTS.
 - Джемпер-поло / свитер-поло / кардиган-поло / водолазка-поло → taxonomySubgroup=KNITWEAR.
 - Футболка-поло / рубашка-поло / классическое поло → taxonomySubgroup=POLO.
 - Футболка / t-shirt / tee → taxonomySubgroup=TSHIRTS.
@@ -4048,6 +4049,13 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
   if (/угги|ugg|tall boots|высокие сапоги/i.test(title)) {
     item.taxonomyGroup = "SHOES";
     item.taxonomySubgroup = "TALL_BOOTS";
+    item.isTryOnRelevant = true;
+  }
+
+  const genericBootsRe = /ботинк|\bboot\b|\bboots\b/i;
+  if (genericBootsRe.test(title) && item.taxonomySubgroup !== "TALL_BOOTS") {
+    item.taxonomyGroup = "SHOES";
+    item.taxonomySubgroup = "BOOTS";
     item.isTryOnRelevant = true;
   }
 
