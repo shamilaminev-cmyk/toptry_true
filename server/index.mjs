@@ -3842,13 +3842,13 @@ function buildCatalogAiReviewPrompt(products) {
       "id": "string",
       "isTryOnRelevant": true,
       "taxonomyGroup": "CLOTHING|SHOES|BAGS|ACCESSORIES|OTHER",
-      "taxonomySubgroup": "OUTERWEAR|KNITWEAR|HOODIES|TSHIRTS|SHIRTS|POLO|TROUSERS|DENIM|SKIRTS|DRESSES|SNEAKERS|BOOTS|LOAFERS|SANDALS|BALLET|SHOES_CLASSIC|BAGS|ACCESSORIES|null",
+      "taxonomySubgroup": "OUTERWEAR|KNITWEAR|HOODIES|TSHIRTS|SHIRTS|POLO|TROUSERS|DENIM|SKIRTS|DRESSES|SNEAKERS|BOOTS|LOAFERS|SANDALS|BALLET|SHOES_CLASSIC|BAGS|HEADWEAR|GLOVES|SCARVES|BELTS|SOCKS|ACCESSORIES|null",
       "gender": "male|female|unisex|kids|unknown",
       "colorFamily": "black|white|grey|beige|brown|blue|green|red|pink|purple|yellow|orange|multi|unknown",
       "seasonTags": ["summer|demi|winter|all-season"],
       "occasionTags": ["casual|office|sport|outdoor|evening|travel"],
       "styleTags": ["classic|minimal|streetwear|outdoor|sporty|elegant|basic"],
-      "rejectReasons": ["SPORT_EQUIPMENT|BEAUTY_DEVICE|SWIMWEAR|UNDERWEAR|HOME_TEXTILE|BAD_IMAGE|BROKEN_LINK|NON_FASHION_ACCESSORY|DUPLICATE|UNKNOWN"],
+      "rejectReasons": ["SPORT_EQUIPMENT|BEAUTY_DEVICE|SWIMWEAR|UNDERWEAR|HOME_TEXTILE|BAD_IMAGE|BROKEN_LINK|NON_FASHION_ACCESSORY|TRYON_UNSUPPORTED_ACCESSORY|DUPLICATE|UNKNOWN"],
       "confidence": 0.0,
       "explanation": "short Russian explanation"
     }
@@ -3857,12 +3857,25 @@ function buildCatalogAiReviewPrompt(products) {
 
 Правила:
 - Насосы, мячи, коврики, эспандеры, утяжелители, фитболы, спортинвентарь: isTryOnRelevant=false, taxonomyGroup=OTHER.
-- Плавки, купальники, шорты плавательные, beach/swim: isTryOnRelevant=false, rejectReasons include SWIMWEAR.
+- Плавки, купальники, шорты плавательные, аквашузы, beach/swim/aqua: isTryOnRelevant=false, rejectReasons include SWIMWEAR.
 - Обычная одежда, обувь и сумки: isTryOnRelevant=true.
-- ACCESSORIES разрешай только если это носимый fashion-аксессуар. Спорные аксессуары лучше isTryOnRelevant=false.
+- Головные уборы: шапка, кепка, панама, бейсболка, балаклава → taxonomyGroup=ACCESSORIES, taxonomySubgroup=HEADWEAR, isTryOnRelevant=true.
+- Варежки и перчатки → taxonomyGroup=ACCESSORIES, taxonomySubgroup=GLOVES, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
+- Шарфы → taxonomyGroup=ACCESSORIES, taxonomySubgroup=SCARVES, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
+- Ремни → taxonomyGroup=ACCESSORIES, taxonomySubgroup=BELTS, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
+- Носки → taxonomyGroup=ACCESSORIES, taxonomySubgroup=SOCKS, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
+- Футболка / t-shirt / tee → taxonomySubgroup=TSHIRTS.
+- Рубашка / shirt button-down → taxonomySubgroup=SHIRTS.
+- Поло → taxonomySubgroup=POLO.
+- Худи / толстовка / свитшот → taxonomySubgroup=HOODIES.
+- Джемпер / свитер / кардиган / водолазка → taxonomySubgroup=KNITWEAR.
 - Если существующая taxonomy явно противоречит названию, предложи исправленную taxonomy.
 - Не придумывай факты, которых нет в названии/параметрах.
-- confidence ставь высоко только если товар понятен по тексту.
+- confidence используй осторожно:
+  1.0 — только очевидный спортинвентарь/очевидный неподходящий товар;
+  0.90 — товар очевиден по названию и параметрам;
+  0.75 — вероятно, но есть конфликт с текущей taxonomy;
+  0.60 — мало данных или спорный аксессуар.
 
 Товары:
 ${JSON.stringify(products, null, 2)}
@@ -3938,6 +3951,134 @@ async function runGeminiCatalogTextReview(products, { allowGateway = true } = {}
     parsed: normalizeCatalogAiReviewJson(responseText),
     rawText: responseText,
   };
+}
+
+
+
+const CATALOG_AI_ALLOWED_GROUPS = new Set([
+  "CLOTHING",
+  "SHOES",
+  "BAGS",
+  "ACCESSORIES",
+  "OTHER",
+]);
+
+const CATALOG_AI_ALLOWED_SUBGROUPS = new Set([
+  "OUTERWEAR",
+  "KNITWEAR",
+  "HOODIES",
+  "TSHIRTS",
+  "SHIRTS",
+  "POLO",
+  "TROUSERS",
+  "DENIM",
+  "SKIRTS",
+  "DRESSES",
+  "SNEAKERS",
+  "BOOTS",
+  "LOAFERS",
+  "SANDALS",
+  "BALLET",
+  "SHOES_CLASSIC",
+  "BAGS",
+  "HEADWEAR",
+  "GLOVES",
+  "SCARVES",
+  "BELTS",
+  "SOCKS",
+  "ACCESSORIES",
+]);
+
+function normalizeCatalogAiString(value) {
+  const s = String(value || "").trim().toUpperCase();
+  if (!s || s === "NULL" || s === "NONE" || s === "N/A") return null;
+  return s;
+}
+
+function addCatalogAiRejectReason(item, reason) {
+  const reasons = Array.isArray(item.rejectReasons) ? item.rejectReasons.map(String) : [];
+  if (!reasons.includes(reason)) reasons.push(reason);
+  item.rejectReasons = reasons;
+}
+
+function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
+  const item = { ...(rawItem || {}) };
+  const title = String(sourceProduct.title || item.title || "").toLowerCase();
+
+  const group = normalizeCatalogAiString(item.taxonomyGroup);
+  item.taxonomyGroup = CATALOG_AI_ALLOWED_GROUPS.has(group) ? group : "OTHER";
+
+  const subgroup = normalizeCatalogAiString(item.taxonomySubgroup);
+  item.taxonomySubgroup = CATALOG_AI_ALLOWED_SUBGROUPS.has(subgroup) ? subgroup : null;
+
+  item.rejectReasons = Array.isArray(item.rejectReasons) ? item.rejectReasons.map(String) : [];
+
+  if (/футболк|t-?shirt|\btee\b/i.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "TSHIRTS";
+    item.isTryOnRelevant = true;
+  } else if (/поло|\bpolo\b/i.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "POLO";
+    item.isTryOnRelevant = true;
+  } else if (/рубашк|button[- ]?down|\bshirt\b/i.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "SHIRTS";
+    item.isTryOnRelevant = true;
+  } else if (/худи|толстовк|свитшот|hoodie|sweatshirt/i.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "HOODIES";
+    item.isTryOnRelevant = true;
+  } else if (/джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan/i.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "KNITWEAR";
+    item.isTryOnRelevant = true;
+  }
+
+  if (/шапк|кепк|панам|бейсболк|балаклав|beanie|cap\b|hat\b/i.test(title)) {
+    item.taxonomyGroup = "ACCESSORIES";
+    item.taxonomySubgroup = "HEADWEAR";
+    item.isTryOnRelevant = true;
+  }
+
+  if (/варежк|перчатк|glove|gloves|mitten|mittens/i.test(title)) {
+    item.taxonomyGroup = "ACCESSORIES";
+    item.taxonomySubgroup = "GLOVES";
+    item.isTryOnRelevant = false;
+    addCatalogAiRejectReason(item, "TRYON_UNSUPPORTED_ACCESSORY");
+  }
+
+  if (/шарф|scarf/i.test(title)) {
+    item.taxonomyGroup = "ACCESSORIES";
+    item.taxonomySubgroup = "SCARVES";
+    item.isTryOnRelevant = false;
+    addCatalogAiRejectReason(item, "TRYON_UNSUPPORTED_ACCESSORY");
+  }
+
+  if (/ремень|ремни|belt/i.test(title)) {
+    item.taxonomyGroup = "ACCESSORIES";
+    item.taxonomySubgroup = "BELTS";
+    item.isTryOnRelevant = false;
+    addCatalogAiRejectReason(item, "TRYON_UNSUPPORTED_ACCESSORY");
+  }
+
+  if (/носк[иов]?|sock|socks/i.test(title)) {
+    item.taxonomyGroup = "ACCESSORIES";
+    item.taxonomySubgroup = "SOCKS";
+    item.isTryOnRelevant = false;
+    addCatalogAiRejectReason(item, "TRYON_UNSUPPORTED_ACCESSORY");
+  }
+
+  if (/плавк|купаль|плават|аквашуз|beach|swim|aqua/i.test(title)) {
+    item.isTryOnRelevant = false;
+    addCatalogAiRejectReason(item, "SWIMWEAR");
+  }
+
+  if (typeof item.confidence !== "number") {
+    item.confidence = null;
+  }
+
+  return item;
 }
 
 
@@ -4068,7 +4209,11 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
       .digest("hex");
 
     const { model, parsed, rawText } = await runGeminiCatalogTextReview(products);
-    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+    const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
+    const items = rawItems.map((item) => {
+      const source = rows.find((r) => r.id === String(item?.id || ""));
+      return normalizeCatalogAiReviewItem(item, source || {});
+    });
 
     let saved = 0;
 
