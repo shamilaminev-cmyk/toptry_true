@@ -2703,8 +2703,12 @@ function getCatalogClothingTypePredicates(clothingType) {
   return [
     { taxonomySubgroup: { in: taxonomy } },
     // fallback for old / not-yet-enriched rows
-    ...(ct === "DRESSES" ? [{ category: "DRESS" }] : []),
-    ...(ct === "OUTERWEAR" ? [{ category: "JACKETS" }] : []),
+    ...(ct === "DRESSES" ? [
+      { category: "DRESS", OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }] },
+    ] : []),
+    ...(ct === "OUTERWEAR" ? [
+      { category: "JACKETS", OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }] },
+    ] : []),
     ...(ct === "BLAZERS" ? [
       { category: "JACKETS", OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "жакет", mode: "insensitive" } },
       { category: "JACKETS", OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "пиджак", mode: "insensitive" } },
@@ -2718,7 +2722,9 @@ function getCatalogClothingTypePredicates(clothingType) {
     ...(ct === "KNITWEAR" ? [{ category: "TOPS", OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "свитер", mode: "insensitive" } }] : []),
     ...(ct === "SHIRTS" ? [{ category: "TOPS", OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "рубаш", mode: "insensitive" } }] : []),
     ...(ct === "SUITS" ? [{ OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "костюм", mode: "insensitive" } }] : []),
-    ...(baseCategory && ct === "TOPS" ? [{ category: baseCategory }] : []),
+    ...(baseCategory && ct === "TOPS" ? [
+      { category: baseCategory, OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }] },
+    ] : []),
   ];
 }
 
