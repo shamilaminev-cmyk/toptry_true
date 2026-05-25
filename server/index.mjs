@@ -3864,9 +3864,10 @@ function buildCatalogAiReviewPrompt(products) {
 - Шарфы → taxonomyGroup=ACCESSORIES, taxonomySubgroup=SCARVES, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
 - Ремни → taxonomyGroup=ACCESSORIES, taxonomySubgroup=BELTS, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
 - Носки → taxonomyGroup=ACCESSORIES, taxonomySubgroup=SOCKS, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
+- Угги / высокие сапоги / tall boots → taxonomySubgroup=TALL_BOOTS.
+- Поло → taxonomySubgroup=POLO.
 - Футболка / t-shirt / tee → taxonomySubgroup=TSHIRTS.
 - Рубашка / shirt button-down → taxonomySubgroup=SHIRTS.
-- Поло → taxonomySubgroup=POLO.
 - Худи / толстовка / свитшот → taxonomySubgroup=HOODIES.
 - Джемпер / свитер / кардиган / водолазка → taxonomySubgroup=KNITWEAR.
 - Если существующая taxonomy явно противоречит названию, предложи исправленную taxonomy.
@@ -3976,6 +3977,7 @@ const CATALOG_AI_ALLOWED_SUBGROUPS = new Set([
   "DRESSES",
   "SNEAKERS",
   "BOOTS",
+  "TALL_BOOTS",
   "LOAFERS",
   "SANDALS",
   "BALLET",
@@ -4013,13 +4015,13 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
 
   item.rejectReasons = Array.isArray(item.rejectReasons) ? item.rejectReasons.map(String) : [];
 
-  if (/футболк|t-?shirt|\btee\b/i.test(title)) {
-    item.taxonomyGroup = "CLOTHING";
-    item.taxonomySubgroup = "TSHIRTS";
-    item.isTryOnRelevant = true;
-  } else if (/поло|\bpolo\b/i.test(title)) {
+  if (/поло|\bpolo\b/i.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "POLO";
+    item.isTryOnRelevant = true;
+  } else if (/футболк|t-?shirt|\btee\b/i.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "TSHIRTS";
     item.isTryOnRelevant = true;
   } else if (/рубашк|button[- ]?down|\bshirt\b/i.test(title)) {
     item.taxonomyGroup = "CLOTHING";
@@ -4032,6 +4034,12 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
   } else if (/джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan/i.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "KNITWEAR";
+    item.isTryOnRelevant = true;
+  }
+
+  if (/угги|ugg|tall boots|высокие сапоги/i.test(title)) {
+    item.taxonomyGroup = "SHOES";
+    item.taxonomySubgroup = "TALL_BOOTS";
     item.isTryOnRelevant = true;
   }
 
