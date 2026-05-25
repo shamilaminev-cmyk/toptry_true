@@ -4608,6 +4608,189 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-dryrun", async (req, res) 
 });
 
 
+
+const CATALOG_AI_SAFE_TAXONOMY_TRANSITIONS = [
+  ["CLOTHING", "POLO", "CLOTHING", "TSHIRTS"],
+  ["CLOTHING", "KNITWEAR", "CLOTHING", "HOODIES"],
+  ["SHOES", "SNEAKERS", "CLOTHING", "TSHIRTS"],
+  ["CLOTHING", "SHIRTS", "CLOTHING", "TSHIRTS"],
+  ["CLOTHING", "POLO", "CLOTHING", "HOODIES"],
+  ["CLOTHING", "BLAZERS", "CLOTHING", "TSHIRTS"],
+  ["CLOTHING", "TROUSERS", "CLOTHING", "DENIM"],
+  ["SHOES", "SNEAKERS", "SHOES", "BOOTS"],
+];
+
+function catalogAiTaxonomyTransitionKey(fromGroup, fromSubgroup, toGroup, toSubgroup) {
+  return [
+    String(fromGroup || ""),
+    String(fromSubgroup || ""),
+    String(toGroup || ""),
+    String(toSubgroup || ""),
+  ].join("||");
+}
+
+const CATALOG_AI_SAFE_TAXONOMY_TRANSITION_KEYS = new Set(
+  CATALOG_AI_SAFE_TAXONOMY_TRANSITIONS.map((t) => catalogAiTaxonomyTransitionKey(...t))
+);
+
+app.post("/api/admin/catalog/ai-review/apply-taxonomy-safe", async (req, res) => {
+  try {
+    const dryRun = String(req.query.dryRun || "1") !== "0";
+    const merchant = String(req.query.merchant || "").trim().toLowerCase();
+    const limit = Math.max(1, Math.min(5000, Number(req.query.limit || 500)));
+    const minConfidence = Math.max(0, Math.min(1, Number(req.query.minConfidence || 0.9)));
+
+    const allowedMerchants = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt"]);
+    if (merchant && !allowedMerchants.has(merchant)) {
+      return res.status(400).json({ error: "Unknown merchant" });
+    }
+
+    const params = [minConfidence, limit];
+
+    let merchantSql = "";
+    if (merchant) {
+      params.push(merchant);
+      merchantSql = `and p.merchant = $${params.length}`;
+    }
+
+    const rows = await prisma.$queryRawUnsafe(`
+      with latest as (
+        select distinct on (r."productId")
+          r.id as "reviewId",
+          r."productId",
+          r."isTryOnRelevantSuggested",
+          r."taxonomyGroupSuggested",
+          r."taxonomySubgroupSuggested",
+          r.confidence,
+          r.explanation,
+          r."rejectReasons",
+          r."createdAt"
+        from "CatalogProductAIReview" r
+        order by r."productId", r."createdAt" desc
+      )
+      select
+        p.id,
+        p.merchant,
+        p.title,
+        p.category,
+        p."taxonomyGroup",
+        p."taxonomySubgroup",
+        p."isActive",
+        latest."reviewId",
+        latest."taxonomyGroupSuggested",
+        latest."taxonomySubgroupSuggested",
+        latest.confidence,
+        latest.explanation,
+        latest."rejectReasons",
+        latest."createdAt"
+      from latest
+      join "CatalogProduct" p on p.id = latest."productId"
+      where p."isActive" = true
+        ${merchantSql}
+        and latest."isTryOnRelevantSuggested" = true
+        and latest.confidence >= $1
+        and coalesce(cardinality(latest."rejectReasons"), 0) = 0
+        and latest."taxonomyGroupSuggested" is not null
+        and latest."taxonomySubgroupSuggested" is not null
+        and (
+          coalesce(p."taxonomyGroup", '') <> coalesce(latest."taxonomyGroupSuggested", '')
+          or coalesce(p."taxonomySubgroup", '') <> coalesce(latest."taxonomySubgroupSuggested", '')
+        )
+      order by latest.confidence asc, latest."createdAt" desc
+      limit $2
+    `, ...params);
+
+    const rawCandidates = Array.isArray(rows) ? rows : [];
+
+    const candidates = rawCandidates.filter((r) => {
+      const key = catalogAiTaxonomyTransitionKey(
+        r.taxonomyGroup,
+        r.taxonomySubgroup,
+        r.taxonomyGroupSuggested,
+        r.taxonomySubgroupSuggested
+      );
+      return CATALOG_AI_SAFE_TAXONOMY_TRANSITION_KEYS.has(key);
+    });
+
+    const byMerchant = {};
+    const byChange = {};
+
+    for (const r of candidates) {
+      const m = String(r.merchant || "");
+      byMerchant[m] = (byMerchant[m] || 0) + 1;
+
+      const key = `${r.taxonomyGroup || ""}/${r.taxonomySubgroup || ""} -> ${r.taxonomyGroupSuggested || ""}/${r.taxonomySubgroupSuggested || ""}`;
+      byChange[key] = (byChange[key] || 0) + 1;
+    }
+
+    let updated = 0;
+
+    if (!dryRun && candidates.length) {
+      await prisma.$transaction(
+        candidates.map((r) =>
+          prisma.catalogProduct.update({
+            where: { id: String(r.id) },
+            data: {
+              taxonomyGroup: r.taxonomyGroupSuggested,
+              taxonomySubgroup: r.taxonomySubgroupSuggested,
+            },
+          })
+        )
+      );
+      updated = candidates.length;
+
+      console.log("[toptry] catalog AI safe taxonomy applied", {
+        merchant: merchant || null,
+        candidates: candidates.length,
+        updated,
+        minConfidence,
+        byMerchant,
+        byChange,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      dryRun,
+      merchant: merchant || null,
+      limit,
+      minConfidence,
+      safeTransitions: CATALOG_AI_SAFE_TAXONOMY_TRANSITIONS.map(([fg, fs, tg, ts]) => ({
+        from: { taxonomyGroup: fg, taxonomySubgroup: fs },
+        to: { taxonomyGroup: tg, taxonomySubgroup: ts },
+      })),
+      scanned: rawCandidates.length,
+      candidates: candidates.length,
+      updated,
+      byMerchant,
+      byChange,
+      items: candidates.map((r) => ({
+        id: r.id,
+        merchant: r.merchant,
+        title: r.title,
+        category: r.category,
+        current: {
+          taxonomyGroup: r.taxonomyGroup,
+          taxonomySubgroup: r.taxonomySubgroup,
+        },
+        suggested: {
+          taxonomyGroup: r.taxonomyGroupSuggested,
+          taxonomySubgroup: r.taxonomySubgroupSuggested,
+        },
+        confidence: r.confidence,
+        explanation: r.explanation,
+        reviewCreatedAt: r.createdAt,
+      })),
+    });
+  } catch (e) {
+    console.error("[toptry] catalog AI apply taxonomy safe error", e);
+    return res.status(500).json({
+      error: e?.message || "catalog AI apply taxonomy safe failed",
+    });
+  }
+});
+
+
 app.post("/api/admin/catalog/import/remington", async (_req, res) => {
   try {
     const FEED_URL = process.env.ADMITAD_REMINGTON_FEED_URL || "";
