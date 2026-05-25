@@ -4612,7 +4612,9 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-dryrun", async (req, res) 
 const CATALOG_AI_SAFE_TAXONOMY_TRANSITIONS = [
   ["CLOTHING", "POLO", "CLOTHING", "TSHIRTS"],
   ["CLOTHING", "KNITWEAR", "CLOTHING", "HOODIES"],
+  ["CLOTHING", "HOODIES", "CLOTHING", "TSHIRTS"],
   ["SHOES", "SNEAKERS", "CLOTHING", "TSHIRTS"],
+  ["SHOES", "SNEAKERS", "CLOTHING", "POLO"],
   ["CLOTHING", "SHIRTS", "CLOTHING", "TSHIRTS"],
   ["CLOTHING", "POLO", "CLOTHING", "HOODIES"],
   ["CLOTHING", "BLAZERS", "CLOTHING", "TSHIRTS"],
