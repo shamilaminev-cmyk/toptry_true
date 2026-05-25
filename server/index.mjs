@@ -4122,10 +4122,12 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
     const limit = Math.max(1, Math.min(100, Number(req.query.limit || 20)));
     const includeInactive = String(req.query.includeInactive || "") === "1";
     const focus = String(req.query.focus || "").trim().toLowerCase();
+    const q = String(req.query.q || "").trim();
 
     const where = {
       ...(merchant ? { merchant } : {}),
       ...(includeInactive ? {} : { isActive: true }),
+      ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
       price: { gt: 0 },
       AND: [
         { imageUrl: { not: null } },
@@ -4201,9 +4203,11 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
       return res.json({
         ok: true,
         merchant: merchant || null,
+        q: q || null,
         limit,
         reviewed: 0,
         saved: 0,
+        chunks: 0,
         items: [],
       });
     }
@@ -4216,12 +4220,31 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
       }))
       .digest("hex");
 
-    const { model, parsed, rawText } = await runGeminiCatalogTextReview(products);
-    const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
-    const items = rawItems.map((item) => {
-      const source = rows.find((r) => r.id === String(item?.id || ""));
-      return normalizeCatalogAiReviewItem(item, source || {});
-    });
+    const catalogAiReviewChunkSize = Math.max(
+      1,
+      Math.min(30, Number(req.query.chunkSize || 20))
+    );
+
+    const chunks = [];
+    for (let i = 0; i < products.length; i += catalogAiReviewChunkSize) {
+      chunks.push(products.slice(i, i + catalogAiReviewChunkSize));
+    }
+
+    let model = null;
+    let rawTextLen = 0;
+    const items = [];
+
+    for (const chunk of chunks) {
+      const result = await runGeminiCatalogTextReview(chunk);
+      model = model || result.model;
+      rawTextLen += String(result.rawText || "").length;
+
+      const rawItems = Array.isArray(result.parsed?.items) ? result.parsed.items : [];
+      for (const rawItem of rawItems) {
+        const source = rows.find((r) => r.id === String(rawItem?.id || ""));
+        items.push(normalizeCatalogAiReviewItem(rawItem, source || {}));
+      }
+    }
 
     let saved = 0;
 
@@ -4264,12 +4287,15 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
       ok: true,
       merchant: merchant || null,
       focus: focus || null,
+      q: q || null,
       model,
       limit,
       reviewed: products.length,
       saved,
+      chunks: chunks.length,
+      chunkSize: catalogAiReviewChunkSize,
       items,
-      rawTextLen: rawText.length,
+      rawTextLen,
     });
   } catch (e) {
     console.error("[toptry] catalog ai review error", e);
