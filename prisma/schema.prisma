@@ -178,5 +178,44 @@ model CatalogProduct {
   updatedAt     DateTime @updatedAt
 
   @@unique([merchant, externalId])
+  aiReviews CatalogProductAIReview[]
+}
+
+
+
+model CatalogProductAIReview {
+  id                         String   @id @default(cuid())
+  productId                  String
+  merchant                   String
+  model                      String
+  status                     String   @default("REVIEWED")
+
+  isTryOnRelevantSuggested   Boolean?
+  taxonomyGroupSuggested     String?
+  taxonomySubgroupSuggested  String?
+  genderSuggested            String?
+  colorFamilySuggested       String?
+  seasonTagsSuggested        String[]
+  occasionTagsSuggested      String[]
+  styleTagsSuggested         String[]
+  rejectReasons              String[]
+  confidence                 Float?
+  explanation                String?
+
+  inputHash                  String
+  rawInput                   Json?
+  rawOutput                  Json?
+  error                      String?
+
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  appliedAt                  DateTime?
+
+  product                    CatalogProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([merchant])
+  @@index([status])
+  @@index([inputHash])
 }
 

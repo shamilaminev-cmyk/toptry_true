@@ -3810,6 +3810,255 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
   }
 });
 
+
+function normalizeCatalogAiReviewJson(text) {
+  const raw = String(text || "").trim();
+  if (!raw) throw new Error("empty ai review response");
+
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const jsonText = fenced ? fenced[1].trim() : raw;
+
+  try {
+    return JSON.parse(jsonText);
+  } catch {
+    const first = jsonText.indexOf("{");
+    const last = jsonText.lastIndexOf("}");
+    if (first >= 0 && last > first) {
+      return JSON.parse(jsonText.slice(first, last + 1));
+    }
+    throw new Error("failed to parse ai review JSON");
+  }
+}
+
+function buildCatalogAiReviewPrompt(products) {
+  return `Ты проверяешь товары для российского сервиса виртуальной примерочной TopTry.
+
+Задача: для каждого товара определить, пригоден ли он для виртуальной примерки, и предложить нормализованные признаки.
+
+Верни СТРОГО JSON без markdown:
+{
+  "items": [
+    {
+      "id": "string",
+      "isTryOnRelevant": true,
+      "taxonomyGroup": "CLOTHING|SHOES|BAGS|ACCESSORIES|OTHER",
+      "taxonomySubgroup": "OUTERWEAR|KNITWEAR|HOODIES|TSHIRTS|SHIRTS|POLO|TROUSERS|DENIM|SKIRTS|DRESSES|SNEAKERS|BOOTS|LOAFERS|SANDALS|BALLET|SHOES_CLASSIC|BAGS|ACCESSORIES|null",
+      "gender": "male|female|unisex|kids|unknown",
+      "colorFamily": "black|white|grey|beige|brown|blue|green|red|pink|purple|yellow|orange|multi|unknown",
+      "seasonTags": ["summer|demi|winter|all-season"],
+      "occasionTags": ["casual|office|sport|outdoor|evening|travel"],
+      "styleTags": ["classic|minimal|streetwear|outdoor|sporty|elegant|basic"],
+      "rejectReasons": ["SPORT_EQUIPMENT|BEAUTY_DEVICE|SWIMWEAR|UNDERWEAR|HOME_TEXTILE|BAD_IMAGE|BROKEN_LINK|NON_FASHION_ACCESSORY|DUPLICATE|UNKNOWN"],
+      "confidence": 0.0,
+      "explanation": "short Russian explanation"
+    }
+  ]
+}
+
+Правила:
+- Насосы, мячи, коврики, эспандеры, утяжелители, фитболы, спортинвентарь: isTryOnRelevant=false, taxonomyGroup=OTHER.
+- Плавки, купальники, шорты плавательные, beach/swim: isTryOnRelevant=false, rejectReasons include SWIMWEAR.
+- Обычная одежда, обувь и сумки: isTryOnRelevant=true.
+- ACCESSORIES разрешай только если это носимый fashion-аксессуар. Спорные аксессуары лучше isTryOnRelevant=false.
+- Если существующая taxonomy явно противоречит названию, предложи исправленную taxonomy.
+- Не придумывай факты, которых нет в названии/параметрах.
+- confidence ставь высоко только если товар понятен по тексту.
+
+Товары:
+${JSON.stringify(products, null, 2)}
+`;
+}
+
+async function runGeminiCatalogTextReview(products) {
+  const model =
+    process.env.GEMINI_CATALOG_MODEL ||
+    process.env.GEMINI_MODEL_TEXT ||
+    "gemini-2.5-flash-lite";
+
+  const prompt = buildCatalogAiReviewPrompt(products);
+
+  const result = await genAI.models.generateContent({
+    model,
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: {
+      temperature: 0,
+      responseMimeType: "application/json",
+    },
+  });
+
+  const responseText =
+    result?.text ||
+    result?.response?.text?.() ||
+    result?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") ||
+    "";
+
+  return {
+    model,
+    parsed: normalizeCatalogAiReviewJson(responseText),
+    rawText: responseText,
+  };
+}
+
+app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
+  try {
+    const merchant = String(req.query.merchant || "").trim().toLowerCase();
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit || 20)));
+    const includeInactive = String(req.query.includeInactive || "") === "1";
+    const focus = String(req.query.focus || "").trim().toLowerCase();
+
+    const where = {
+      ...(merchant ? { merchant } : {}),
+      ...(includeInactive ? {} : { isActive: true }),
+      price: { gt: 0 },
+      AND: [
+        { imageUrl: { not: null } },
+        { imageUrl: { not: "" } },
+      ],
+      ...(focus === "accessories"
+        ? { taxonomyGroup: "ACCESSORIES" }
+        : {}),
+      ...(focus === "suspicious"
+        ? {
+            OR: [
+              { taxonomyGroup: "OTHER" },
+              { taxonomyGroup: null },
+              { taxonomySubgroup: null },
+              { title: { contains: "насос", mode: "insensitive" } },
+              { title: { contains: "коврик", mode: "insensitive" } },
+              { title: { contains: "эспандер", mode: "insensitive" } },
+              { title: { contains: "плав", mode: "insensitive" } },
+              { title: { contains: "swim", mode: "insensitive" } },
+              { title: { contains: "beach", mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+
+    const rows = await prisma.catalogProduct.findMany({
+      where,
+      orderBy: [{ updatedAt: "desc" }],
+      take: limit,
+      select: {
+        id: true,
+        merchant: true,
+        title: true,
+        brand: true,
+        category: true,
+        gender: true,
+        price: true,
+        oldPrice: true,
+        taxonomyGroup: true,
+        taxonomySubgroup: true,
+        styleTags: true,
+        occasionTags: true,
+        seasonTags: true,
+        colorFamily: true,
+        rawPayload: true,
+      },
+    });
+
+    const products = rows.map((p) => ({
+      id: p.id,
+      merchant: p.merchant,
+      title: p.title,
+      brand: p.brand,
+      category: p.category,
+      gender: p.gender,
+      price: p.price,
+      oldPrice: p.oldPrice,
+      taxonomyGroup: p.taxonomyGroup,
+      taxonomySubgroup: p.taxonomySubgroup,
+      styleTags: p.styleTags || [],
+      occasionTags: p.occasionTags || [],
+      seasonTags: p.seasonTags || [],
+      colorFamily: p.colorFamily,
+      raw: {
+        categoryId: p.rawPayload?.categoryId || null,
+        typePrefix: p.rawPayload?.typePrefix || null,
+        param: String(p.rawPayload?.param || "").slice(0, 1500),
+        description: String(p.rawPayload?.description || "").slice(0, 1000),
+      },
+    }));
+
+    if (!products.length) {
+      return res.json({
+        ok: true,
+        merchant: merchant || null,
+        limit,
+        reviewed: 0,
+        saved: 0,
+        items: [],
+      });
+    }
+
+    const inputHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify({
+        products,
+        modelHint: process.env.GEMINI_CATALOG_MODEL || process.env.GEMINI_MODEL_TEXT || "",
+      }))
+      .digest("hex");
+
+    const { model, parsed, rawText } = await runGeminiCatalogTextReview(products);
+    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+
+    let saved = 0;
+
+    for (const item of items) {
+      const productId = String(item.id || "");
+      const source = rows.find((r) => r.id === productId);
+      if (!source) continue;
+
+      await prisma.catalogProductAIReview.create({
+        data: {
+          productId,
+          merchant: source.merchant,
+          model,
+          status: "REVIEWED",
+          isTryOnRelevantSuggested:
+            typeof item.isTryOnRelevant === "boolean" ? item.isTryOnRelevant : null,
+          taxonomyGroupSuggested: item.taxonomyGroup || null,
+          taxonomySubgroupSuggested:
+            item.taxonomySubgroup && item.taxonomySubgroup !== "null"
+              ? item.taxonomySubgroup
+              : null,
+          genderSuggested: item.gender || null,
+          colorFamilySuggested: item.colorFamily || null,
+          seasonTagsSuggested: Array.isArray(item.seasonTags) ? item.seasonTags.map(String) : [],
+          occasionTagsSuggested: Array.isArray(item.occasionTags) ? item.occasionTags.map(String) : [],
+          styleTagsSuggested: Array.isArray(item.styleTags) ? item.styleTags.map(String) : [],
+          rejectReasons: Array.isArray(item.rejectReasons) ? item.rejectReasons.map(String) : [],
+          confidence: typeof item.confidence === "number" ? item.confidence : null,
+          explanation: item.explanation ? String(item.explanation).slice(0, 1000) : null,
+          inputHash,
+          rawInput: products.find((p) => p.id === productId) || {},
+          rawOutput: item,
+        },
+      });
+
+      saved++;
+    }
+
+    return res.json({
+      ok: true,
+      merchant: merchant || null,
+      focus: focus || null,
+      model,
+      limit,
+      reviewed: products.length,
+      saved,
+      items,
+      rawTextLen: rawText.length,
+    });
+  } catch (e) {
+    console.error("[toptry] catalog ai review error", e);
+    return res.status(500).json({
+      error: e?.message || "catalog ai review failed",
+    });
+  }
+});
+
+
 app.post("/api/admin/catalog/import/remington", async (_req, res) => {
   try {
     const FEED_URL = process.env.ADMITAD_REMINGTON_FEED_URL || "";
