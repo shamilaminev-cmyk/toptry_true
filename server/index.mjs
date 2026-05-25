@@ -4457,6 +4457,157 @@ app.post("/api/admin/catalog/ai-review/apply-safe-deactivate", async (req, res) 
 });
 
 
+
+app.post("/api/admin/catalog/ai-review/apply-taxonomy-dryrun", async (req, res) => {
+  try {
+    const merchant = String(req.query.merchant || "").trim().toLowerCase();
+    const limit = Math.max(1, Math.min(5000, Number(req.query.limit || 500)));
+    const minConfidence = Math.max(0, Math.min(1, Number(req.query.minConfidence || 0.75)));
+    const includeAccessories = String(req.query.includeAccessories || "") === "1";
+
+    const allowedMerchants = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt"]);
+    if (merchant && !allowedMerchants.has(merchant)) {
+      return res.status(400).json({ error: "Unknown merchant" });
+    }
+
+    const allowedGroups = Array.from(CATALOG_AI_ALLOWED_GROUPS).filter((g) => g !== "OTHER");
+    const allowedSubgroups = Array.from(CATALOG_AI_ALLOWED_SUBGROUPS);
+
+    const params = [
+      minConfidence,
+      allowedGroups,
+      allowedSubgroups,
+      limit,
+    ];
+
+    let merchantSql = "";
+    if (merchant) {
+      params.push(merchant);
+      merchantSql = `and p.merchant = $${params.length}`;
+    }
+
+    let accessoriesSql = "";
+    if (!includeAccessories) {
+      accessoriesSql = `and coalesce(latest."taxonomyGroupSuggested", '') <> 'ACCESSORIES'`;
+    }
+
+    const rows = await prisma.$queryRawUnsafe(`
+      with latest as (
+        select distinct on (r."productId")
+          r.id as "reviewId",
+          r."productId",
+          r."isTryOnRelevantSuggested",
+          r."taxonomyGroupSuggested",
+          r."taxonomySubgroupSuggested",
+          r."genderSuggested",
+          r."colorFamilySuggested",
+          r."seasonTagsSuggested",
+          r."occasionTagsSuggested",
+          r."styleTagsSuggested",
+          r."rejectReasons",
+          r.confidence,
+          r.explanation,
+          r."createdAt"
+        from "CatalogProductAIReview" r
+        order by r."productId", r."createdAt" desc
+      )
+      select
+        p.id,
+        p.merchant,
+        p.title,
+        p.category,
+        p."taxonomyGroup",
+        p."taxonomySubgroup",
+        p."isActive",
+        latest."reviewId",
+        latest."taxonomyGroupSuggested",
+        latest."taxonomySubgroupSuggested",
+        latest."genderSuggested",
+        latest."colorFamilySuggested",
+        latest."seasonTagsSuggested",
+        latest."occasionTagsSuggested",
+        latest."styleTagsSuggested",
+        latest."rejectReasons",
+        latest.confidence,
+        latest.explanation,
+        latest."createdAt"
+      from latest
+      join "CatalogProduct" p on p.id = latest."productId"
+      where p."isActive" = true
+        ${merchantSql}
+        ${accessoriesSql}
+        and latest."isTryOnRelevantSuggested" = true
+        and latest.confidence >= $1
+        and coalesce(cardinality(latest."rejectReasons"), 0) = 0
+        and latest."taxonomyGroupSuggested" = any($2::text[])
+        and latest."taxonomySubgroupSuggested" = any($3::text[])
+        and (
+          coalesce(p."taxonomyGroup", '') <> coalesce(latest."taxonomyGroupSuggested", '')
+          or coalesce(p."taxonomySubgroup", '') <> coalesce(latest."taxonomySubgroupSuggested", '')
+        )
+      order by latest.confidence asc, latest."createdAt" desc
+      limit $4
+    `, ...params);
+
+    const candidates = Array.isArray(rows) ? rows : [];
+
+    const byMerchant = {};
+    const byChange = {};
+
+    for (const r of candidates) {
+      const m = String(r.merchant || "");
+      byMerchant[m] = (byMerchant[m] || 0) + 1;
+
+      const fromGroup = r.taxonomyGroup || "";
+      const fromSubgroup = r.taxonomySubgroup || "";
+      const toGroup = r.taxonomyGroupSuggested || "";
+      const toSubgroup = r.taxonomySubgroupSuggested || "";
+      const key = `${fromGroup}/${fromSubgroup} -> ${toGroup}/${toSubgroup}`;
+      byChange[key] = (byChange[key] || 0) + 1;
+    }
+
+    return res.json({
+      ok: true,
+      dryRun: true,
+      merchant: merchant || null,
+      limit,
+      minConfidence,
+      includeAccessories,
+      candidates: candidates.length,
+      byMerchant,
+      byChange,
+      items: candidates.map((r) => ({
+        id: r.id,
+        merchant: r.merchant,
+        title: r.title,
+        category: r.category,
+        current: {
+          taxonomyGroup: r.taxonomyGroup,
+          taxonomySubgroup: r.taxonomySubgroup,
+        },
+        suggested: {
+          taxonomyGroup: r.taxonomyGroupSuggested,
+          taxonomySubgroup: r.taxonomySubgroupSuggested,
+          gender: r.genderSuggested,
+          colorFamily: r.colorFamilySuggested,
+          seasonTags: r.seasonTagsSuggested || [],
+          occasionTags: r.occasionTagsSuggested || [],
+          styleTags: r.styleTagsSuggested || [],
+        },
+        confidence: r.confidence,
+        explanation: r.explanation,
+        reviewCreatedAt: r.createdAt,
+      })),
+    });
+  } catch (e) {
+    console.error("[toptry] catalog AI apply taxonomy dryrun error", e);
+    return res.status(500).json({
+      error: e?.message || "catalog AI apply taxonomy dryrun failed",
+    });
+  }
+});
+
+
 app.post("/api/admin/catalog/import/remington", async (_req, res) => {
   try {
     const FEED_URL = process.env.ADMITAD_REMINGTON_FEED_URL || "";
