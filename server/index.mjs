@@ -2396,6 +2396,9 @@ function toPrice(value) {
 
 const SAFE_CATALOG_ACTIVE_GROUPS = ["SHOES", "CLOTHING", "BAGS"];
 
+const BLOCK_CATALOG_RESTORE_TITLE_RE =
+  /плават|плавки|купаль|бикини|пляж|swim|beach/i;
+
 async function restoreSafeCatalogActiveProducts(merchant) {
   const m = String(merchant || "").trim().toLowerCase();
   if (!m) return { count: 0 };
@@ -2406,6 +2409,15 @@ async function restoreSafeCatalogActiveProducts(merchant) {
       isActive: false,
       price: { gt: 0 },
       taxonomyGroup: { in: SAFE_CATALOG_ACTIVE_GROUPS },
+      NOT: [
+        { title: { contains: "плават", mode: "insensitive" } },
+        { title: { contains: "плавки", mode: "insensitive" } },
+        { title: { contains: "купаль", mode: "insensitive" } },
+        { title: { contains: "бикини", mode: "insensitive" } },
+        { title: { contains: "пляж", mode: "insensitive" } },
+        { title: { contains: "swim", mode: "insensitive" } },
+        { title: { contains: "beach", mode: "insensitive" } },
+      ],
       AND: [
         { imageUrl: { not: null } },
         { imageUrl: { not: "" } },
@@ -2419,6 +2431,7 @@ async function restoreSafeCatalogActiveProducts(merchant) {
       merchant: m,
       restored: result.count,
       groups: SAFE_CATALOG_ACTIVE_GROUPS,
+      excluded: "swimwear/beach",
     });
   }
 
