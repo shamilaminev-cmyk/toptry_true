@@ -4314,6 +4314,145 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
 });
 
 
+
+const CATALOG_AI_SAFE_DEACTIVATE_REASONS = [
+  "SPORT_EQUIPMENT",
+  "NON_FASHION_ACCESSORY",
+  "SWIMWEAR",
+  "TRYON_UNSUPPORTED_ACCESSORY",
+  "BEAUTY_DEVICE",
+  "HOME_TEXTILE",
+  "UNDERWEAR",
+];
+
+app.post("/api/admin/catalog/ai-review/apply-safe-deactivate", async (req, res) => {
+  try {
+    const dryRun = String(req.query.dryRun || "1") !== "0";
+    const merchant = String(req.query.merchant || "").trim().toLowerCase();
+    const limit = Math.max(1, Math.min(5000, Number(req.query.limit || 500)));
+    const minConfidence = Math.max(0, Math.min(1, Number(req.query.minConfidence || 0.95)));
+
+    const allowedMerchants = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt"]);
+    if (merchant && !allowedMerchants.has(merchant)) {
+      return res.status(400).json({ error: "Unknown merchant" });
+    }
+
+    const params = [
+      minConfidence,
+      CATALOG_AI_SAFE_DEACTIVATE_REASONS,
+      limit,
+    ];
+
+    let merchantSql = "";
+    if (merchant) {
+      params.push(merchant);
+      merchantSql = `and p.merchant = $${params.length}`;
+    }
+
+    const latestRows = await prisma.$queryRawUnsafe(`
+      with latest as (
+        select distinct on (r."productId")
+          r.id as "reviewId",
+          r."productId",
+          r."isTryOnRelevantSuggested",
+          r."rejectReasons",
+          r.confidence,
+          r.explanation,
+          r."createdAt"
+        from "CatalogProductAIReview" r
+        order by r."productId", r."createdAt" desc
+      )
+      select
+        p.id,
+        p.merchant,
+        p.title,
+        p.category,
+        p."taxonomyGroup",
+        p."taxonomySubgroup",
+        p."isActive",
+        latest."reviewId",
+        latest."isTryOnRelevantSuggested",
+        latest."rejectReasons",
+        latest.confidence,
+        latest.explanation,
+        latest."createdAt"
+      from latest
+      join "CatalogProduct" p on p.id = latest."productId"
+      where p."isActive" = true
+        ${merchantSql}
+        and latest."isTryOnRelevantSuggested" = false
+        and latest.confidence >= $1
+        and latest."rejectReasons" && $2::text[]
+      order by latest."createdAt" desc
+      limit $3
+    `, ...params);
+
+    const candidates = Array.isArray(latestRows) ? latestRows : [];
+    const ids = candidates.map((r) => String(r.id)).filter(Boolean);
+
+    let updated = 0;
+
+    if (!dryRun && ids.length) {
+      const result = await prisma.catalogProduct.updateMany({
+        where: {
+          id: { in: ids },
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+        },
+      });
+
+      updated = result.count || 0;
+
+      console.log("[toptry] catalog AI safe deactivate applied", {
+        merchant: merchant || null,
+        candidates: ids.length,
+        updated,
+        minConfidence,
+        reasons: CATALOG_AI_SAFE_DEACTIVATE_REASONS,
+      });
+    }
+
+    const byMerchant = {};
+    for (const r of candidates) {
+      const m = String(r.merchant || "");
+      byMerchant[m] = (byMerchant[m] || 0) + 1;
+    }
+
+    return res.json({
+      ok: true,
+      dryRun,
+      merchant: merchant || null,
+      minConfidence,
+      safeReasons: CATALOG_AI_SAFE_DEACTIVATE_REASONS,
+      candidates: candidates.length,
+      updated,
+      byMerchant,
+      items: candidates.map((r) => ({
+        id: r.id,
+        merchant: r.merchant,
+        title: r.title,
+        category: r.category,
+        taxonomyGroup: r.taxonomyGroup,
+        taxonomySubgroup: r.taxonomySubgroup,
+        isActive: r.isActive,
+        isTryOnRelevantSuggested: r.isTryOnRelevantSuggested,
+        rejectReasons: r.rejectReasons || [],
+        confidence: r.confidence,
+        explanation: r.explanation,
+        reviewCreatedAt: r.createdAt,
+      })),
+    });
+  } catch (e) {
+    console.error("[toptry] catalog AI apply safe deactivate error", e);
+    return res.status(500).json({
+      error: e?.message || "catalog AI apply safe deactivate failed",
+    });
+  }
+});
+
+
 app.post("/api/admin/catalog/import/remington", async (_req, res) => {
   try {
     const FEED_URL = process.env.ADMITAD_REMINGTON_FEED_URL || "";
