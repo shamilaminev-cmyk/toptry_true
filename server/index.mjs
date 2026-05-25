@@ -3875,9 +3875,14 @@ async function runGeminiCatalogTextReview(products) {
     process.env.GEMINI_MODEL_TEXT ||
     "gemini-2.5-flash-lite";
 
-  const prompt = buildCatalogAiReviewPrompt(products);
+  if (!GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured on the server");
+  }
 
-  const result = await genAI.models.generateContent({
+  const prompt = buildCatalogAiReviewPrompt(products);
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+  const result = await ai.models.generateContent({
     model,
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
