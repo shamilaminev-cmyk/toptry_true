@@ -4617,31 +4617,94 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-dryrun", async (req, res) 
 
 
 
-const CATALOG_AI_SAFE_TAXONOMY_TRANSITIONS = [
-  ["CLOTHING", "POLO", "CLOTHING", "TSHIRTS"],
-  ["CLOTHING", "KNITWEAR", "CLOTHING", "HOODIES"],
-  ["CLOTHING", "HOODIES", "CLOTHING", "TSHIRTS"],
-  ["SHOES", "SNEAKERS", "CLOTHING", "TSHIRTS"],
-  ["SHOES", "SNEAKERS", "CLOTHING", "POLO"],
-  ["CLOTHING", "SHIRTS", "CLOTHING", "TSHIRTS"],
-  ["CLOTHING", "POLO", "CLOTHING", "HOODIES"],
-  ["CLOTHING", "BLAZERS", "CLOTHING", "TSHIRTS"],
-  ["CLOTHING", "TROUSERS", "CLOTHING", "DENIM"],
-  ["SHOES", "SNEAKERS", "SHOES", "BOOTS"],
+
+const CATALOG_AI_SAFE_TAXONOMY_RULES = [
+  {
+    code: "TITLE_BOTTOMS_TO_TROUSERS",
+    toGroup: "CLOTHING",
+    toSubgroup: "TROUSERS",
+    titleRe: /(брюки|шорты|легинс|велосипедк|полукомбинезон|pants|shorts|leggings|bib)/i,
+  },
+  {
+    code: "TITLE_OUTERWEAR",
+    toGroup: "CLOTHING",
+    toSubgroup: "OUTERWEAR",
+    titleRe: /(куртк|пуховик|ветровк|пальто|жилет|jacket|coat|parka|vest|gilet)/i,
+  },
+  {
+    code: "TITLE_TSHIRTS",
+    toGroup: "CLOTHING",
+    toSubgroup: "TSHIRTS",
+    titleRe: /(футболк|майк|топ бра|спортивный бра|tank top|t-?shirt|tee\b)/i,
+  },
+  {
+    code: "TITLE_HOODIES",
+    toGroup: "CLOTHING",
+    toSubgroup: "HOODIES",
+    titleRe: /(худи|толстовк|свитшот|hoodie|sweatshirt)/i,
+  },
+  {
+    code: "TITLE_KNITWEAR",
+    toGroup: "CLOTHING",
+    toSubgroup: "KNITWEAR",
+    titleRe: /(джемпер|свитер|водолазк|кардиган|лонгслив|knit|sweater|cardigan|turtleneck|longsleeve|long sleeve)/i,
+  },
+  {
+    code: "TITLE_SNEAKERS",
+    toGroup: "SHOES",
+    toSubgroup: "SNEAKERS",
+    titleRe: /(кеды|кроссовк|бутсы|sneakers?|trainers?|cleats?)/i,
+  },
+  {
+    code: "TITLE_BOOTS",
+    toGroup: "SHOES",
+    toSubgroup: "BOOTS",
+    titleRe: /(ботинк|\bboots?\b)/i,
+  },
+  {
+    code: "TITLE_SKIRTS",
+    toGroup: "CLOTHING",
+    toSubgroup: "SKIRTS",
+    titleRe: /(юбк|skirt)/i,
+  },
+  {
+    code: "TITLE_SHIRTS",
+    toGroup: "CLOTHING",
+    toSubgroup: "SHIRTS",
+    titleRe: /(рубашк|блузк|blouse|button[- ]?down|\bshirt\b)/i,
+  },
 ];
 
-function catalogAiTaxonomyTransitionKey(fromGroup, fromSubgroup, toGroup, toSubgroup) {
-  return [
-    String(fromGroup || ""),
-    String(fromSubgroup || ""),
-    String(toGroup || ""),
-    String(toSubgroup || ""),
-  ].join("||");
+function isCatalogAiTitleSafeTaxonomyCandidate(row) {
+  const title = String(row?.title || "");
+  const toGroup = String(row?.taxonomyGroupSuggested || "");
+  const toSubgroup = String(row?.taxonomySubgroupSuggested || "");
+
+  if (!title || !toGroup || !toSubgroup) return false;
+
+  return CATALOG_AI_SAFE_TAXONOMY_RULES.some((rule) => {
+    return (
+      rule.toGroup === toGroup &&
+      rule.toSubgroup === toSubgroup &&
+      rule.titleRe.test(title)
+    );
+  });
 }
 
-const CATALOG_AI_SAFE_TAXONOMY_TRANSITION_KEYS = new Set(
-  CATALOG_AI_SAFE_TAXONOMY_TRANSITIONS.map((t) => catalogAiTaxonomyTransitionKey(...t))
-);
+function catalogAiSafeTaxonomyRuleCodesFor(row) {
+  const title = String(row?.title || "");
+  const toGroup = String(row?.taxonomyGroupSuggested || "");
+  const toSubgroup = String(row?.taxonomySubgroupSuggested || "");
+
+  return CATALOG_AI_SAFE_TAXONOMY_RULES
+    .filter((rule) => (
+      rule.toGroup === toGroup &&
+      rule.toSubgroup === toSubgroup &&
+      rule.titleRe.test(title)
+    ))
+    .map((rule) => rule.code);
+}
+
 
 app.post("/api/admin/catalog/ai-review/apply-taxonomy-safe", async (req, res) => {
   try {
@@ -4712,15 +4775,7 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-safe", async (req, res) =>
 
     const rawCandidates = Array.isArray(rows) ? rows : [];
 
-    const candidates = rawCandidates.filter((r) => {
-      const key = catalogAiTaxonomyTransitionKey(
-        r.taxonomyGroup,
-        r.taxonomySubgroup,
-        r.taxonomyGroupSuggested,
-        r.taxonomySubgroupSuggested
-      );
-      return CATALOG_AI_SAFE_TAXONOMY_TRANSITION_KEYS.has(key);
-    });
+    const candidates = rawCandidates.filter((r) => isCatalogAiTitleSafeTaxonomyCandidate(r));
 
     const byMerchant = {};
     const byChange = {};
@@ -4765,9 +4820,10 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-safe", async (req, res) =>
       merchant: merchant || null,
       limit,
       minConfidence,
-      safeTransitions: CATALOG_AI_SAFE_TAXONOMY_TRANSITIONS.map(([fg, fs, tg, ts]) => ({
-        from: { taxonomyGroup: fg, taxonomySubgroup: fs },
-        to: { taxonomyGroup: tg, taxonomySubgroup: ts },
+      safeRules: CATALOG_AI_SAFE_TAXONOMY_RULES.map((rule) => ({
+        code: rule.code,
+        to: { taxonomyGroup: rule.toGroup, taxonomySubgroup: rule.toSubgroup },
+        titlePattern: String(rule.titleRe),
       })),
       scanned: rawCandidates.length,
       candidates: candidates.length,
@@ -4788,6 +4844,7 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-safe", async (req, res) =>
           taxonomySubgroup: r.taxonomySubgroupSuggested,
         },
         confidence: r.confidence,
+        safeRuleCodes: catalogAiSafeTaxonomyRuleCodesFor(r),
         explanation: r.explanation,
         reviewCreatedAt: r.createdAt,
       })),
