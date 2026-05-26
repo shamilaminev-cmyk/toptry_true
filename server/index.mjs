@@ -4692,7 +4692,8 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     code: "TITLE_OUTERWEAR",
     toGroup: "CLOTHING",
     toSubgroup: "OUTERWEAR",
-    titleRe: /(куртк|пуховик|ветровк|пальто|жилет|jacket|coat|parka|vest|gilet)/i,
+    titleRe: /(верхн[яе][яе]\s+одежд|куртк|пуховик|ветровк|пальто|плащ|жилет|jacket|coat|parka|vest|gilet)/i,
+    rejectTitleRe: /(пиджак|жакет|blazer)/i,
   },
   {
     code: "TITLE_TSHIRTS",
