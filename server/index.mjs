@@ -4020,7 +4020,14 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
   const knitPoloRe = /(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)[\s\-]+поло|поло[\s\-]+(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)/i;
   const classicPoloRe = /(футболк|рубашк|shirt|t-?shirt|tee)[\s\-]+поло|поло[\s\-]+(футболк|рубашк|shirt|t-?shirt|tee)|^поло\b|\bpolo\b/i;
 
-  if (knitPoloRe.test(title)) {
+  const outerwearTitleRe = /(верхн[яе][яе]\s+одежд|куртк|пуховик|ветровк|пальто|плащ|жилет|jacket|coat|parka|vest|gilet)/i;
+  const blazerTitleRe = /(пиджак|жакет|blazer)/i;
+
+  if (outerwearTitleRe.test(title) && !blazerTitleRe.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "OUTERWEAR";
+    item.isTryOnRelevant = true;
+  } else if (knitPoloRe.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "KNITWEAR";
     item.isTryOnRelevant = true;
@@ -4735,6 +4742,18 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     toGroup: "CLOTHING",
     toSubgroup: "SKIRTS",
     titleRe: /(юбк|skirt)/i,
+  },
+  {
+    code: "TITLE_DRESSES",
+    toGroup: "CLOTHING",
+    toSubgroup: "DRESSES",
+    titleRe: /(плать|dress)/i,
+  },
+  {
+    code: "TITLE_DENIM",
+    toGroup: "CLOTHING",
+    toSubgroup: "DENIM",
+    titleRe: /(джинс|denim|jeans)/i,
   },
   {
     code: "TITLE_SHIRTS",
