@@ -4337,6 +4337,59 @@ const CATALOG_AI_SAFE_DEACTIVATE_REASONS = [
   "UNDERWEAR",
 ];
 
+const CATALOG_AI_SAFE_DEACTIVATE_TITLE_RULES = [
+  {
+    code: "TITLE_UNSUPPORTED_ACCESSORY",
+    reasons: ["TRYON_UNSUPPORTED_ACCESSORY"],
+    titleRe: /(варежк|перчатк|gloves?|mittens?|шарф|scarf|ремень|ремни|belts?|носк[иов]?|socks?)/i,
+  },
+  {
+    code: "TITLE_SWIMWEAR",
+    reasons: ["SWIMWEAR"],
+    titleRe: /(плавк|купаль|бикини|пляж|пляжн|аквашуз|плавател|swim|beach|aqua)/i,
+  },
+  {
+    code: "TITLE_SPORT_EQUIPMENT",
+    reasons: ["SPORT_EQUIPMENT", "NON_FASHION_ACCESSORY"],
+    titleRe: /(насос|мяч|коврик|эспандер|утяжелител|фитбол|гантел|штанг|гир[яи]|тренаж[её]р|турник|скакалк|ракетк|клюшк|шлем|защит[аы]|ролик|коньк|лыж|сноуборд|самокат|велосипед|палатк|спальник|бутылк|фляг|pump|ball\b|mat\b|expander|dumbbell|barbell|kettlebell|trainer|helmet|skates?|skis?|snowboard|scooter|bike|bicycle|tent|sleeping bag|bottle)/i,
+  },
+  {
+    code: "TITLE_BEAUTY_OR_CARE",
+    reasons: ["BEAUTY_DEVICE", "NON_FASHION_ACCESSORY"],
+    titleRe: /(крем|спрей|уход|космет|чист|салфет|пропитк|ложк|щ[её]тк|дезодорант|средств|губк|краск|воск|очистит|растяжит|стельк|шнурк|cream|spray|cleaner|deodorant|insole|laces?)/i,
+  },
+  {
+    code: "TITLE_HOME_TEXTILE",
+    reasons: ["HOME_TEXTILE"],
+    titleRe: /(полотенц|плед|одеял|простын|подушк|ков[её]р|towel|blanket|sheet|pillow|rug)/i,
+  },
+  {
+    code: "TITLE_UNDERWEAR",
+    reasons: ["UNDERWEAR"],
+    titleRe: /(трус[ыов]|бюстгальтер|лифчик|бра\b|бель[её]|underwear|briefs?|boxers?|bra\b)/i,
+  },
+];
+
+function catalogAiSafeDeactivateRuleCodesFor(row) {
+  const title = String(row?.title || "");
+  const reasons = Array.isArray(row?.rejectReasons)
+    ? row.rejectReasons.map((v) => String(v || "").trim()).filter(Boolean)
+    : [];
+
+  if (!title || !reasons.length) return [];
+
+  return CATALOG_AI_SAFE_DEACTIVATE_TITLE_RULES
+    .filter((rule) => {
+      if (!rule.titleRe.test(title)) return false;
+      return reasons.some((reason) => rule.reasons.includes(reason));
+    })
+    .map((rule) => rule.code);
+}
+
+function isCatalogAiSafeDeactivateCandidate(row) {
+  return catalogAiSafeDeactivateRuleCodesFor(row).length > 0;
+}
+
 app.post("/api/admin/catalog/ai-review/apply-safe-deactivate", async (req, res) => {
   try {
     const dryRun = String(req.query.dryRun || "1") !== "0";
@@ -4399,7 +4452,8 @@ app.post("/api/admin/catalog/ai-review/apply-safe-deactivate", async (req, res) 
       limit $3
     `, ...params);
 
-    const candidates = Array.isArray(latestRows) ? latestRows : [];
+    const rawCandidates = Array.isArray(latestRows) ? latestRows : [];
+    const candidates = rawCandidates.filter((r) => isCatalogAiSafeDeactivateCandidate(r));
     const ids = candidates.map((r) => String(r.id)).filter(Boolean);
 
     let updated = 0;
@@ -4438,6 +4492,12 @@ app.post("/api/admin/catalog/ai-review/apply-safe-deactivate", async (req, res) 
       merchant: merchant || null,
       minConfidence,
       safeReasons: CATALOG_AI_SAFE_DEACTIVATE_REASONS,
+      safeDeactivateRules: CATALOG_AI_SAFE_DEACTIVATE_TITLE_RULES.map((rule) => ({
+        code: rule.code,
+        reasons: rule.reasons,
+        titlePattern: String(rule.titleRe),
+      })),
+      scanned: rawCandidates.length,
       candidates: candidates.length,
       updated,
       byMerchant,
@@ -4452,6 +4512,7 @@ app.post("/api/admin/catalog/ai-review/apply-safe-deactivate", async (req, res) 
         isTryOnRelevantSuggested: r.isTryOnRelevantSuggested,
         rejectReasons: r.rejectReasons || [],
         confidence: r.confidence,
+        safeRuleCodes: catalogAiSafeDeactivateRuleCodesFor(r),
         explanation: r.explanation,
         reviewCreatedAt: r.createdAt,
       })),
