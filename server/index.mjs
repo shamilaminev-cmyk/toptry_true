@@ -4651,8 +4651,8 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     code: "TITLE_KNITWEAR",
     toGroup: "CLOTHING",
     toSubgroup: "KNITWEAR",
-    titleRe: /(джемпер|свитер|водолазк|кардиган|лонгслив|knit|sweater|cardigan|turtleneck|longsleeve|long sleeve)/i,
-    rejectTitleRe: /(худи|толстовк|свитшот|hoodie|sweatshirt|футболк|t-?shirt|tee\b)/i,
+    titleRe: /(джемпер|свитер|водолазк|кардиган|лонгслив|sweater|cardigan|turtleneck|longsleeve|long sleeve)/i,
+    rejectTitleRe: /(юбк|skirt|брюки|шорты|легинс|велосипедк|полукомбинезон|pants|shorts|leggings|bib|куртк|пуховик|ветровк|пальто|жилет|jacket|coat|parka|vest|gilet|худи|толстовк|свитшот|hoodie|sweatshirt|футболк|майк|t-?shirt|tee\b|tank top|топ бра|спортивный бра)/i,
   },
   {
     code: "TITLE_SNEAKERS",
