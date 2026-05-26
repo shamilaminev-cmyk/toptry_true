@@ -3842,7 +3842,7 @@ function buildCatalogAiReviewPrompt(products) {
       "id": "string",
       "isTryOnRelevant": true,
       "taxonomyGroup": "CLOTHING|SHOES|BAGS|ACCESSORIES|OTHER",
-      "taxonomySubgroup": "OUTERWEAR|KNITWEAR|HOODIES|TSHIRTS|SHIRTS|POLO|TROUSERS|DENIM|SKIRTS|DRESSES|SNEAKERS|BOOTS|LOAFERS|SANDALS|BALLET|SHOES_CLASSIC|BAGS|HEADWEAR|GLOVES|SCARVES|BELTS|SOCKS|ACCESSORIES|null",
+      "taxonomySubgroup": "OUTERWEAR|BLAZERS|KNITWEAR|HOODIES|TSHIRTS|SHIRTS|POLO|TROUSERS|DENIM|SKIRTS|DRESSES|SNEAKERS|BOOTS|LOAFERS|SANDALS|BALLET|SHOES_CLASSIC|BAGS|HEADWEAR|GLOVES|SCARVES|BELTS|SOCKS|ACCESSORIES|null",
       "gender": "male|female|unisex|kids|unknown",
       "colorFamily": "black|white|grey|beige|brown|blue|green|red|pink|purple|yellow|orange|multi|unknown",
       "seasonTags": ["summer|demi|winter|all-season"],
@@ -3870,6 +3870,7 @@ function buildCatalogAiReviewPrompt(products) {
 - Футболка-поло / рубашка-поло / классическое поло → taxonomySubgroup=POLO.
 - Футболка / t-shirt / tee → taxonomySubgroup=TSHIRTS.
 - Рубашка / shirt button-down → taxonomySubgroup=SHIRTS.
+- Пиджак / жакет / blazer → taxonomySubgroup=BLAZERS.
 - Худи / толстовка / свитшот → taxonomySubgroup=HOODIES.
 - Джемпер / свитер / кардиган / водолазка → taxonomySubgroup=KNITWEAR.
 - Если существующая taxonomy явно противоречит названию, предложи исправленную taxonomy.
@@ -3968,6 +3969,7 @@ const CATALOG_AI_ALLOWED_GROUPS = new Set([
 
 const CATALOG_AI_ALLOWED_SUBGROUPS = new Set([
   "OUTERWEAR",
+  "BLAZERS",
   "KNITWEAR",
   "HOODIES",
   "TSHIRTS",
@@ -4023,7 +4025,11 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
   const outerwearTitleRe = /(верхн[яе][яе]\s+одежд|куртк|пуховик|ветровк|пальто|плащ|жилет|jacket|coat|parka|vest|gilet)/i;
   const blazerTitleRe = /(пиджак|жакет|blazer)/i;
 
-  if (outerwearTitleRe.test(title) && !blazerTitleRe.test(title)) {
+  if (blazerTitleRe.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "BLAZERS";
+    item.isTryOnRelevant = true;
+  } else if (outerwearTitleRe.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "OUTERWEAR";
     item.isTryOnRelevant = true;
@@ -4701,6 +4707,12 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     toSubgroup: "OUTERWEAR",
     titleRe: /(верхн[яе][яе]\s+одежд|куртк|пуховик|ветровк|пальто|плащ|жилет|jacket|coat|parka|vest|gilet)/i,
     rejectTitleRe: /(пиджак|жакет|blazer)/i,
+  },
+  {
+    code: "TITLE_BLAZERS",
+    toGroup: "CLOTHING",
+    toSubgroup: "BLAZERS",
+    titleRe: /(пиджак|жакет|blazer)/i,
   },
   {
     code: "TITLE_TSHIRTS",
