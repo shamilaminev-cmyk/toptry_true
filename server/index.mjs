@@ -4618,12 +4618,14 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-dryrun", async (req, res) 
 
 
 
+
 const CATALOG_AI_SAFE_TAXONOMY_RULES = [
   {
     code: "TITLE_BOTTOMS_TO_TROUSERS",
     toGroup: "CLOTHING",
     toSubgroup: "TROUSERS",
     titleRe: /(брюки|шорты|легинс|велосипедк|полукомбинезон|pants|shorts|leggings|bib)/i,
+    rejectTitleRe: /(сумк|bag\b|bags\b|рюкзак|backpack)/i,
   },
   {
     code: "TITLE_OUTERWEAR",
@@ -4636,30 +4638,35 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     toGroup: "CLOTHING",
     toSubgroup: "TSHIRTS",
     titleRe: /(футболк|майк|топ бра|спортивный бра|tank top|t-?shirt|tee\b)/i,
+    rejectTitleRe: /(рубашк|блузк|куртк|пуховик|ветровк|пальто|жилет|худи|толстовк|свитшот|джемпер|свитер|кардиган|водолазк)/i,
   },
   {
     code: "TITLE_HOODIES",
     toGroup: "CLOTHING",
     toSubgroup: "HOODIES",
     titleRe: /(худи|толстовк|свитшот|hoodie|sweatshirt)/i,
+    rejectTitleRe: /(футболк|майк|t-?shirt|tee\b|джемпер|свитер|кардиган|водолазк)/i,
   },
   {
     code: "TITLE_KNITWEAR",
     toGroup: "CLOTHING",
     toSubgroup: "KNITWEAR",
     titleRe: /(джемпер|свитер|водолазк|кардиган|лонгслив|knit|sweater|cardigan|turtleneck|longsleeve|long sleeve)/i,
+    rejectTitleRe: /(худи|толстовк|свитшот|hoodie|sweatshirt|футболк|t-?shirt|tee\b)/i,
   },
   {
     code: "TITLE_SNEAKERS",
     toGroup: "SHOES",
     toSubgroup: "SNEAKERS",
     titleRe: /(кеды|кроссовк|бутсы|sneakers?|trainers?|cleats?)/i,
+    rejectTitleRe: /(ботинк|\bboots?\b|сапог|лофер|туфл|балетк|сандал)/i,
   },
   {
     code: "TITLE_BOOTS",
     toGroup: "SHOES",
     toSubgroup: "BOOTS",
     titleRe: /(ботинк|\bboots?\b)/i,
+    rejectTitleRe: /(кеды|кроссовк|бутсы|sneakers?|trainers?|cleats?)/i,
   },
   {
     code: "TITLE_SKIRTS",
@@ -4672,36 +4679,36 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     toGroup: "CLOTHING",
     toSubgroup: "SHIRTS",
     titleRe: /(рубашк|блузк|blouse|button[- ]?down|\bshirt\b)/i,
+    rejectTitleRe: /(куртк|пуховик|ветровк|пальто|жилет|футболк|t-?shirt|tee\b|top\b|tank top|майк|худи|толстовк|свитшот)/i,
   },
 ];
 
-function isCatalogAiTitleSafeTaxonomyCandidate(row) {
+function isCatalogAiSafeRuleMatch(rule, row) {
   const title = String(row?.title || "");
+  const currentGroup = String(row?.taxonomyGroup || "");
   const toGroup = String(row?.taxonomyGroupSuggested || "");
   const toSubgroup = String(row?.taxonomySubgroupSuggested || "");
 
   if (!title || !toGroup || !toSubgroup) return false;
 
-  return CATALOG_AI_SAFE_TAXONOMY_RULES.some((rule) => {
-    return (
-      rule.toGroup === toGroup &&
-      rule.toSubgroup === toSubgroup &&
-      rule.titleRe.test(title)
-    );
-  });
+  // First automatic taxonomy pass should not move bags/accessories into clothing/shoes.
+  // These cases need separate review because false positives are costly.
+  if (currentGroup === "BAGS" || currentGroup === "ACCESSORIES") return false;
+
+  if (rule.toGroup !== toGroup || rule.toSubgroup !== toSubgroup) return false;
+  if (!rule.titleRe.test(title)) return false;
+  if (rule.rejectTitleRe && rule.rejectTitleRe.test(title)) return false;
+
+  return true;
+}
+
+function isCatalogAiTitleSafeTaxonomyCandidate(row) {
+  return CATALOG_AI_SAFE_TAXONOMY_RULES.some((rule) => isCatalogAiSafeRuleMatch(rule, row));
 }
 
 function catalogAiSafeTaxonomyRuleCodesFor(row) {
-  const title = String(row?.title || "");
-  const toGroup = String(row?.taxonomyGroupSuggested || "");
-  const toSubgroup = String(row?.taxonomySubgroupSuggested || "");
-
   return CATALOG_AI_SAFE_TAXONOMY_RULES
-    .filter((rule) => (
-      rule.toGroup === toGroup &&
-      rule.toSubgroup === toSubgroup &&
-      rule.titleRe.test(title)
-    ))
+    .filter((rule) => isCatalogAiSafeRuleMatch(rule, row))
     .map((rule) => rule.code);
 }
 
