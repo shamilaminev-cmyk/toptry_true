@@ -6011,7 +6011,7 @@ app.get("/api/catalog/brands", async (req, res) => {
 });
 
 
-function mapCatalogProductForApi(p) {
+function mapCatalogProductForApi(p, sizeOverride = {}) {
   const normalizedDisplayCategory = normalizeCatalogDisplayCategory([
     p.category,
     p.title,
@@ -6037,15 +6037,19 @@ function mapCatalogProductForApi(p) {
     category: p.category || "OTHER",
     displayCategory: normalizedDisplayCategory,
     sizes: [
-      ...(p.sizesTop || []),
-      ...(p.sizesBottom || []),
-      ...(p.sizesShoes || []),
+      ...(sizeOverride.sizesTop || p.sizesTop || []),
+      ...(sizeOverride.sizesBottom || p.sizesBottom || []),
+      ...(sizeOverride.sizesShoes || p.sizesShoes || []),
     ].length
-      ? Array.from(new Set([...(p.sizesTop || []), ...(p.sizesBottom || []), ...(p.sizesShoes || [])]))
+      ? Array.from(new Set([
+          ...(sizeOverride.sizesTop || p.sizesTop || []),
+          ...(sizeOverride.sizesBottom || p.sizesBottom || []),
+          ...(sizeOverride.sizesShoes || p.sizesShoes || []),
+        ]))
       : ["ONE"],
-    sizesTop: p.sizesTop || [],
-    sizesBottom: p.sizesBottom || [],
-    sizesShoes: p.sizesShoes || [],
+    sizesTop: sizeOverride.sizesTop || p.sizesTop || [],
+    sizesBottom: sizeOverride.sizesBottom || p.sizesBottom || [],
+    sizesShoes: sizeOverride.sizesShoes || p.sizesShoes || [],
     taxonomyGroup: p.taxonomyGroup || null,
     taxonomySubgroup: p.taxonomySubgroup || null,
     styleTags: p.styleTags || [],
@@ -6072,6 +6076,127 @@ function mapCatalogProductForApi(p) {
   };
 }
 
+
+function catalogRawParamValue(rawPayload, key) {
+  const param = String(rawPayload?.param || "");
+  if (!param) return "";
+
+  const wanted = String(key || "").trim().toLowerCase();
+
+  for (const part of param.split("|")) {
+    const idx = part.indexOf(":");
+    if (idx < 0) continue;
+
+    const k = part.slice(0, idx).trim().toLowerCase();
+    const v = part.slice(idx + 1).trim();
+
+    if (k === wanted) return v;
+  }
+
+  return "";
+}
+
+function normalizeCatalogDisplaySizeValue(value) {
+  const v = String(value || "").trim();
+  if (!v) return "";
+  return v.replace(",", ".");
+}
+
+function sortCatalogDisplaySizes(values) {
+  const order = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+
+  return Array.from(new Set(values.map(normalizeCatalogDisplaySizeValue).filter(Boolean))).sort((a, b) => {
+    const an = Number(a);
+    const bn = Number(b);
+
+    if (Number.isFinite(an) && Number.isFinite(bn)) return an - bn;
+
+    const ai = order.indexOf(a.toUpperCase());
+    const bi = order.indexOf(b.toUpperCase());
+
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1;
+    if (bi >= 0) return 1;
+
+    return String(a).localeCompare(String(b), "ru");
+  });
+}
+
+async function getAggregatedRendezvousSizesForProduct(p) {
+  if (!p || p.merchant !== "rendezvous") return null;
+
+  const raw = p.rawPayload || {};
+  const model = String(raw.model || "").trim();
+  const typePrefix = String(raw.typePrefix || "").trim();
+  const color = catalogRawParamValue(raw, "Цвет");
+  const sex = catalogRawParamValue(raw, "Пол");
+
+  if (!model || !typePrefix || !color || !sex) return null;
+
+  const siblings = await prisma.catalogProduct.findMany({
+    where: {
+      merchant: p.merchant,
+      rawPayload: {
+        path: ["model"],
+        equals: model,
+      },
+    },
+    select: {
+      sizesTop: true,
+      sizesBottom: true,
+      sizesShoes: true,
+      rawPayload: true,
+    },
+  });
+
+  const sizesTop = [];
+  const sizesBottom = [];
+  const sizesShoes = [];
+
+  for (const row of siblings) {
+    const r = row.rawPayload || {};
+    const rowTypePrefix = String(r.typePrefix || "").trim();
+    const rowColor = catalogRawParamValue(r, "Цвет");
+    const rowSex = catalogRawParamValue(r, "Пол");
+
+    if (rowTypePrefix !== typePrefix || rowColor !== color || rowSex !== sex) continue;
+
+    const rawSize = normalizeCatalogDisplaySizeValue(catalogRawParamValue(r, "Размер"));
+
+    for (const size of row.sizesTop || []) sizesTop.push(size);
+    for (const size of row.sizesBottom || []) sizesBottom.push(size);
+    for (const size of row.sizesShoes || []) sizesShoes.push(size);
+
+    if (rawSize) {
+      const category = String(p.category || "").toUpperCase();
+      const taxonomyGroup = String(p.taxonomyGroup || "").toUpperCase();
+
+      if (category === "SHOES" || taxonomyGroup === "SHOES") {
+        sizesShoes.push(rawSize);
+      } else if (category === "BOTTOMS") {
+        sizesBottom.push(rawSize);
+      } else if (category === "TOPS" || category === "JACKETS" || category === "DRESS") {
+        sizesTop.push(rawSize);
+      } else {
+        sizesTop.push(rawSize);
+      }
+    }
+  }
+
+  const result = {
+    sizesTop: sortCatalogDisplaySizes(sizesTop),
+    sizesBottom: sortCatalogDisplaySizes(sizesBottom),
+    sizesShoes: sortCatalogDisplaySizes(sizesShoes),
+  };
+
+  if (!result.sizesTop.length && !result.sizesBottom.length && !result.sizesShoes.length) {
+    return null;
+  }
+
+  return result;
+}
+
+
 app.get("/api/catalog/products/:id", async (req, res) => {
   try {
     const id = String(req.params.id || "").trim();
@@ -6086,7 +6211,9 @@ app.get("/api/catalog/products/:id", async (req, res) => {
 
     if (!p) return res.status(404).json({ error: "Product not found" });
 
-    return res.json({ product: mapCatalogProductForApi(p) });
+    const aggregatedSizes = await getAggregatedRendezvousSizesForProduct(p);
+
+    return res.json({ product: mapCatalogProductForApi(p, aggregatedSizes || {}) });
   } catch (e) {
     console.error("[toptry] /api/catalog/products/:id error", e);
     return res.status(500).json({ error: e?.message || "catalog product failed" });
