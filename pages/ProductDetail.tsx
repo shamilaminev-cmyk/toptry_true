@@ -36,6 +36,98 @@ function categoryLabel(value?: string) {
   return 'товар';
 }
 
+function productTypeCatalogParams(product: any) {
+  const group = String(product?.taxonomyGroup || '').toUpperCase();
+  const subgroup = String(product?.taxonomySubgroup || '').toUpperCase();
+  const displayCategory = String(product?.displayCategory || '').toUpperCase();
+  const category = String(product?.category || '').toUpperCase();
+
+  const shoeTypes = new Set([
+    'SNEAKERS',
+    'SNEAKERS_CASUAL',
+    'BOOTS',
+    'TALL_BOOTS',
+    'LOAFERS',
+    'SANDALS',
+    'BALLET',
+    'SHOES_CLASSIC',
+  ]);
+
+  const clothingTypes = new Set([
+    'DRESSES',
+    'TOPS',
+    'BLAZERS',
+    'OUTERWEAR',
+    'SKIRTS',
+    'TROUSERS',
+    'DENIM',
+    'TSHIRTS',
+    'POLO',
+    'HOODIES',
+    'KNITWEAR',
+    'SHIRTS',
+    'SUITS',
+  ]);
+
+  if (group === 'SHOES' || category === 'SHOES' || displayCategory === 'SHOES') {
+    const shoeType = shoeTypes.has(subgroup) ? `&shoeType=${encodeURIComponent(subgroup)}` : '';
+    return `displayCategory=SHOES${shoeType}`;
+  }
+
+  if (group === 'CLOTHING' || ['TOPS', 'BOTTOMS', 'JACKETS', 'DRESS'].includes(category) || displayCategory === 'CLOTHING') {
+    const clothingType = clothingTypes.has(subgroup) ? `&clothingType=${encodeURIComponent(subgroup)}` : '';
+    return `displayCategory=CLOTHING${clothingType}`;
+  }
+
+  if (group === 'BAGS' || displayCategory === 'BAGS') {
+    return 'displayCategory=BAGS';
+  }
+
+  if (group === 'ACCESSORIES' || displayCategory === 'ACCESSORIES') {
+    return 'displayCategory=ACCESSORIES';
+  }
+
+  return displayCategory ? `displayCategory=${encodeURIComponent(displayCategory)}` : '';
+}
+
+function productTypeLabel(product: any) {
+  const subgroup = String(product?.taxonomySubgroup || '').toUpperCase();
+  const group = String(product?.taxonomyGroup || '').toUpperCase();
+  const category = String(product?.category || '').toUpperCase();
+
+  const labels: Record<string, string> = {
+    SNEAKERS: 'кроссовки',
+    SNEAKERS_CASUAL: 'кеды',
+    BOOTS: 'ботинки',
+    TALL_BOOTS: 'сапоги',
+    LOAFERS: 'лоферы',
+    SANDALS: 'сандалии и босоножки',
+    BALLET: 'балетки',
+    SHOES_CLASSIC: 'туфли',
+    DRESSES: 'платья',
+    TOPS: 'верх',
+    BLAZERS: 'жакеты',
+    OUTERWEAR: 'верхнюю одежду',
+    SKIRTS: 'юбки',
+    TROUSERS: 'брюки',
+    DENIM: 'джинсы',
+    TSHIRTS: 'футболки',
+    POLO: 'поло',
+    HOODIES: 'худи и толстовки',
+    KNITWEAR: 'трикотаж',
+    SHIRTS: 'рубашки',
+    SUITS: 'костюмы',
+    BAGS: 'сумки',
+  };
+
+  if (labels[subgroup]) return labels[subgroup];
+  if (group === 'SHOES' || category === 'SHOES') return 'обувь';
+  if (group === 'CLOTHING') return 'одежду';
+  if (group === 'BAGS') return 'сумки';
+  return 'похожие товары';
+}
+
+
 function companionLinks(product: any) {
   const subgroup = String(product?.taxonomySubgroup || '').toUpperCase();
   const group = String(product?.taxonomyGroup || '').toUpperCase();
@@ -176,9 +268,12 @@ const ProductDetail = () => {
 
   const image = product?.images?.[0] || '';
   const buyUrl = product.affiliateUrl || product.productUrl || '';
-  const relatedHref = `/catalog?displayCategory=${encodeURIComponent(product.displayCategory || '')}${
+  const relatedParams = productTypeCatalogParams(product);
+  const relatedTypeLabel = productTypeLabel(product);
+  const relatedHref = `/catalog?${relatedParams}${
     product.brand ? `&brand=${encodeURIComponent(product.brand)}` : ''
   }`;
+  const relatedFallbackHref = `/catalog?${relatedParams}`;
 
   return (
     <div className="px-4 pt-4 pb-28 max-w-6xl mx-auto">
@@ -315,15 +410,30 @@ const ProductDetail = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400 mb-3">
               Похожие товары
             </p>
-            <Link
-              to={relatedHref}
-              className="flex items-center justify-between rounded-2xl bg-zinc-50 px-4 py-3 text-sm font-bold text-zinc-800 hover:bg-zinc-100"
-            >
-              <span>
-                Смотреть похожие {product.brand ? `бренда ${product.brand}` : 'в каталоге'}
-              </span>
-              <span className="text-zinc-400">→</span>
-            </Link>
+
+            <div className="grid gap-2">
+              <Link
+                to={relatedHref}
+                className="flex items-center justify-between rounded-2xl bg-zinc-50 px-4 py-3 text-sm font-bold text-zinc-800 hover:bg-zinc-100"
+              >
+                <span>
+                  {product.brand
+                    ? `${relatedTypeLabel} бренда ${product.brand}`
+                    : `Похожие ${relatedTypeLabel}`}
+                </span>
+                <span className="text-zinc-400">→</span>
+              </Link>
+
+              {product.brand && (
+                <Link
+                  to={relatedFallbackHref}
+                  className="flex items-center justify-between rounded-2xl bg-white border border-zinc-100 px-4 py-3 text-sm font-bold text-zinc-700 hover:bg-zinc-50"
+                >
+                  <span>Все похожие {relatedTypeLabel}</span>
+                  <span className="text-zinc-400">→</span>
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       </div>
