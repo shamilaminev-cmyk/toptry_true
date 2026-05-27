@@ -3648,6 +3648,27 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
 });
 
 
+
+function isSportmasterCatalogItemRelevantAfterAllowList(row, title) {
+  const primary = [
+    title,
+    row?.categoryId,
+    row?.typePrefix,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (!primary) return false;
+
+  // Hard rejects that should be evaluated on stable product identity fields,
+  // not on the long technical param where words may appear in unrelated contexts.
+  const hardRejectRe =
+    /(для\s+мальчик|для\s+девоч|детск|подростк|baby|kids|junior|плаватель|плавки|купаль|бикини|пляж|swim|beach|aqua|инвентарь|мяч|шлем|клюш|ракет|велосип|самокат|ролик|коньк|лыж|сноуборд|тренаж|гантел|штанг|турник|палат|спальник|бутыл|фляг|фляж|коврик|защит|маск|очки|час|трубк|пробк|напильник|направляющ|перчатки хоккейные)/i;
+
+  if (hardRejectRe.test(primary)) return false;
+
+  return true;
+}
+
+
 app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
   try {
     const FEED_URL = process.env.ADMITAD_SPORTMASTER_FEED_URL || "";
@@ -3736,7 +3757,7 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
         pickFirst(r, ["gender", "sex"]),
       ].join(" ");
 
-      if (!isTryOnRelevantCatalogItem([rawCategory, haystack].join(" "))) {
+      if (!isSportmasterCatalogItemRelevantAfterAllowList(r, title)) {
         skipped++;
         continue;
       }
