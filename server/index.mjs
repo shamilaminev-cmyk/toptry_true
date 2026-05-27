@@ -6125,23 +6125,17 @@ function sortCatalogDisplaySizes(values) {
 async function getAggregatedRendezvousSizesForProduct(p) {
   if (!p || p.merchant !== "rendezvous") return null;
 
-  const raw = p.rawPayload || {};
-  const model = String(raw.model || "").trim();
-  const typePrefix = String(raw.typePrefix || "").trim();
-  const color = catalogRawParamValue(raw, "Цвет");
-  const sex = catalogRawParamValue(raw, "Пол");
-
-  if (!model || !typePrefix || !color || !sex) return null;
+  const productUrl = String(p.productUrl || "").trim();
+  if (!productUrl) return null;
 
   const siblings = await prisma.catalogProduct.findMany({
     where: {
       merchant: p.merchant,
-      rawPayload: {
-        path: ["model"],
-        equals: model,
-      },
+      productUrl,
     },
     select: {
+      category: true,
+      taxonomyGroup: true,
       sizesTop: true,
       sizesBottom: true,
       sizesShoes: true,
@@ -6154,22 +6148,17 @@ async function getAggregatedRendezvousSizesForProduct(p) {
   const sizesShoes = [];
 
   for (const row of siblings) {
-    const r = row.rawPayload || {};
-    const rowTypePrefix = String(r.typePrefix || "").trim();
-    const rowColor = catalogRawParamValue(r, "Цвет");
-    const rowSex = catalogRawParamValue(r, "Пол");
-
-    if (rowTypePrefix !== typePrefix || rowColor !== color || rowSex !== sex) continue;
-
-    const rawSize = normalizeCatalogDisplaySizeValue(catalogRawParamValue(r, "Размер"));
+    const rawSize = normalizeCatalogDisplaySizeValue(
+      catalogRawParamValue(row.rawPayload || {}, "Размер")
+    );
 
     for (const size of row.sizesTop || []) sizesTop.push(size);
     for (const size of row.sizesBottom || []) sizesBottom.push(size);
     for (const size of row.sizesShoes || []) sizesShoes.push(size);
 
     if (rawSize) {
-      const category = String(p.category || "").toUpperCase();
-      const taxonomyGroup = String(p.taxonomyGroup || "").toUpperCase();
+      const category = String(row.category || p.category || "").toUpperCase();
+      const taxonomyGroup = String(row.taxonomyGroup || p.taxonomyGroup || "").toUpperCase();
 
       if (category === "SHOES" || taxonomyGroup === "SHOES") {
         sizesShoes.push(rawSize);
