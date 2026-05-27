@@ -3649,6 +3649,53 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
 
 
 
+
+function catalogStableIdentityText(row, title, brand = "") {
+  return [
+    title,
+    brand,
+    row?.categoryId,
+    row?.market_category,
+    row?.typePrefix,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function hasAnyCatalogKeyword(text, keywords) {
+  const s = String(text || "").toLowerCase();
+  return keywords.some((k) => s.includes(k));
+}
+
+function isTheCulttOrRendezvousRelevantAfterAllowList(row, title, brand = "") {
+  const stable = catalogStableIdentityText(row, title, brand);
+
+  if (!stable) return false;
+
+  const hardReject = [
+    "крем", "спрей", "уход", "стельк", "шнурк", "космет", "чист",
+    "салфет", "пропитк", "ложк", "щетк", "дезодорант", "средств",
+  ];
+
+  // Important: do not reject luxury bags named "Baby" or brand-size "Baby".
+  // Use hard reject only on stable product identity fields, not long param.
+  return !hasAnyCatalogKeyword(stable, hardReject);
+}
+
+function isRemingtonRelevantAfterAllowList(row, title, brand = "") {
+  const stable = catalogStableIdentityText(row, title, brand);
+
+  if (!stable) return false;
+
+  const hardReject = [
+    "инвентарь", "мяч", "шлем", "клюш", "ракет", "велосип", "самокат",
+    "ролик", "коньк", "лыж", "сноуборд", "тренаж", "гантел", "штанг",
+    "турник", "палат", "спальник", "бутыл", "фляг", "коврик",
+    "защит", "маск", "очки для плав"
+  ];
+
+  return !hasAnyCatalogKeyword(stable, hardReject);
+}
+
+
 function isSportmasterCatalogItemRelevantAfterAllowList(row, title) {
   const primary = [
     title,
@@ -3728,7 +3775,8 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       ];
 
       const isAllowed = allowKeywords.some(k => rawCategory.includes(k));
-      const isBlocked = blockKeywords.some(k => rawCategory.includes(k));
+      const stableCategory = catalogStableIdentityText(r, title, brand);
+      const isBlocked = blockKeywords.some(k => stableCategory.includes(k));
 
       if (!isAllowed || isBlocked) {
         skipped++;
@@ -5081,9 +5129,7 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
         "защит", "маск", "очки для плав"
       ];
 
-      const isBlocked = blockKeywords.some(k => rawCategory.includes(k));
-
-      if (isBlocked) {
+      if (!isRemingtonRelevantAfterAllowList(r, title, brand)) {
         skipped++;
         continue;
       }
@@ -5268,7 +5314,7 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       ];
 
       const isAllowed = allowKeywords.some(k => rawCategory.includes(k));
-      const isBlocked = blockKeywords.some(k => rawCategory.includes(k));
+      const isBlocked = !isTheCulttOrRendezvousRelevantAfterAllowList(r, title, brand);
 
       if (!title || !imageUrl || !affiliateUrl || price === null || !isAllowed || isBlocked) {
         skipped++;
@@ -5295,7 +5341,7 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
         pickFirst(r, ["param"]),
       ].join(" ");
 
-      if (!isTryOnRelevantCatalogItem([rawCategory, haystack].join(" "))) {
+      if (!isTheCulttOrRendezvousRelevantAfterAllowList(r, title, brand)) {
         skipped++;
         continue;
       }
@@ -5720,7 +5766,7 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
       ];
 
       const isAllowed = allowKeywords.some(k => rawCategory.includes(k));
-      const isBlocked = blockKeywords.some(k => rawCategory.includes(k));
+      const isBlocked = !isTheCulttOrRendezvousRelevantAfterAllowList(r, title, brand);
 
       if (!title || !imageUrl || !affiliateUrl || price === null || !isAllowed || isBlocked) {
         skipped++;
@@ -5747,7 +5793,7 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
         pickFirst(r, ["param"]),
       ].join(" ");
 
-      if (!isTryOnRelevantCatalogItem([rawCategory, haystack].join(" "))) {
+      if (!isTheCulttOrRendezvousRelevantAfterAllowList(r, title, brand)) {
         skipped++;
         continue;
       }
