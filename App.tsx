@@ -13,6 +13,7 @@ import Auth from './pages/Auth';
 import Home from './pages/Home';
 import LookDetails from './pages/LookDetails';
 import CreateLook from './pages/CreateLook';
+import ProductDetail from './pages/ProductDetail';
 import Logo from './components/Logo';
 
 class TopTryErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: any }> {
@@ -132,6 +133,7 @@ const AppRoutes = () => {
         <Route path="/profile" element={<Profile />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/look/:id" element={<LookDetails />} />
+        <Route path="/product/:id" element={<ProductDetail />} />
       </Routes>
     </Layout>
   );

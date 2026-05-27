@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
 import { withApiOrigin } from "../utils/withApiOrigin";
 import { catalogImageSrc } from "../utils/catalogImageSrc";
@@ -130,6 +131,7 @@ const SHOE_SIZES = ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', 
 
 
 const Catalog = () => {
+  const navigate = useNavigate();
   const { wardrobe, actions, user } = useAppState() as any;
 
   const [gender, setGender] = useState<'' | Gender>('');
@@ -1168,17 +1170,24 @@ const Catalog = () => {
                       </div>
                     )}
 
-                    <img
-                      src={p?.images?.[0] ? catalogImageSrc(p.images[0], { w: 420 }) : IMG_FALLBACK}
-                      alt={p.title || ""}
-                      loading="lazy"
-                      decoding="async"
-                      onError={(e) => {
-                        const el = e.currentTarget as HTMLImageElement;
-                        el.style.display = "none";
-                      }}
-                      className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-all duration-700"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/product/${encodeURIComponent(p.id)}`)}
+                      className="w-full h-full block"
+                      aria-label={`Открыть товар ${p.title || ''}`}
+                    >
+                      <img
+                        src={p?.images?.[0] ? catalogImageSrc(p.images[0], { w: 420 }) : IMG_FALLBACK}
+                        alt={p.title || ""}
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          const el = e.currentTarget as HTMLImageElement;
+                          el.style.display = "none";
+                        }}
+                        className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-all duration-700"
+                      />
+                    </button>
 
                     <button
                       onClick={(e) => {
@@ -1208,9 +1217,15 @@ const Catalog = () => {
 
                   <div className="mt-4 px-1 space-y-1.5">
                     <div className="flex justify-between items-start">
-                      <h3 className="text-[11px] font-bold uppercase tracking-tight truncate flex-1 text-zinc-700">
-                        {p.title}
-                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/product/${encodeURIComponent(p.id)}`)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <h3 className="text-[11px] font-bold uppercase tracking-tight truncate text-zinc-700 hover:text-zinc-950">
+                          {p.title}
+                        </h3>
+                      </button>
                     </div>
                     <div className="flex justify-between items-center gap-3">
                       <div className="min-w-0">
@@ -1226,13 +1241,10 @@ const Catalog = () => {
                       </span>
                     </div>
                     <button
-                      onClick={() => {
-                        const url = p.affiliateUrl || p.productUrl;
-                        if (url) window.open(url, "_blank", "noopener,noreferrer");
-                      }}
+                      onClick={() => navigate(`/product/${encodeURIComponent(p.id)}`)}
                       className="w-full mt-3 py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm"
                     >
-                      Купить сейчас
+                      Подробнее
                     </button>
                   </div>
                 </div>

@@ -6010,6 +6010,90 @@ app.get("/api/catalog/brands", async (req, res) => {
   }
 });
 
+
+function mapCatalogProductForApi(p) {
+  const normalizedDisplayCategory = normalizeCatalogDisplayCategory([
+    p.category,
+    p.title,
+    p.brand,
+  ].filter(Boolean).join(" "));
+
+  const price = Number(p.price || 0);
+  const oldPrice = Number(p.oldPrice || 0);
+  const discountPercent =
+    oldPrice > price && price > 0
+      ? Math.max(1, Math.round(((oldPrice - price) / oldPrice) * 100))
+      : 0;
+
+  return {
+    id: p.id,
+    merchant: p.merchant,
+    title: p.title,
+    price,
+    oldPrice: oldPrice > price ? oldPrice : undefined,
+    discountPercent: discountPercent > 0 ? discountPercent : undefined,
+    currency: normalizeCatalogCurrency(p.currency || "RUB"),
+    gender: p.gender || "UNISEX",
+    category: p.category || "OTHER",
+    displayCategory: normalizedDisplayCategory,
+    sizes: [
+      ...(p.sizesTop || []),
+      ...(p.sizesBottom || []),
+      ...(p.sizesShoes || []),
+    ].length
+      ? Array.from(new Set([...(p.sizesTop || []), ...(p.sizesBottom || []), ...(p.sizesShoes || [])]))
+      : ["ONE"],
+    sizesTop: p.sizesTop || [],
+    sizesBottom: p.sizesBottom || [],
+    sizesShoes: p.sizesShoes || [],
+    taxonomyGroup: p.taxonomyGroup || null,
+    taxonomySubgroup: p.taxonomySubgroup || null,
+    styleTags: p.styleTags || [],
+    occasionTags: p.occasionTags || [],
+    seasonTags: p.seasonTags || [],
+    colorFamily: p.colorFamily || null,
+    images: p.imageUrl ? [p.imageUrl] : [],
+    storeId: p.merchant,
+    storeName:
+      p.merchant === "sportmaster"
+        ? "Спортмастер"
+        : p.merchant === "rendezvous"
+          ? "Rendez-Vous"
+          : p.merchant === "thecultt"
+            ? "The Cultt"
+            : p.merchant === "remington"
+              ? "Remington"
+              : "Sportcourt",
+    availability: p.isActive,
+    isCatalog: true,
+    brand: p.brand || undefined,
+    productUrl: p.productUrl || undefined,
+    affiliateUrl: p.affiliateUrl || undefined,
+  };
+}
+
+app.get("/api/catalog/products/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "Product id is required" });
+
+    const p = await prisma.catalogProduct.findFirst({
+      where: {
+        id,
+        isActive: true,
+      },
+    });
+
+    if (!p) return res.status(404).json({ error: "Product not found" });
+
+    return res.json({ product: mapCatalogProductForApi(p) });
+  } catch (e) {
+    console.error("[toptry] /api/catalog/products/:id error", e);
+    return res.status(500).json({ error: e?.message || "catalog product failed" });
+  }
+});
+
+
 app.get("/api/catalog/products", async (req, res) => {
   try {
     const limit = Math.min(
