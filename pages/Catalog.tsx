@@ -219,6 +219,36 @@ const Catalog = () => {
 
   const draftMySizeValue = getProfileSizeForFilters(draftDisplayCategory, draftClothingType);
 
+  const expandProfileSizeForLooseFilter = (value: string) => {
+    const raw = String(value || '').trim().toUpperCase();
+    if (!raw) return [];
+
+    const letterOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+    const letterIndex = letterOrder.indexOf(raw);
+    if (letterIndex >= 0) {
+      return letterOrder.filter((_, idx) => Math.abs(idx - letterIndex) <= 1);
+    }
+
+    if (/^(3[5-9]|4[0-6])$/.test(raw)) {
+      const n = Number(raw);
+      return [n - 1, n, n + 1]
+        .filter((x) => x >= 35 && x <= 46)
+        .map(String);
+    }
+
+    return [raw];
+  };
+
+  const draftHighlightedSizeValues =
+    draftSize === 'MY'
+      ? new Set(
+          (draftSizeLoose
+            ? expandProfileSizeForLooseFilter(draftMySizeValue)
+            : [draftMySizeValue]
+          ).filter(Boolean)
+        )
+      : new Set<string>();
+
   const mySizeLabel = [
     user?.sizeTop ? `верх ${user.sizeTop}` : '',
     user?.sizeBottom ? `низ ${user.sizeBottom}` : '',
@@ -1069,7 +1099,7 @@ const Catalog = () => {
                 {visibleSizeOptions.map((s) => {
                   const active =
                     draftSize === s ||
-                    (draftSize === 'MY' && draftMySizeValue === s);
+                    (draftSize === 'MY' && draftHighlightedSizeValues.has(s));
 
                   return (
                     <button
