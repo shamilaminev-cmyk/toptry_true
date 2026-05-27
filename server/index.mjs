@@ -4265,6 +4265,7 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
     let model = null;
     let rawTextLen = 0;
     const items = [];
+    const unmatchedItems = [];
 
     for (const chunk of chunks) {
       const result = await runGeminiCatalogTextReview(chunk);
@@ -4272,18 +4273,52 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
       rawTextLen += String(result.rawText || "").length;
 
       const rawItems = Array.isArray(result.parsed?.items) ? result.parsed.items : [];
-      for (const rawItem of rawItems) {
-        const source = rows.find((r) => r.id === String(rawItem?.id || ""));
-        items.push(normalizeCatalogAiReviewItem(rawItem, source || {}));
+      for (let idx = 0; idx < rawItems.length; idx++) {
+        const rawItem = rawItems[idx] || {};
+        const rawId = String(rawItem?.id || "").trim();
+        const exactSource = rows.find((r) => r.id === rawId);
+        const fallbackProduct = chunk[idx] || null;
+        const source = exactSource || (fallbackProduct ? rows.find((r) => r.id === fallbackProduct.id) : null);
+
+        if (!exactSource && source) {
+          unmatchedItems.push({
+            rawId,
+            fallbackId: source.id,
+            title: source.title,
+            chunkIndex: idx,
+          });
+        }
+
+        const normalized = normalizeCatalogAiReviewItem(
+          { ...rawItem, id: source?.id || rawId },
+          source || {}
+        );
+
+        items.push({
+          ...normalized,
+          aiReturnedId: rawId || null,
+          idMatchedExactly: !!exactSource,
+        });
       }
     }
 
     let saved = 0;
+    const skippedItems = [];
 
     for (const item of items) {
       const productId = String(item.id || "");
       const source = rows.find((r) => r.id === productId);
-      if (!source) continue;
+      if (!source) {
+        skippedItems.push({
+          id: item.id || null,
+          aiReturnedId: item.aiReturnedId || null,
+          reason: "source_not_found",
+        });
+        continue;
+      }
+
+      const rawOutput = { ...item };
+      delete rawOutput.idMatchedExactly;
 
       await prisma.catalogProductAIReview.create({
         data: {
@@ -4308,7 +4343,7 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
           explanation: item.explanation ? String(item.explanation).slice(0, 1000) : null,
           inputHash,
           rawInput: products.find((p) => p.id === productId) || {},
-          rawOutput: item,
+          rawOutput,
         },
       });
 
@@ -4327,6 +4362,10 @@ app.post("/api/admin/catalog/ai-review/gemini-text", async (req, res) => {
       saved,
       chunks: chunks.length,
       chunkSize: catalogAiReviewChunkSize,
+      unmatched: unmatchedItems.length,
+      skipped: skippedItems.length,
+      unmatchedItems,
+      skippedItems,
       items,
       rawTextLen,
     });
