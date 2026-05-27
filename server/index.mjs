@@ -3051,6 +3051,41 @@ function buildCatalogExternalId(row) {
   return "dedupe-" + crypto.createHash("md5").update(dedupeKey).digest("hex");
 }
 
+function buildCatalogImportSkippedSample(row) {
+  return {
+    title: pickFirst(row, ["name", "title", "product_name", "model"]),
+    brand: pickFirst(row, ["brand", "vendor", "manufacturer"]),
+    categoryId: row?.categoryId || "",
+    market_category: row?.market_category || "",
+    typePrefix: row?.typePrefix || "",
+    price: pickFirst(row, ["price", "current_price", "price_value"]),
+    oldprice: pickFirst(row, ["oldprice", "old_price", "price_old"]),
+    picture: pickFirst(row, ["image", "imageurl", "picture", "img"]).slice(0, 160),
+    url: pickFirst(row, ["url", "product_url", "link"]).slice(0, 220),
+    param: String(row?.param || "").slice(0, 320),
+  };
+}
+
+function createCatalogImportDiagnostics(sampleLimit = 8) {
+  const byReason = {};
+  const samples = {};
+
+  return {
+    byReason,
+    samples,
+    skip(reason, row) {
+      const key = String(reason || "unknown");
+      byReason[key] = (byReason[key] || 0) + 1;
+
+      if (!samples[key]) samples[key] = [];
+      if (samples[key].length < sampleLimit) {
+        samples[key].push(buildCatalogImportSkippedSample(row || {}));
+      }
+    },
+  };
+}
+
+
 function isTryOnRelevantCatalogItem(raw) {
   const s = String(raw || "").toLowerCase();
 
@@ -3532,6 +3567,7 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
     let updated = 0;
     let skipped = 0;
     const seen = new Set();
+    const importDiag = createCatalogImportDiagnostics();
 
     await prisma.catalogProduct.updateMany({
       where: { merchant: "sportcourt" },
@@ -3548,12 +3584,14 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
       const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
 
       if (!title || !imageUrl || !affiliateUrl || price === null) {
+        importDiag.skip("missingRequired", r);
         skipped++;
         continue;
       }
 
       const hasUsableImage = await isUsableCatalogImageUrl(imageUrl);
       if (!hasUsableImage) {
+        importDiag.skip("imageUnavailable", r);
         skipped++;
         continue;
       }
@@ -3567,6 +3605,7 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
 
 
       if (!isTryOnRelevantCatalogItem(haystack)) {
+        importDiag.skip("notTryOnRelevant", r);
         skipped++;
         continue;
       }
@@ -3574,6 +3613,7 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
 
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
+        importDiag.skip("duplicate", r);
         skipped++;
         continue;
       }
@@ -3640,6 +3680,8 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
       restoredSafe: restoredSafe.count || 0,
       deactivatedBlocked: deactivatedBlocked.count || 0,
       active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
+      skippedByReason: importDiag.byReason,
+      skippedSamples: importDiag.samples,
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/sportcourt error", e);
@@ -3735,6 +3777,7 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
     let updated = 0;
     let skipped = 0;
     const seen = new Set();
+    const importDiag = createCatalogImportDiagnostics();
 
     await prisma.catalogProduct.updateMany({
       where: { merchant: "sportmaster" },
@@ -3778,12 +3821,20 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       const stableCategory = catalogStableIdentityText(r, title, brand);
       const isBlocked = blockKeywords.some(k => stableCategory.includes(k));
 
-      if (!isAllowed || isBlocked) {
+      if (!isAllowed) {
+        importDiag.skip("notAllowed", r);
+        skipped++;
+        continue;
+      }
+
+      if (isBlocked) {
+        importDiag.skip("blocked", r);
         skipped++;
         continue;
       }
 
       if (!title || !imageUrl || !affiliateUrl || price === null) {
+        importDiag.skip("missingRequired", r);
         skipped++;
         continue;
       }
@@ -3794,6 +3845,7 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
           : await isUsableCatalogImageUrl(imageUrl);
 
       if (!hasUsableImage) {
+        importDiag.skip("imageUnavailable", r);
         skipped++;
         continue;
       }
@@ -3806,12 +3858,14 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       ].join(" ");
 
       if (!isSportmasterCatalogItemRelevantAfterAllowList(r, title)) {
+        importDiag.skip("notTryOnRelevant", r);
         skipped++;
         continue;
       }
 
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
+        importDiag.skip("duplicate", r);
         skipped++;
         continue;
       }
@@ -3878,6 +3932,8 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       restoredSafe: restoredSafe.count || 0,
       deactivatedBlocked: deactivatedBlocked.count || 0,
       active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
+      skippedByReason: importDiag.byReason,
+      skippedSamples: importDiag.samples,
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/sportmaster error", e);
@@ -5099,6 +5155,7 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
     let updated = 0;
     let skipped = 0;
     const seen = new Set();
+    const importDiag = createCatalogImportDiagnostics();
 
     await prisma.catalogProduct.updateMany({
       where: { merchant: "remington" },
@@ -5130,11 +5187,13 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
       ];
 
       if (!isRemingtonRelevantAfterAllowList(r, title, brand)) {
+        importDiag.skip("blocked", r);
         skipped++;
         continue;
       }
 
       if (!title || !imageUrl || !affiliateUrl || price === null) {
+        importDiag.skip("missingRequired", r);
         skipped++;
         continue;
       }
@@ -5142,6 +5201,7 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
       const hasUsableImage = await isUsableCatalogImageUrl(imageUrl);
 
       if (!hasUsableImage) {
+        importDiag.skip("imageUnavailable", r);
         skipped++;
         continue;
       }
@@ -5157,6 +5217,7 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
 
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
+        importDiag.skip("duplicate", r);
         skipped++;
         continue;
       }
@@ -5248,6 +5309,8 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
       restoredSafe: restoredSafe.count || 0,
       deactivatedBlocked: deactivatedBlocked.count || 0,
       active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
+      skippedByReason: importDiag.byReason,
+      skippedSamples: importDiag.samples,
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/remington error", e);
@@ -5274,6 +5337,7 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
     let updated = 0;
     let skipped = 0;
     const seen = new Set();
+    const importDiag = createCatalogImportDiagnostics();
 
     await prisma.catalogProduct.updateMany({
       where: { merchant: "rendezvous" },
@@ -5316,7 +5380,20 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       const isAllowed = allowKeywords.some(k => rawCategory.includes(k));
       const isBlocked = !isTheCulttOrRendezvousRelevantAfterAllowList(r, title, brand);
 
-      if (!title || !imageUrl || !affiliateUrl || price === null || !isAllowed || isBlocked) {
+      if (!title || !imageUrl || !affiliateUrl || price === null) {
+        importDiag.skip("missingRequired", r);
+        skipped++;
+        continue;
+      }
+
+      if (!isAllowed) {
+        importDiag.skip("notAllowed", r);
+        skipped++;
+        continue;
+      }
+
+      if (isBlocked) {
+        importDiag.skip("blocked", r);
         skipped++;
         continue;
       }
@@ -5327,6 +5404,7 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
           : await isUsableCatalogImageUrl(imageUrl);
 
       if (!hasUsableImage) {
+        importDiag.skip("imageUnavailable", r);
         skipped++;
         continue;
       }
@@ -5342,12 +5420,14 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       ].join(" ");
 
       if (!isTheCulttOrRendezvousRelevantAfterAllowList(r, title, brand)) {
+        importDiag.skip("notTryOnRelevant", r);
         skipped++;
         continue;
       }
 
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
+        importDiag.skip("duplicate", r);
         skipped++;
         continue;
       }
@@ -5414,6 +5494,8 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       restoredSafe: restoredSafe.count || 0,
       deactivatedBlocked: deactivatedBlocked.count || 0,
       active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
+      skippedByReason: importDiag.byReason,
+      skippedSamples: importDiag.samples,
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/rendezvous error", e);
@@ -5726,6 +5808,7 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
     let updated = 0;
     let skipped = 0;
     const seen = new Set();
+    const importDiag = createCatalogImportDiagnostics();
 
     await prisma.catalogProduct.updateMany({
       where: { merchant: "thecultt" },
@@ -5768,7 +5851,20 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
       const isAllowed = allowKeywords.some(k => rawCategory.includes(k));
       const isBlocked = !isTheCulttOrRendezvousRelevantAfterAllowList(r, title, brand);
 
-      if (!title || !imageUrl || !affiliateUrl || price === null || !isAllowed || isBlocked) {
+      if (!title || !imageUrl || !affiliateUrl || price === null) {
+        importDiag.skip("missingRequired", r);
+        skipped++;
+        continue;
+      }
+
+      if (!isAllowed) {
+        importDiag.skip("notAllowed", r);
+        skipped++;
+        continue;
+      }
+
+      if (isBlocked) {
+        importDiag.skip("blocked", r);
         skipped++;
         continue;
       }
@@ -5779,6 +5875,7 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
           : await isUsableCatalogImageUrl(imageUrl);
 
       if (!hasUsableImage) {
+        importDiag.skip("imageUnavailable", r);
         skipped++;
         continue;
       }
@@ -5794,12 +5891,14 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
       ].join(" ");
 
       if (!isTheCulttOrRendezvousRelevantAfterAllowList(r, title, brand)) {
+        importDiag.skip("notTryOnRelevant", r);
         skipped++;
         continue;
       }
 
       const externalId = buildCatalogExternalId(r);
       if (seen.has(externalId)) {
+        importDiag.skip("duplicate", r);
         skipped++;
         continue;
       }
@@ -5866,6 +5965,8 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
       restoredSafe: restoredSafe.count || 0,
       deactivatedBlocked: deactivatedBlocked.count || 0,
       active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
+      skippedByReason: importDiag.byReason,
+      skippedSamples: importDiag.samples,
     });
   } catch (e) {
     console.error("[toptry] /api/admin/catalog/import/thecultt error", e);
