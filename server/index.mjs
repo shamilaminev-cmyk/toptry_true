@@ -3624,7 +3624,10 @@ app.post("/api/admin/catalog/import/sportcourt", async (_req, res) => {
       }
     }
 
-    const restoredSafe = await restoreSafeCatalogActiveProducts("sportcourt");
+    // Do not auto-restore inactive products after import.
+    // If a product is absent from the current merchant feed, it must stay inactive;
+    // otherwise stale offers keep appearing with outdated prices/sizes.
+    const restoredSafe = { count: 0 };
     const deactivatedBlocked = await deactivateBlockedCatalogProducts("sportcourt");
 
     return res.json({
@@ -3790,7 +3793,10 @@ app.post("/api/admin/catalog/import/sportmaster", async (_req, res) => {
       }
     }
 
-    const restoredSafe = await restoreSafeCatalogActiveProducts("sportmaster");
+    // Do not auto-restore inactive products after import.
+    // If a product is absent from the current merchant feed, it must stay inactive;
+    // otherwise stale offers keep appearing with outdated prices/sizes.
+    const restoredSafe = { count: 0 };
     const deactivatedBlocked = await deactivateBlockedCatalogProducts("sportmaster");
 
     return res.json({
@@ -5159,7 +5165,10 @@ app.post("/api/admin/catalog/import/remington", async (_req, res) => {
       }
     }
 
-    const restoredSafe = await restoreSafeCatalogActiveProducts("remington");
+    // Do not auto-restore inactive products after import.
+    // If a product is absent from the current merchant feed, it must stay inactive;
+    // otherwise stale offers keep appearing with outdated prices/sizes.
+    const restoredSafe = { count: 0 };
     const deactivatedBlocked = await deactivateBlockedCatalogProducts("remington");
 
     return res.json({
@@ -5322,7 +5331,10 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       }
     }
 
-    const restoredSafe = await restoreSafeCatalogActiveProducts("rendezvous");
+    // Do not auto-restore inactive products after import.
+    // If a product is absent from the current merchant feed, it must stay inactive;
+    // otherwise stale offers keep appearing with outdated prices/sizes.
+    const restoredSafe = { count: 0 };
     const deactivatedBlocked = await deactivateBlockedCatalogProducts("rendezvous");
 
     return res.json({
@@ -5771,7 +5783,10 @@ app.post("/api/admin/catalog/import/thecultt", async (_req, res) => {
       }
     }
 
-    const restoredSafe = await restoreSafeCatalogActiveProducts("thecultt");
+    // Do not auto-restore inactive products after import.
+    // If a product is absent from the current merchant feed, it must stay inactive;
+    // otherwise stale offers keep appearing with outdated prices/sizes.
+    const restoredSafe = { count: 0 };
     const deactivatedBlocked = await deactivateBlockedCatalogProducts("thecultt");
 
     return res.json({
