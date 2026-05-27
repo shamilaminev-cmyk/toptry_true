@@ -177,6 +177,48 @@ const Catalog = () => {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const hasProfileSize = Boolean(user?.sizeTop || user?.sizeBottom || user?.sizeShoes);
+
+  const getProfileSizeForFilters = (
+    category: '' | DisplayCategory,
+    type: ClothingType
+  ) => {
+    if (category === 'SHOES') return user?.sizeShoes || '';
+
+    if (category === 'CLOTHING') {
+      const bottomTypes: ClothingType[] = ['SKIRTS', 'TROUSERS', 'DENIM'];
+      const topTypes: ClothingType[] = [
+        'TOPS',
+        'TSHIRTS',
+        'POLO',
+        'SHIRTS',
+        'HOODIES',
+        'KNITWEAR',
+        'BLAZERS',
+        'OUTERWEAR',
+        'SUITS',
+      ];
+
+      if (bottomTypes.includes(type)) return user?.sizeBottom || '';
+      if (topTypes.includes(type)) return user?.sizeTop || '';
+
+      if (type === 'DRESSES') {
+        if (user?.sizeTop && user?.sizeTop === user?.sizeBottom) return user.sizeTop;
+        return user?.sizeTop || user?.sizeBottom || '';
+      }
+
+      return user?.sizeTop || user?.sizeBottom || '';
+    }
+
+    return '';
+  };
+
+  const currentMySizeValue = getProfileSizeForFilters(
+    filtersOpen ? draftDisplayCategory : displayCategory,
+    filtersOpen ? draftClothingType : clothingType
+  );
+
+  const draftMySizeValue = getProfileSizeForFilters(draftDisplayCategory, draftClothingType);
+
   const mySizeLabel = [
     user?.sizeTop ? `верх ${user.sizeTop}` : '',
     user?.sizeBottom ? `низ ${user.sizeBottom}` : '',
@@ -1025,7 +1067,9 @@ const Catalog = () => {
             {(isShoesCategory || isClothingCategory) && (
               <div className="flex flex-wrap gap-2">
                 {visibleSizeOptions.map((s) => {
-                  const active = draftSize === s;
+                  const active =
+                    draftSize === s ||
+                    (draftSize === 'MY' && draftMySizeValue === s);
 
                   return (
                     <button
