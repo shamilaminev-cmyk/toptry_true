@@ -503,15 +503,15 @@ const Catalog = () => {
     return wardrobe.some((item: any) => {
       if (!(item?.isCatalog || item?.sourceType === "catalog")) return false;
 
+      // Catalog titles are not unique: e.g. many cards can be named
+      // "Брюки Maison David". The selected/checkmark state must rely only
+      // on stable item identity, not on title/category/gender fallback.
+      if (product?.id && item?.id && item.id === product.id) return true;
       if (product?.affiliateUrl && item?.affiliateUrl && item.affiliateUrl === product.affiliateUrl) return true;
       if (product?.productUrl && item?.productUrl && item.productUrl === product.productUrl) return true;
       if (product?.images?.[0] && item?.images?.[0] && item.images[0] === product.images[0]) return true;
 
-      return (
-        String(item?.title || "").trim().toLowerCase() === String(product?.title || "").trim().toLowerCase() &&
-        String(item?.category || "").trim().toUpperCase() === String(product?.category || "").trim().toUpperCase() &&
-        String(item?.gender || "").trim().toUpperCase() === String(product?.gender || "").trim().toUpperCase()
-      );
+      return false;
     });
   };
 
