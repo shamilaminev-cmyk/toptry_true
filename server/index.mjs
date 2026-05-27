@@ -3747,12 +3747,19 @@ function isSportmasterCatalogItemRelevantAfterAllowList(row, title) {
 
   if (!primary) return false;
 
-  // Hard rejects that should be evaluated on stable product identity fields,
-  // not on the long technical param where words may appear in unrelated contexts.
-  const hardRejectRe =
-    /(для\s+мальчик|для\s+девоч|детск|подростк|baby|kids|junior|плаватель|плавки|купаль|бикини|пляж|swim|beach|aqua|инвентарь|мяч|шлем|клюш|ракет|велосип|самокат|ролик|коньк|лыж|сноуборд|тренаж|гантел|штанг|турник|палат|спальник|бутыл|фляг|фляж|коврик|защит|маск|очки|час|трубк|пробк|напильник|направляющ|перчатки хоккейные)/i;
+  const isOuterwear =
+    /(курт|пуховик|пальто|ветровк|жилет)/i.test(primary) ||
+    String(row?.categoryId || "").trim().toLowerCase() === "куртки";
 
-  if (hardRejectRe.test(primary)) return false;
+  const alwaysRejectRe =
+    /(для\s+мальчик|для\s+девоч|детск|подростк|baby|kids|junior|плаватель|плавки|купаль|бикини|пляж|swim|beach|aqua|инвентарь|мяч|шлем|клюш|ракет|велосип|самокат|ролик|коньк|тренаж|гантел|штанг|турник|палат|спальник|бутыл|фляг|фляж|коврик|защит|маск|очки|час|трубк|пробк|напильник|направляющ|перчатки хоккейные)/i;
+
+  if (alwaysRejectRe.test(primary)) return false;
+
+  // Ski/snowboard words should not reject jackets and other outerwear:
+  // "Куртка для беговых лыж", "Куртка сноубордическая" are valid try-on items.
+  // But ski/snowboard boots and equipment are still not useful for TopTry.
+  if (!isOuterwear && /(лыж|сноуборд)/i.test(primary)) return false;
 
   return true;
 }
