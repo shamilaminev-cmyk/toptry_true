@@ -3222,50 +3222,75 @@ function uniqueStrings(values) {
 }
 
 function inferCatalogTaxonomy(product) {
-  const haystack = [
+  const raw = product?.rawPayload || {};
+
+  const stableText = [
     product?.title,
     product?.brand,
     product?.category,
+    raw?.categoryId,
+    raw?.market_category,
+    raw?.typePrefix,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  const noisyText = [
+    stableText,
     product?.gender,
-    JSON.stringify(product?.rawPayload || {}),
+    JSON.stringify(raw || {}),
   ].filter(Boolean).join(" ").toLowerCase();
 
   const originalCategory = String(product?.category || "").trim().toUpperCase();
-  const inferredCategory = originalCategory === "OTHER"
-    ? normalizeCatalogCategory(haystack)
-    : originalCategory;
 
-  const category = inferredCategory;
+  const stableCategory = normalizeCatalogCategory(stableText);
+  const noisyCategory = normalizeCatalogCategory(noisyText);
+
+  const category =
+    stableCategory && stableCategory !== "OTHER"
+      ? stableCategory
+      : originalCategory && originalCategory !== "OTHER"
+        ? originalCategory
+        : noisyCategory;
 
   let taxonomyGroup = "OTHER";
   let taxonomySubgroup = "";
 
   if (category === "SHOES") {
     taxonomyGroup = "SHOES";
-    if (/балетк|ballet/.test(haystack)) taxonomySubgroup = "BALLET";
-    else if (/сапог|ботфорт|угг|tall boot|ugg/.test(haystack)) taxonomySubgroup = "TALL_BOOTS";
-    else if (/кроссов|sneaker|runner|running|trainer|trail/.test(haystack)) taxonomySubgroup = "SNEAKERS";
-    else if (/кед|canvas|plimsoll/.test(haystack)) taxonomySubgroup = "SNEAKERS_CASUAL";
-    else if (/лофер|loafer|мокас/.test(haystack)) taxonomySubgroup = "LOAFERS";
-    else if (/сандал|босонож|эспадриль|сланц|шл[её]п|sand|espadrille/.test(haystack)) taxonomySubgroup = "SANDALS";
-    else if (/туф|oxford|дерби|монк|brogue|formal shoe/.test(haystack)) taxonomySubgroup = "SHOES_CLASSIC";
-    else if (/ботин|ботильон|boot|chelsea|chukka/.test(haystack)) taxonomySubgroup = "BOOTS";
+
+    if (/балетк|ballet/.test(stableText)) taxonomySubgroup = "BALLET";
+    else if (/угг|ботфорт|высок.*сапог|tall boot|ugg/.test(stableText)) taxonomySubgroup = "TALL_BOOTS";
+    else if (/кроссов|sneaker|runner|running|trainer|trail/.test(stableText)) taxonomySubgroup = "SNEAKERS";
+    else if (/кед|canvas|plimsoll/.test(stableText)) taxonomySubgroup = "SNEAKERS_CASUAL";
+    else if (/лофер|loafer|мокас/.test(stableText)) taxonomySubgroup = "LOAFERS";
+    else if (/домашн.*обув|тапоч|сандал|босонож|эспадриль|сланц|шл[её]п|sand|espadrille/.test(stableText)) taxonomySubgroup = "SANDALS";
+    else if (/туф|oxford|дерби|монк|brogue|formal shoe/.test(stableText)) taxonomySubgroup = "SHOES_CLASSIC";
+    else if (/ботин|ботильон|boot|chelsea|chukka|сапог/.test(stableText)) taxonomySubgroup = "BOOTS";
   } else if (["TOPS", "BOTTOMS", "JACKETS", "DRESS"].includes(category)) {
     taxonomyGroup = "CLOTHING";
-    if (category === "DRESS" || /плать|dress/.test(haystack)) taxonomySubgroup = "DRESSES";
-    else if (/жакет|пиджак|blazer/.test(haystack)) taxonomySubgroup = "BLAZERS";
-    else if (/поло|polo/.test(haystack)) taxonomySubgroup = "POLO";
-    else if (/худи|hoodie|свитшот|sweatshirt|толстов/.test(haystack)) taxonomySubgroup = "HOODIES";
-    else if (/свитер|джемпер|кардиган|knit|sweater/.test(haystack)) taxonomySubgroup = "KNITWEAR";
-    else if (/рубаш|блуз|shirt|blouse/.test(haystack)) taxonomySubgroup = "SHIRTS";
-    else if (/футбол|майк|t-shirt|tee/.test(haystack)) taxonomySubgroup = "TSHIRTS";
-    else if (/юбк|skirt/.test(haystack)) taxonomySubgroup = "SKIRTS";
-    else if (/джинс|denim|jeans/.test(haystack)) taxonomySubgroup = "DENIM";
-    else if (/брюк|штан|trouser|pants/.test(haystack)) taxonomySubgroup = "TROUSERS";
-    else if (category === "JACKETS" || /куртк|пальто|пухов|парка|бомбер|coat|jacket/.test(haystack)) taxonomySubgroup = "OUTERWEAR";
-    else if (category === "TOPS") taxonomySubgroup = "TOPS";
+
+    if (category === "DRESS") {
+      taxonomySubgroup = "DRESSES";
+    } else if (category === "JACKETS") {
+      taxonomySubgroup = /(жакет|пиджак|blazer)/.test(stableText)
+        ? "BLAZERS"
+        : "OUTERWEAR";
+    } else if (category === "BOTTOMS") {
+      if (/юбк|skirt/.test(stableText)) taxonomySubgroup = "SKIRTS";
+      else if (/джинс|denim|jeans/.test(stableText)) taxonomySubgroup = "DENIM";
+      else taxonomySubgroup = "TROUSERS";
+    } else if (category === "TOPS") {
+      const knitPoloRe = /(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)[\s\-]+поло|поло[\s\-]+(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)/i;
+
+      if (knitPoloRe.test(stableText)) taxonomySubgroup = "KNITWEAR";
+      else if (/худи|hoodie|свитшот|sweatshirt|толстов/.test(stableText)) taxonomySubgroup = "HOODIES";
+      else if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(stableText)) taxonomySubgroup = "KNITWEAR";
+      else if (/рубаш|блуз|лонгслив|shirt|blouse|longsleeve|long sleeve/.test(stableText)) taxonomySubgroup = "SHIRTS";
+      else if (/футбол|майк|t-?shirt|tee/.test(stableText)) taxonomySubgroup = "TSHIRTS";
+      else if (/поло|polo/.test(stableText)) taxonomySubgroup = "POLO";
+      else taxonomySubgroup = "TOPS";
+    }
   } else if (category === "ACCESSORIES") {
-    if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошелек|wallet/.test(haystack)) {
+    if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошелек|wallet/.test(stableText)) {
       taxonomyGroup = "BAGS";
       taxonomySubgroup = "BAGS";
     } else {
@@ -3275,34 +3300,35 @@ function inferCatalogTaxonomy(product) {
   }
 
   const styleTags = [];
-  if (/classic|оксфорд|дерби|лофер|пальто|рубаш|пиджак|жакет/.test(haystack)) styleTags.push("classic");
-  if (/sport|running|trail|training|трениров|кроссов/.test(haystack)) styleTags.push("sport");
-  if (/casual|hoodie|худи|джинс|футбол|sneaker|кед/.test(haystack)) styleTags.push("casual");
-  if (/premium|luxury|кожа|leather|шерсть|wool|cashmere|кашемир/.test(haystack)) styleTags.push("premium");
+  if (/classic|оксфорд|дерби|лофер|пальто|рубаш|пиджак|жакет/.test(noisyText)) styleTags.push("classic");
+  if (/sport|running|trail|training|трениров|кроссов/.test(noisyText)) styleTags.push("sport");
+  if (/casual|hoodie|худи|джинс|футбол|sneaker|кед/.test(noisyText)) styleTags.push("casual");
+  if (/premium|luxury|кожа|leather|шерсть|wool|cashmere|кашемир/.test(noisyText)) styleTags.push("premium");
 
   const occasionTags = [];
-  if (/office|офис|classic|дерби|оксфорд|рубаш|пиджак|жакет/.test(haystack)) occasionTags.push("office");
-  if (/running|trail|sport|training|трениров/.test(haystack)) occasionTags.push("sport");
-  if (/casual|джинс|футбол|худи|sneaker|кед/.test(haystack)) occasionTags.push("casual");
-  if (/evening|вечер|premium|luxury/.test(haystack)) occasionTags.push("evening");
+  if (/office|офис|classic|дерби|оксфорд|рубаш|пиджак|жакет/.test(noisyText)) occasionTags.push("office");
+  if (/running|trail|sport|training|трениров/.test(noisyText)) occasionTags.push("sport");
+  if (/casual|джинс|футбол|худи|sneaker|кед/.test(noisyText)) occasionTags.push("casual");
+  if (/evening|вечер|premium|luxury/.test(noisyText)) occasionTags.push("evening");
 
   const seasonTags = [];
-  if (/winter|зим|пухов|шерсть|wool/.test(haystack)) seasonTags.push("winter");
-  if (/summer|летн|сандал|босонож|shorts|шорт/.test(haystack)) seasonTags.push("summer");
-  if (/демисез|spring|autumn|fall|осень|весна/.test(haystack)) seasonTags.push("midseason");
+  if (/winter|зим|пухов|шерсть|wool/.test(noisyText)) seasonTags.push("winter");
+  if (/summer|летн|сандал|босонож|shorts|шорт/.test(noisyText)) seasonTags.push("summer");
+  if (/демисез|spring|autumn|fall|осень|весна/.test(noisyText)) seasonTags.push("midseason");
 
   let colorFamily = null;
-  if (/black|черн|чёрн/.test(haystack)) colorFamily = "black";
-  else if (/white|бел/.test(haystack)) colorFamily = "white";
-  else if (/gray|grey|сер/.test(haystack)) colorFamily = "gray";
-  else if (/blue|син|голуб/.test(haystack)) colorFamily = "blue";
-  else if (/brown|корич|beige|беж/.test(haystack)) colorFamily = "brown";
-  else if (/green|зел/.test(haystack)) colorFamily = "green";
-  else if (/red|крас|бордов/.test(haystack)) colorFamily = "red";
-  else if (/pink|роз/.test(haystack)) colorFamily = "pink";
+  if (/black|черн|чёрн/.test(noisyText)) colorFamily = "black";
+  else if (/white|бел/.test(noisyText)) colorFamily = "white";
+  else if (/gray|grey|сер/.test(noisyText)) colorFamily = "gray";
+  else if (/blue|син|голуб/.test(noisyText)) colorFamily = "blue";
+  else if (/brown|корич|beige|беж/.test(noisyText)) colorFamily = "brown";
+  else if (/green|зел/.test(noisyText)) colorFamily = "green";
+  else if (/red|крас|бордов/.test(noisyText)) colorFamily = "red";
+  else if (/pink|роз/.test(noisyText)) colorFamily = "pink";
 
+  const canPatchCategory = ["SHOES", "TOPS", "BOTTOMS", "JACKETS", "DRESS", "ACCESSORIES"].includes(category);
   const categoryPatch =
-    originalCategory === "OTHER" && ["SHOES", "TOPS", "BOTTOMS", "JACKETS", "DRESS", "ACCESSORIES"].includes(category)
+    canPatchCategory && category && category !== originalCategory
       ? { category }
       : {};
 
@@ -3310,7 +3336,7 @@ function inferCatalogTaxonomy(product) {
     ...categoryPatch,
     taxonomyGroup,
     taxonomySubgroup,
-    taxonomySource: "rules_v2",
+    taxonomySource: "rules_v3_category_first",
     taxonomyEnrichedAt: new Date(),
     styleTags: uniqueStrings(styleTags),
     occasionTags: uniqueStrings(occasionTags),
