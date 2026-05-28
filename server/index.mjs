@@ -6964,37 +6964,70 @@ function truncateForReport(value, maxLen = 2000) {
   return s.length > maxLen ? s.slice(0, maxLen) + "\n...[truncated]" : s;
 }
 
-async function callLocalCatalogPipelineJson(pathname, { method = "POST", timeoutMs = 1800000 } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
+async function updateCatalogPipelineLiveReport(runId, reportLines) {
+  if (!runId) return;
   try {
-    const url = `http://127.0.0.1:${PORT}${pathname}`;
-    const resp = await fetch(url, {
-      method,
-      headers: { accept: "application/json" },
-      signal: controller.signal,
+    await prisma.catalogPipelineRun.update({
+      where: { id: runId },
+      data: {
+        reportText: reportLines.join("\n"),
+      },
+    });
+  } catch (e) {
+    console.warn("[toptry] catalog pipeline live report update failed", e?.message || e);
+  }
+}
+
+async function callLocalCatalogPipelineJson(pathname, { method = "POST", timeoutMs = 1800000 } = {}) {
+  // Use node:http instead of global fetch here.
+  // Node/undici fetch can fail around ~300s on long-running import responses,
+  // while catalog imports may legitimately take longer.
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: PORT,
+        path: pathname,
+        method,
+        headers: {
+          accept: "application/json",
+        },
+        timeout: timeoutMs,
+      },
+      (resp) => {
+        const chunks = [];
+
+        resp.on("data", (chunk) => chunks.push(chunk));
+        resp.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          let data = null;
+
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = { rawText: text };
+          }
+
+          if (resp.statusCode < 200 || resp.statusCode >= 300) {
+            const err = new Error(`HTTP ${resp.statusCode}: ${truncateForReport(data, 800)}`);
+            err.status = resp.statusCode;
+            err.data = data;
+            reject(err);
+            return;
+          }
+
+          resolve(data);
+        });
+      }
+    );
+
+    req.on("timeout", () => {
+      req.destroy(new Error(`local pipeline request timeout after ${timeoutMs}ms: ${method} ${pathname}`));
     });
 
-    const text = await resp.text();
-    let data = null;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { rawText: text };
-    }
-
-    if (!resp.ok) {
-      const err = new Error(`HTTP ${resp.status}: ${truncateForReport(data, 800)}`);
-      err.status = resp.status;
-      err.data = data;
-      throw err;
-    }
-
-    return data;
-  } finally {
-    clearTimeout(timer);
-  }
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 async function createPipelineStep(runId, name, merchant = null) {
@@ -7031,12 +7064,14 @@ async function runPipelineStep(runId, name, merchant, fn, reportLines, warnings)
   const step = await createPipelineStep(runId, name, merchant);
   const label = merchant ? `${name}:${merchant}` : name;
   reportLines.push(`\n[${pipelineNowIso()}] STEP START ${label}`);
+  await updateCatalogPipelineLiveReport(runId, reportLines);
 
   try {
     const result = await fn();
     await finishPipelineStep(step, "COMPLETED", result, null);
     reportLines.push(`[${pipelineNowIso()}] STEP OK ${label}`);
     reportLines.push(truncateForReport(result, 5000));
+    await updateCatalogPipelineLiveReport(runId, reportLines);
     return { ok: true, result };
   } catch (e) {
     const msg = e?.stack || e?.message || String(e);
@@ -7044,6 +7079,7 @@ async function runPipelineStep(runId, name, merchant, fn, reportLines, warnings)
     reportLines.push(`[${pipelineNowIso()}] STEP FAILED ${label}`);
     reportLines.push(String(msg).slice(0, 5000));
     warnings.push(`${label}: ${String(e?.message || e).slice(0, 500)}`);
+    await updateCatalogPipelineLiveReport(runId, reportLines);
     return { ok: false, error: msg };
   }
 }
@@ -7119,6 +7155,7 @@ async function runCatalogPipelineAiReviewForMerchant(runId, merchant, reportLine
       reportLines.push(
         `[${pipelineNowIso()}] AI ${merchant} batch=${totals.batches} reviewed=${reviewed} saved=${saved} model=${data?.model || ""}`
       );
+      await updateCatalogPipelineLiveReport(runId, reportLines);
 
       if (reviewed <= 0) {
         totals.completed = true;
@@ -7137,6 +7174,7 @@ async function runCatalogPipelineAiReviewForMerchant(runId, merchant, reportLine
       reportLines.push(
         `[${pipelineNowIso()}] AI ERROR ${merchant} consecutive=${consecutiveErrors}/${CATALOG_PIPELINE_AI_MAX_CONSECUTIVE_ERRORS}: ${msg.slice(0, 800)}`
       );
+      await updateCatalogPipelineLiveReport(runId, reportLines);
 
       if (consecutiveErrors >= CATALOG_PIPELINE_AI_MAX_CONSECUTIVE_ERRORS) {
         const warning = `AI-review incomplete for ${merchant}: ${consecutiveErrors} consecutive errors`;
@@ -7164,8 +7202,8 @@ async function runCatalogPipelineAiReviewForMerchant(runId, merchant, reportLine
   return totals;
 }
 
-async function runCatalogNightlyPipeline({ applySafe = false, trigger = "manual" } = {}) {
-  const runId = `catalog-pipeline-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+async function runCatalogNightlyPipeline({ runId = "", applySafe = false, trigger = "manual" } = {}) {
+  runId = runId || `catalog-pipeline-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
   const startedAt = new Date();
 
   const reportLines = [];
@@ -7371,6 +7409,7 @@ async function runCatalogNightlyPipeline({ applySafe = false, trigger = "manual"
   });
 
   catalogNightlyPipelineRunning = null;
+  await updateCatalogPipelineLiveReport(runId, reportLines);
 
   console.log("[toptry] catalog nightly pipeline finished", {
     runId,
@@ -7402,7 +7441,9 @@ function startCatalogNightlyPipeline({ applySafe = false, trigger = "manual" } =
   }
 
   const startedAt = new Date().toISOString();
-  const runPromise = runCatalogNightlyPipeline({ applySafe, trigger })
+  const runId = `catalog-pipeline-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+
+  const runPromise = runCatalogNightlyPipeline({ runId, applySafe, trigger })
     .catch((e) => {
       console.error("[toptry] catalog nightly pipeline fatal", e?.stack || e);
       catalogNightlyPipelineRunning = null;
@@ -7410,7 +7451,7 @@ function startCatalogNightlyPipeline({ applySafe = false, trigger = "manual" } =
 
   catalogNightlyPipelineRunning = {
     running: true,
-    runId: null,
+    runId,
     startedAt,
     promise: runPromise,
   };
@@ -7419,6 +7460,7 @@ function startCatalogNightlyPipeline({ applySafe = false, trigger = "manual" } =
     ok: true,
     queued: true,
     running: true,
+    runId,
     startedAt,
   };
 }
@@ -7459,6 +7501,31 @@ app.get("/api/admin/catalog/nightly-pipeline/runs", async (req, res) => {
   } catch (e) {
     console.error("[toptry] catalog pipeline runs list error", e);
     return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
+setImmediate(async () => {
+  try {
+    const staleMessage = "Marked failed on backend startup: previous pipeline was interrupted";
+    await prisma.catalogPipelineStep.updateMany({
+      where: { status: "RUNNING" },
+      data: {
+        status: "FAILED",
+        finishedAt: new Date(),
+        error: staleMessage,
+      },
+    });
+    await prisma.catalogPipelineRun.updateMany({
+      where: { status: "RUNNING" },
+      data: {
+        status: "FAILED",
+        finishedAt: new Date(),
+        error: staleMessage,
+      },
+    });
+  } catch (e) {
+    console.warn("[toptry] catalog pipeline stale cleanup failed", e?.message || e);
   }
 });
 
