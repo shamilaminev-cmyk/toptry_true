@@ -6978,55 +6978,111 @@ async function updateCatalogPipelineLiveReport(runId, reportLines) {
   }
 }
 
+function findExpressRouteHandler(method, routePath) {
+  const stack = app?._router?.stack || app?.router?.stack || [];
+  const lowerMethod = String(method || "GET").toLowerCase();
+
+  for (const layer of stack) {
+    const route = layer?.route;
+    if (!route) continue;
+    if (route.path !== routePath) continue;
+    if (!route.methods?.[lowerMethod]) continue;
+
+    const routeStack = Array.isArray(route.stack) ? route.stack : [];
+    const match = routeStack.find((r) => typeof r?.handle === "function");
+    if (match?.handle) return match.handle;
+  }
+
+  return null;
+}
+
 async function callLocalCatalogPipelineJson(pathname, { method = "POST", timeoutMs = 1800000 } = {}) {
-  // Use node:http instead of global fetch here.
-  // Node/undici fetch can fail around ~300s on long-running import responses,
-  // while catalog imports may legitimately take longer.
-  return new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        hostname: "127.0.0.1",
-        port: PORT,
-        path: pathname,
-        method,
-        headers: {
-          accept: "application/json",
-        },
-        timeout: timeoutMs,
-      },
-      (resp) => {
-        const chunks = [];
+  // Do not call this backend through HTTP from itself.
+  // Long catalog imports were observed to hang/fail through self-HTTP calls.
+  // Instead, invoke the already registered Express route handler directly.
+  const u = new URL(String(pathname || "/"), "http://toptry.local");
+  const routePath = u.pathname;
+  const handler = findExpressRouteHandler(method, routePath);
 
-        resp.on("data", (chunk) => chunks.push(chunk));
-        resp.on("end", () => {
-          const text = Buffer.concat(chunks).toString("utf8");
-          let data = null;
+  if (!handler) {
+    throw new Error(`local pipeline route handler not found: ${method} ${routePath}`);
+  }
 
-          try {
-            data = JSON.parse(text);
-          } catch {
-            data = { rawText: text };
-          }
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    let statusCode = 200;
 
-          if (resp.statusCode < 200 || resp.statusCode >= 300) {
-            const err = new Error(`HTTP ${resp.statusCode}: ${truncateForReport(data, 800)}`);
-            err.status = resp.statusCode;
-            err.data = data;
-            reject(err);
-            return;
-          }
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`local pipeline handler timeout after ${timeoutMs}ms: ${method} ${pathname}`));
+    }, timeoutMs);
 
-          resolve(data);
-        });
+    const finish = (payload, isSend = false) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+
+      let data = payload;
+      if (isSend && typeof payload === "string") {
+        try {
+          data = JSON.parse(payload);
+        } catch {
+          data = { rawText: payload };
+        }
       }
-    );
 
-    req.on("timeout", () => {
-      req.destroy(new Error(`local pipeline request timeout after ${timeoutMs}ms: ${method} ${pathname}`));
+      if (statusCode < 200 || statusCode >= 300) {
+        const err = new Error(`HTTP ${statusCode}: ${truncateForReport(data, 800)}`);
+        err.status = statusCode;
+        err.data = data;
+        reject(err);
+        return;
+      }
+
+      resolve(data);
+    };
+
+    const req = {
+      method: String(method || "GET").toUpperCase(),
+      url: pathname,
+      path: routePath,
+      originalUrl: pathname,
+      query: Object.fromEntries(u.searchParams.entries()),
+      params: {},
+      body: {},
+      headers: {},
+      auth: null,
+    };
+
+    const res = {
+      status(code) {
+        statusCode = Number(code || 200);
+        return this;
+      },
+      json(payload) {
+        finish(payload, false);
+        return this;
+      },
+      send(payload) {
+        finish(payload, true);
+        return this;
+      },
+      end(payload) {
+        finish(payload || "", true);
+        return this;
+      },
+      setHeader() {
+        return this;
+      },
+    };
+
+    Promise.resolve(handler(req, res)).catch((e) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(e);
     });
-
-    req.on("error", reject);
-    req.end();
   });
 }
 
