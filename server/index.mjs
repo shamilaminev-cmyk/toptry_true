@@ -3224,32 +3224,39 @@ function uniqueStrings(values) {
 function inferCatalogTaxonomy(product) {
   const raw = product?.rawPayload || {};
 
-  const stableText = [
+  // Critical: category/subgroup must be inferred from source identity fields only.
+  // Do not use product.category here: it may be stale/wrong from older imports.
+  // Do not use brand here: e.g. "DC Shoes" makes T-shirts look like shoes.
+  // Do not use full rawPayload/param here: it contains related products and articles.
+  const sourceText = [
     product?.title,
-    product?.brand,
-    product?.category,
     raw?.categoryId,
     raw?.market_category,
     raw?.typePrefix,
   ].filter(Boolean).join(" ").toLowerCase();
 
   const noisyText = [
-    stableText,
+    sourceText,
+    product?.brand,
     product?.gender,
     JSON.stringify(raw || {}),
   ].filter(Boolean).join(" ").toLowerCase();
 
   const originalCategory = String(product?.category || "").trim().toUpperCase();
 
-  const stableCategory = normalizeCatalogCategory(stableText);
-  const noisyCategory = normalizeCatalogCategory(noisyText);
+  let sourceCategory = normalizeCatalogCategory(sourceText);
+
+  // Shoe-adjacent accessories should not become SHOES.
+  if (/(украшен.*обув|украшени.*обув|jibbitz|шнурк|стельк|аксессуар.*обув|средств.*уход|значк|носк|гольф)/i.test(sourceText)) {
+    sourceCategory = "ACCESSORIES";
+  }
 
   const category =
-    stableCategory && stableCategory !== "OTHER"
-      ? stableCategory
+    sourceCategory && sourceCategory !== "OTHER"
+      ? sourceCategory
       : originalCategory && originalCategory !== "OTHER"
         ? originalCategory
-        : noisyCategory;
+        : "OTHER";
 
   let taxonomyGroup = "OTHER";
   let taxonomySubgroup = "";
@@ -3257,40 +3264,40 @@ function inferCatalogTaxonomy(product) {
   if (category === "SHOES") {
     taxonomyGroup = "SHOES";
 
-    if (/балетк|ballet/.test(stableText)) taxonomySubgroup = "BALLET";
-    else if (/угг|ботфорт|высок.*сапог|tall boot|ugg/.test(stableText)) taxonomySubgroup = "TALL_BOOTS";
-    else if (/кроссов|sneaker|runner|running|trainer|trail/.test(stableText)) taxonomySubgroup = "SNEAKERS";
-    else if (/кед|canvas|plimsoll/.test(stableText)) taxonomySubgroup = "SNEAKERS_CASUAL";
-    else if (/лофер|loafer|мокас/.test(stableText)) taxonomySubgroup = "LOAFERS";
-    else if (/домашн.*обув|тапоч|сандал|босонож|эспадриль|сланц|шл[её]п|sand|espadrille/.test(stableText)) taxonomySubgroup = "SANDALS";
-    else if (/туф|oxford|дерби|монк|brogue|formal shoe/.test(stableText)) taxonomySubgroup = "SHOES_CLASSIC";
-    else if (/ботин|ботильон|boot|chelsea|chukka|сапог/.test(stableText)) taxonomySubgroup = "BOOTS";
+    if (/балетк|ballet/.test(sourceText)) taxonomySubgroup = "BALLET";
+    else if (/угг|ботфорт|высок.*сапог|tall boot|ugg/.test(sourceText)) taxonomySubgroup = "TALL_BOOTS";
+    else if (/кроссов|sneaker|runner|running|trainer|trail/.test(sourceText)) taxonomySubgroup = "SNEAKERS";
+    else if (/кед|слипон|slip[-\s]?on|canvas|plimsoll/.test(sourceText)) taxonomySubgroup = "SNEAKERS_CASUAL";
+    else if (/лофер|loafer|мокас/.test(sourceText)) taxonomySubgroup = "LOAFERS";
+    else if (/домашн.*обув|тапоч|сандал|босонож|эспадриль|сланц|шл[её]п|sand|espadrille/.test(sourceText)) taxonomySubgroup = "SANDALS";
+    else if (/туф|oxford|дерби|монк|brogue|formal shoe/.test(sourceText)) taxonomySubgroup = "SHOES_CLASSIC";
+    else if (/ботин|ботильон|boot|chelsea|chukka|сапог/.test(sourceText)) taxonomySubgroup = "BOOTS";
   } else if (["TOPS", "BOTTOMS", "JACKETS", "DRESS"].includes(category)) {
     taxonomyGroup = "CLOTHING";
 
     if (category === "DRESS") {
       taxonomySubgroup = "DRESSES";
     } else if (category === "JACKETS") {
-      taxonomySubgroup = /(жакет|пиджак|blazer)/.test(stableText)
+      taxonomySubgroup = /(жакет|пиджак|blazer)/.test(sourceText)
         ? "BLAZERS"
         : "OUTERWEAR";
     } else if (category === "BOTTOMS") {
-      if (/юбк|skirt/.test(stableText)) taxonomySubgroup = "SKIRTS";
-      else if (/джинс|denim|jeans/.test(stableText)) taxonomySubgroup = "DENIM";
+      if (/юбк|skirt/.test(sourceText)) taxonomySubgroup = "SKIRTS";
+      else if (/джинс|denim|jeans/.test(sourceText)) taxonomySubgroup = "DENIM";
       else taxonomySubgroup = "TROUSERS";
     } else if (category === "TOPS") {
       const knitPoloRe = /(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)[\s\-]+поло|поло[\s\-]+(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)/i;
 
-      if (knitPoloRe.test(stableText)) taxonomySubgroup = "KNITWEAR";
-      else if (/худи|hoodie|свитшот|sweatshirt|толстов/.test(stableText)) taxonomySubgroup = "HOODIES";
-      else if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(stableText)) taxonomySubgroup = "KNITWEAR";
-      else if (/рубаш|блуз|лонгслив|shirt|blouse|longsleeve|long sleeve/.test(stableText)) taxonomySubgroup = "SHIRTS";
-      else if (/футбол|майк|t-?shirt|tee/.test(stableText)) taxonomySubgroup = "TSHIRTS";
-      else if (/поло|polo/.test(stableText)) taxonomySubgroup = "POLO";
+      if (knitPoloRe.test(sourceText)) taxonomySubgroup = "KNITWEAR";
+      else if (/худи|hoodie|свитшот|sweatshirt|толстов/.test(sourceText)) taxonomySubgroup = "HOODIES";
+      else if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(sourceText)) taxonomySubgroup = "KNITWEAR";
+      else if (/рубаш|блуз|лонгслив|shirt|blouse|longsleeve|long sleeve/.test(sourceText)) taxonomySubgroup = "SHIRTS";
+      else if (/футбол|майк|t-?shirt|tee/.test(sourceText)) taxonomySubgroup = "TSHIRTS";
+      else if (/поло|polo/.test(sourceText)) taxonomySubgroup = "POLO";
       else taxonomySubgroup = "TOPS";
     }
   } else if (category === "ACCESSORIES") {
-    if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошелек|wallet/.test(stableText)) {
+    if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошелек|wallet/.test(sourceText)) {
       taxonomyGroup = "BAGS";
       taxonomySubgroup = "BAGS";
     } else {
@@ -3336,7 +3343,7 @@ function inferCatalogTaxonomy(product) {
     ...categoryPatch,
     taxonomyGroup,
     taxonomySubgroup,
-    taxonomySource: "rules_v3_category_first",
+    taxonomySource: "rules_v4_source_category_first",
     taxonomyEnrichedAt: new Date(),
     styleTags: uniqueStrings(styleTags),
     occasionTags: uniqueStrings(occasionTags),
