@@ -3256,8 +3256,14 @@ function inferCatalogTaxonomy(product) {
   const explicitNonTryOnAccessoryRe =
     /(носк|гольф)/i;
 
+  const hasSourceShoePath =
+    /(^|[\\/])обувь([\\/]|$)/i.test(sourceText) ||
+    /женская\s+обувь|мужская\s+обувь/i.test(sourceText);
+
   if (explicitShoeAccessoryRe.test(sourceText) || explicitNonTryOnAccessoryRe.test(sourceText)) {
     sourceCategory = "ACCESSORIES";
+  } else if (hasSourceShoePath) {
+    sourceCategory = "SHOES";
   }
 
   const category =
@@ -3278,7 +3284,7 @@ function inferCatalogTaxonomy(product) {
     else if (/кроссов|sneaker|runner|running|trainer|trail/.test(sourceText)) taxonomySubgroup = "SNEAKERS";
     else if (/кед|слипон|slip[-\s]?on|canvas|plimsoll/.test(sourceText)) taxonomySubgroup = "SNEAKERS_CASUAL";
     else if (/лофер|loafer|мокас/.test(sourceText)) taxonomySubgroup = "LOAFERS";
-    else if (/домашн.*обув|тапоч|сандал|босонож|эспадриль|сланц|шл[её]п|sand|espadrille/.test(sourceText)) taxonomySubgroup = "SANDALS";
+    else if (/домашн.*обув|тапоч|сандал|босонож|сабо|эспадриль|сланц|шл[её]п|sand|espadrille/.test(sourceText)) taxonomySubgroup = "SANDALS";
     else if (/туф|oxford|дерби|монк|brogue|formal shoe/.test(sourceText)) taxonomySubgroup = "SHOES_CLASSIC";
     else if (/ботин|ботильон|boot|chelsea|chukka|сапог/.test(sourceText)) taxonomySubgroup = "BOOTS";
   } else if (["TOPS", "BOTTOMS", "JACKETS", "DRESS"].includes(category)) {
