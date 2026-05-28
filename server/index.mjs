@@ -3247,7 +3247,16 @@ function inferCatalogTaxonomy(product) {
   let sourceCategory = normalizeCatalogCategory(sourceText);
 
   // Shoe-adjacent accessories should not become SHOES.
-  if (/(украшен.*обув|украшени.*обув|jibbitz|шнурк|стельк|аксессуар.*обув|средств.*уход|значк|носк|гольф)/i.test(sourceText)) {
+  // Keep this guard narrow: marketplace paths like
+  // "Одежда, обувь и аксессуары/Обувь/..." are normal shoe categories,
+  // not shoe accessories.
+  const explicitShoeAccessoryRe =
+    /(украшен(?:ие|ия)?\s+для\s+обув|jibbitz|шнурк|стельк|средств.*уход|значк|аксессуар\s+для\s+обув)/i;
+
+  const explicitNonTryOnAccessoryRe =
+    /(носк|гольф)/i;
+
+  if (explicitShoeAccessoryRe.test(sourceText) || explicitNonTryOnAccessoryRe.test(sourceText)) {
     sourceCategory = "ACCESSORIES";
   }
 
