@@ -6913,6 +6913,577 @@ app.get("/api/looks/my", requireAuth, async (req, res) => {
   }
 });
 
+
+
+// ---------- CATALOG NIGHTLY PIPELINE ----------
+
+const CATALOG_PIPELINE_MERCHANTS = [
+  "remington",
+  "rendezvous",
+  "thecultt",
+  "sportcourt",
+  "sportmaster",
+];
+
+const CATALOG_PIPELINE_REPORT_DIR =
+  process.env.CATALOG_PIPELINE_REPORT_DIR || "/tmp/toptry-catalog-pipeline-reports";
+
+const CATALOG_PIPELINE_AI_BATCH_DELAY_MS = Math.max(
+  0,
+  Number(process.env.CATALOG_PIPELINE_AI_BATCH_DELAY_MS || 45000)
+);
+
+const CATALOG_PIPELINE_AI_ERROR_SLEEP_MS = Math.max(
+  1000,
+  Number(process.env.CATALOG_PIPELINE_AI_ERROR_SLEEP_MS || 240000)
+);
+
+const CATALOG_PIPELINE_AI_MAX_CONSECUTIVE_ERRORS = Math.max(
+  1,
+  Number(process.env.CATALOG_PIPELINE_AI_MAX_CONSECUTIVE_ERRORS || 5)
+);
+
+let catalogNightlyPipelineRunning = null;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function jsonSafe(value) {
+  return JSON.parse(JSON.stringify(value ?? null, (_k, v) =>
+    typeof v === "bigint" ? String(v) : v
+  ));
+}
+
+function pipelineNowIso() {
+  return new Date().toISOString();
+}
+
+function truncateForReport(value, maxLen = 2000) {
+  const s = typeof value === "string" ? value : JSON.stringify(jsonSafe(value), null, 2);
+  return s.length > maxLen ? s.slice(0, maxLen) + "\n...[truncated]" : s;
+}
+
+async function callLocalCatalogPipelineJson(pathname, { method = "POST", timeoutMs = 1800000 } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const url = `http://127.0.0.1:${PORT}${pathname}`;
+    const resp = await fetch(url, {
+      method,
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    });
+
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { rawText: text };
+    }
+
+    if (!resp.ok) {
+      const err = new Error(`HTTP ${resp.status}: ${truncateForReport(data, 800)}`);
+      err.status = resp.status;
+      err.data = data;
+      throw err;
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function createPipelineStep(runId, name, merchant = null) {
+  return prisma.catalogPipelineStep.create({
+    data: {
+      runId,
+      name,
+      merchant,
+      status: "RUNNING",
+    },
+  });
+}
+
+async function finishPipelineStep(step, status, result = null, error = null) {
+  const finishedAt = new Date();
+  const durationMs = Math.max(
+    0,
+    finishedAt.getTime() - new Date(step.startedAt).getTime()
+  );
+
+  return prisma.catalogPipelineStep.update({
+    where: { id: step.id },
+    data: {
+      status,
+      finishedAt,
+      durationMs,
+      result: result == null ? undefined : jsonSafe(result),
+      error: error ? String(error).slice(0, 5000) : null,
+    },
+  });
+}
+
+async function runPipelineStep(runId, name, merchant, fn, reportLines, warnings) {
+  const step = await createPipelineStep(runId, name, merchant);
+  const label = merchant ? `${name}:${merchant}` : name;
+  reportLines.push(`\n[${pipelineNowIso()}] STEP START ${label}`);
+
+  try {
+    const result = await fn();
+    await finishPipelineStep(step, "COMPLETED", result, null);
+    reportLines.push(`[${pipelineNowIso()}] STEP OK ${label}`);
+    reportLines.push(truncateForReport(result, 5000));
+    return { ok: true, result };
+  } catch (e) {
+    const msg = e?.stack || e?.message || String(e);
+    await finishPipelineStep(step, "FAILED", e?.data || null, msg);
+    reportLines.push(`[${pipelineNowIso()}] STEP FAILED ${label}`);
+    reportLines.push(String(msg).slice(0, 5000));
+    warnings.push(`${label}: ${String(e?.message || e).slice(0, 500)}`);
+    return { ok: false, error: msg };
+  }
+}
+
+async function getCatalogPipelineHealthSummary() {
+  return prisma.$queryRawUnsafe(`
+    select
+      p.merchant,
+      count(*) filter (where p."isActive" = true) as active_products,
+      count(*) filter (
+        where p."isActive" = true and coalesce(p."taxonomyGroup",'') = ''
+      ) as active_empty_group,
+      count(*) filter (
+        where p."isActive" = true and coalesce(p."taxonomySubgroup",'') = ''
+      ) as active_empty_subgroup,
+      count(*) filter (
+        where p."isActive" = true
+          and coalesce(array_length(p."sizesTop",1),0)
+            + coalesce(array_length(p."sizesBottom",1),0)
+            + coalesce(array_length(p."sizesShoes",1),0) = 0
+      ) as active_without_sizes,
+      count(*) filter (
+        where p."isActive" = true
+          and exists (
+            select 1 from "CatalogProductAIReview" r where r."productId" = p.id
+          )
+      ) as active_with_ai_review,
+      count(*) filter (
+        where p."isActive" = true
+          and not exists (
+            select 1 from "CatalogProductAIReview" r where r."productId" = p.id
+          )
+      ) as active_without_ai_review
+    from "CatalogProduct" p
+    group by p.merchant
+    order by p.merchant
+  `);
+}
+
+async function runCatalogPipelineAiReviewForMerchant(runId, merchant, reportLines, warnings) {
+  const step = await createPipelineStep(runId, "ai-review-new-products", merchant);
+  const startedAt = Date.now();
+
+  const totals = {
+    merchant,
+    reviewed: 0,
+    saved: 0,
+    batches: 0,
+    errors: 0,
+    retries: 0,
+    completed: false,
+  };
+
+  reportLines.push(`\n[${pipelineNowIso()}] STEP START ai-review-new-products:${merchant}`);
+
+  let consecutiveErrors = 0;
+
+  while (true) {
+    try {
+      const data = await callLocalCatalogPipelineJson(
+        `/api/admin/catalog/ai-review/gemini-text?merchant=${encodeURIComponent(merchant)}&limit=100&chunkSize=20&skipReviewed=1`,
+        { method: "POST", timeoutMs: 1200000 }
+      );
+
+      const reviewed = Number(data?.reviewed || 0);
+      const saved = Number(data?.saved || 0);
+
+      totals.batches += 1;
+      totals.reviewed += reviewed;
+      totals.saved += saved;
+      consecutiveErrors = 0;
+
+      reportLines.push(
+        `[${pipelineNowIso()}] AI ${merchant} batch=${totals.batches} reviewed=${reviewed} saved=${saved} model=${data?.model || ""}`
+      );
+
+      if (reviewed <= 0) {
+        totals.completed = true;
+        break;
+      }
+
+      if (CATALOG_PIPELINE_AI_BATCH_DELAY_MS > 0) {
+        await sleep(CATALOG_PIPELINE_AI_BATCH_DELAY_MS);
+      }
+    } catch (e) {
+      totals.errors += 1;
+      totals.retries += 1;
+      consecutiveErrors += 1;
+
+      const msg = String(e?.message || e);
+      reportLines.push(
+        `[${pipelineNowIso()}] AI ERROR ${merchant} consecutive=${consecutiveErrors}/${CATALOG_PIPELINE_AI_MAX_CONSECUTIVE_ERRORS}: ${msg.slice(0, 800)}`
+      );
+
+      if (consecutiveErrors >= CATALOG_PIPELINE_AI_MAX_CONSECUTIVE_ERRORS) {
+        const warning = `AI-review incomplete for ${merchant}: ${consecutiveErrors} consecutive errors`;
+        warnings.push(warning);
+        reportLines.push(`[${pipelineNowIso()}] WARNING ${warning}`);
+        break;
+      }
+
+      await sleep(CATALOG_PIPELINE_AI_ERROR_SLEEP_MS);
+    }
+  }
+
+  const status = totals.completed ? "COMPLETED" : "WARNING";
+  await finishPipelineStep(
+    step,
+    status,
+    totals,
+    totals.completed ? null : `AI-review incomplete for ${merchant}`
+  );
+
+  reportLines.push(
+    `[${pipelineNowIso()}] STEP ${status} ai-review-new-products:${merchant} reviewed=${totals.reviewed} saved=${totals.saved} batches=${totals.batches} errors=${totals.errors} durationMs=${Date.now() - startedAt}`
+  );
+
+  return totals;
+}
+
+async function runCatalogNightlyPipeline({ applySafe = false, trigger = "manual" } = {}) {
+  const runId = `catalog-pipeline-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const startedAt = new Date();
+
+  const reportLines = [];
+  const warnings = [];
+  const stepResults = {
+    imports: {},
+    backfillSizes: {},
+    enrichTaxonomy: {},
+    aiReview: {},
+    safeTaxonomy: null,
+    safeDeactivate: null,
+    finalHealth: null,
+  };
+
+  await prisma.catalogPipelineRun.create({
+    data: {
+      id: runId,
+      kind: "nightly-catalog",
+      status: "RUNNING",
+      applySafe,
+      startedAt,
+      meta: {
+        trigger,
+        merchants: CATALOG_PIPELINE_MERCHANTS,
+        aiBatchDelayMs: CATALOG_PIPELINE_AI_BATCH_DELAY_MS,
+        aiErrorSleepMs: CATALOG_PIPELINE_AI_ERROR_SLEEP_MS,
+        aiMaxConsecutiveErrors: CATALOG_PIPELINE_AI_MAX_CONSECUTIVE_ERRORS,
+      },
+    },
+  });
+
+  reportLines.push(`TopTry catalog nightly pipeline report`);
+  reportLines.push(`Run ID: ${runId}`);
+  reportLines.push(`Status: RUNNING`);
+  reportLines.push(`Started: ${startedAt.toISOString()}`);
+  reportLines.push(`Trigger: ${trigger}`);
+  reportLines.push(`applySafe: ${applySafe ? "true" : "false"}`);
+  reportLines.push(`Merchants: ${CATALOG_PIPELINE_MERCHANTS.join(", ")}`);
+
+  let finalStatus = "COMPLETED";
+  let finalError = null;
+
+  try {
+    for (const merchant of CATALOG_PIPELINE_MERCHANTS) {
+      const r = await runPipelineStep(
+        runId,
+        "import",
+        merchant,
+        () => callLocalCatalogPipelineJson(
+          `/api/admin/catalog/import/${encodeURIComponent(merchant)}`,
+          { method: "POST", timeoutMs: 1800000 }
+        ),
+        reportLines,
+        warnings
+      );
+      stepResults.imports[merchant] = r.result || { error: r.error };
+      if (!r.ok) finalStatus = "WARNING";
+    }
+
+    for (const merchant of CATALOG_PIPELINE_MERCHANTS) {
+      const r = await runPipelineStep(
+        runId,
+        "backfill-sizes",
+        merchant,
+        () => callLocalCatalogPipelineJson(
+          `/api/admin/catalog/backfill-sizes?merchant=${encodeURIComponent(merchant)}&limit=50000`,
+          { method: "POST", timeoutMs: 1200000 }
+        ),
+        reportLines,
+        warnings
+      );
+      stepResults.backfillSizes[merchant] = r.result || { error: r.error };
+      if (!r.ok) finalStatus = "WARNING";
+    }
+
+    for (const merchant of CATALOG_PIPELINE_MERCHANTS) {
+      const r = await runPipelineStep(
+        runId,
+        "enrich-taxonomy",
+        merchant,
+        () => callLocalCatalogPipelineJson(
+          `/api/admin/catalog/enrich-taxonomy?merchant=${encodeURIComponent(merchant)}&limit=50000&force=1`,
+          { method: "POST", timeoutMs: 1200000 }
+        ),
+        reportLines,
+        warnings
+      );
+      stepResults.enrichTaxonomy[merchant] = r.result || { error: r.error };
+      if (!r.ok) finalStatus = "WARNING";
+    }
+
+    for (const merchant of CATALOG_PIPELINE_MERCHANTS) {
+      const r = await runCatalogPipelineAiReviewForMerchant(
+        runId,
+        merchant,
+        reportLines,
+        warnings
+      );
+      stepResults.aiReview[merchant] = r;
+      if (!r.completed) finalStatus = "WARNING";
+    }
+
+    const safeTaxonomyDryRun = !applySafe;
+    const safeDeactivateDryRun = !applySafe;
+
+    const safeTaxonomy = await runPipelineStep(
+      runId,
+      "apply-taxonomy-safe",
+      null,
+      () => callLocalCatalogPipelineJson(
+        `/api/admin/catalog/ai-review/apply-taxonomy-safe?dryRun=${safeTaxonomyDryRun ? "1" : "0"}&limit=5000&minConfidence=0.9`,
+        { method: "POST", timeoutMs: 1200000 }
+      ),
+      reportLines,
+      warnings
+    );
+    stepResults.safeTaxonomy = safeTaxonomy.result || { error: safeTaxonomy.error };
+    if (!safeTaxonomy.ok) finalStatus = "WARNING";
+
+    const safeDeactivate = await runPipelineStep(
+      runId,
+      "apply-safe-deactivate",
+      null,
+      () => callLocalCatalogPipelineJson(
+        `/api/admin/catalog/ai-review/apply-safe-deactivate?dryRun=${safeDeactivateDryRun ? "1" : "0"}&limit=5000&minConfidence=0.95`,
+        { method: "POST", timeoutMs: 1200000 }
+      ),
+      reportLines,
+      warnings
+    );
+    stepResults.safeDeactivate = safeDeactivate.result || { error: safeDeactivate.error };
+    if (!safeDeactivate.ok) finalStatus = "WARNING";
+
+    const finalHealthStep = await runPipelineStep(
+      runId,
+      "final-health",
+      null,
+      async () => {
+        const rows = await getCatalogPipelineHealthSummary();
+        return jsonSafe(rows);
+      },
+      reportLines,
+      warnings
+    );
+    stepResults.finalHealth = finalHealthStep.result || { error: finalHealthStep.error };
+    if (!finalHealthStep.ok) finalStatus = "WARNING";
+
+    if (warnings.length && finalStatus === "COMPLETED") {
+      finalStatus = "WARNING";
+    }
+  } catch (e) {
+    finalStatus = "FAILED";
+    finalError = e?.stack || e?.message || String(e);
+    reportLines.push(`\n[${pipelineNowIso()}] PIPELINE FAILED`);
+    reportLines.push(String(finalError).slice(0, 5000));
+  }
+
+  const finishedAt = new Date();
+  const durationMs = Math.max(0, finishedAt.getTime() - startedAt.getTime());
+
+  reportLines.push(`\nFinished: ${finishedAt.toISOString()}`);
+  reportLines.push(`Duration ms: ${durationMs}`);
+  reportLines.push(`Final status: ${finalStatus}`);
+
+  if (warnings.length) {
+    reportLines.push(`\nWARNINGS`);
+    for (const w of warnings) reportLines.push(`- ${w}`);
+  }
+
+  reportLines.push(`\nSUMMARY JSON`);
+  reportLines.push(JSON.stringify(jsonSafe(stepResults), null, 2));
+
+  const reportText = reportLines.join("\n");
+  let reportPath = null;
+
+  try {
+    await fs.mkdir(CATALOG_PIPELINE_REPORT_DIR, { recursive: true });
+    reportPath = path.join(
+      CATALOG_PIPELINE_REPORT_DIR,
+      `${runId}.txt`
+    );
+    await fs.writeFile(reportPath, reportText, "utf8");
+  } catch (e) {
+    warnings.push(`report file write failed: ${e?.message || e}`);
+  }
+
+  await prisma.catalogPipelineRun.update({
+    where: { id: runId },
+    data: {
+      status: finalStatus,
+      finishedAt,
+      durationMs,
+      reportText,
+      reportPath,
+      error: finalError ? String(finalError).slice(0, 5000) : null,
+      meta: {
+        trigger,
+        merchants: CATALOG_PIPELINE_MERCHANTS,
+        warnings,
+        stepResults: jsonSafe(stepResults),
+      },
+    },
+  });
+
+  catalogNightlyPipelineRunning = null;
+
+  console.log("[toptry] catalog nightly pipeline finished", {
+    runId,
+    status: finalStatus,
+    durationMs,
+    reportPath,
+    warnings: warnings.length,
+  });
+
+  return {
+    ok: finalStatus !== "FAILED",
+    runId,
+    status: finalStatus,
+    durationMs,
+    reportPath,
+    warnings,
+  };
+}
+
+function startCatalogNightlyPipeline({ applySafe = false, trigger = "manual" } = {}) {
+  if (catalogNightlyPipelineRunning?.running) {
+    return {
+      ok: true,
+      queued: false,
+      running: true,
+      runId: catalogNightlyPipelineRunning.runId,
+      startedAt: catalogNightlyPipelineRunning.startedAt,
+    };
+  }
+
+  const startedAt = new Date().toISOString();
+  const runPromise = runCatalogNightlyPipeline({ applySafe, trigger })
+    .catch((e) => {
+      console.error("[toptry] catalog nightly pipeline fatal", e?.stack || e);
+      catalogNightlyPipelineRunning = null;
+    });
+
+  catalogNightlyPipelineRunning = {
+    running: true,
+    runId: null,
+    startedAt,
+    promise: runPromise,
+  };
+
+  return {
+    ok: true,
+    queued: true,
+    running: true,
+    startedAt,
+  };
+}
+
+app.post("/api/admin/catalog/nightly-pipeline/start", (req, res) => {
+  const applySafe = String(req.query.applySafe || "") === "1";
+  const trigger = String(req.query.trigger || "manual").slice(0, 80);
+
+  const result = startCatalogNightlyPipeline({ applySafe, trigger });
+  return res.status(result.queued ? 202 : 200).json(result);
+});
+
+app.get("/api/admin/catalog/nightly-pipeline/runs", async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit || 20)));
+
+    const runs = await prisma.catalogPipelineRun.findMany({
+      orderBy: { startedAt: "desc" },
+      take: limit,
+      include: {
+        steps: {
+          orderBy: { startedAt: "asc" },
+          select: {
+            id: true,
+            name: true,
+            merchant: true,
+            status: true,
+            startedAt: true,
+            finishedAt: true,
+            durationMs: true,
+            error: true,
+          },
+        },
+      },
+    });
+
+    return res.json({ ok: true, runs });
+  } catch (e) {
+    console.error("[toptry] catalog pipeline runs list error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.get("/api/admin/catalog/nightly-pipeline/runs/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+
+    const run = await prisma.catalogPipelineRun.findUnique({
+      where: { id },
+      include: {
+        steps: {
+          orderBy: { startedAt: "asc" },
+        },
+      },
+    });
+
+    if (!run) return res.status(404).json({ error: "Pipeline run not found" });
+    return res.json({ ok: true, run });
+  } catch (e) {
+    console.error("[toptry] catalog pipeline run read error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "toptry-api" });
 });

@@ -219,3 +219,43 @@ model CatalogProductAIReview {
   @@index([inputHash])
 }
 
+model CatalogPipelineRun {
+  id          String   @id
+  kind        String   @default("nightly-catalog")
+  status      String   @default("RUNNING")
+  applySafe   Boolean  @default(false)
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  durationMs  Int?
+  reportText  String?
+  reportPath  String?
+  meta        Json?
+  error       String?
+
+  steps CatalogPipelineStep[]
+
+  @@index([kind])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model CatalogPipelineStep {
+  id         String   @id @default(cuid())
+  runId      String
+  name       String
+  merchant   String?
+  status     String   @default("RUNNING")
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+  result     Json?
+  error      String?
+
+  run CatalogPipelineRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([name])
+  @@index([merchant])
+  @@index([status])
+}
+
