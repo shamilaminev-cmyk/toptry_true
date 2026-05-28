@@ -2479,15 +2479,57 @@ function normalizeCatalogCurrency(value) {
   return s;
 }
 
-function normalizeCatalogSizes(raw) {
-  const s = String(raw || "").toUpperCase();
+function normalizeCatalogSizeToken(raw) {
+  const s = String(raw || "")
+    .trim()
+    .toUpperCase()
+    .replace(",", ".")
+    .replace(/^2XL$/, "XXL")
+    .replace(/^3XL$/, "XXL")
+    .replace(/^ONE\s*SIZE$/, "ONE")
+    .replace(/^ONESIZE$/, "ONE");
 
-  const letterSizes = Array.from(
-    new Set(
-      (s.match(/\b(XXL|XL|XS|S|M|L)\b/g) || [])
-        .map((v) => String(v).trim().toUpperCase())
-    )
-  );
+  if (!s) return "";
+  if (["XXL", "XL", "XS", "S", "M", "L", "ONE"].includes(s)) return s;
+  return "";
+}
+
+function normalizeRussianClothingNumberToLetter(n) {
+  const x = Number(String(n || "").replace(",", "."));
+  if (!Number.isFinite(x)) return "";
+
+  // Conservative RU clothing size mapping into TopTry profile sizes.
+  if (x <= 42) return "XS";
+  if (x <= 44) return "S";
+  if (x <= 46) return "M";
+  if (x <= 48) return "L";
+  if (x <= 50) return "XL";
+  if (x <= 56) return "XXL";
+  return "";
+}
+
+function normalizeCatalogSizes(raw, category = "") {
+  const s = String(raw || "").toUpperCase();
+  const c = String(category || "").toUpperCase();
+
+  const letterSizes = new Set();
+
+  for (const m of s.matchAll(/\b(XXL|XL|XS|S|M|L|2XL|3XL|ONE\s*SIZE|ONESIZE)\b/g)) {
+    const v = normalizeCatalogSizeToken(m[1]);
+    if (v) letterSizes.add(v);
+  }
+
+  // Clothing numeric sizes and ranges, e.g. 42-44, 46-48, 48-50.
+  // Apply only to clothing categories, not shoes.
+  if (["TOPS", "BOTTOMS", "JACKETS", "DRESS"].includes(c)) {
+    for (const m of s.matchAll(/\b(3[8-9]|4[0-9]|5[0-6])(?:\s*[-–]\s*(3[8-9]|4[0-9]|5[0-6]))?\b/g)) {
+      const a = Number(m[1]);
+      const b = m[2] ? Number(m[2]) : a;
+      const mid = Math.round((a + b) / 2);
+      const v = normalizeRussianClothingNumberToLetter(mid);
+      if (v) letterSizes.add(v);
+    }
+  }
 
   const shoeSizes = Array.from(
     new Set(
@@ -2496,7 +2538,20 @@ function normalizeCatalogSizes(raw) {
     )
   );
 
-  return { letterSizes, shoeSizes };
+  return {
+    letterSizes: Array.from(letterSizes),
+    shoeSizes,
+  };
+}
+
+function isSizeLikeParamValue(value) {
+  const v = String(value || "").trim();
+  if (!v) return false;
+
+  // Avoid swallowing long marketing/description chunks.
+  if (v.length > 80) return false;
+
+  return /(^|[\s,;/])((XXL|XL|XS|S|M|L|2XL|3XL|ONE\s*SIZE|ONESIZE)|((3[8-9]|4[0-9]|5[0-6])\s*[-–]\s*(3[8-9]|4[0-9]|5[0-6]))|(3[5-9]|4[0-6])([.,]5)?)([\s,;/]|$)/i.test(v);
 }
 
 function extractExplicitSizeText(row) {
@@ -2519,11 +2574,21 @@ function extractExplicitSizeText(row) {
       key === "размер" ||
       key === "размеры" ||
       key === "size" ||
-      key === "sizes" ||
-      key.includes("размер товара")
+      key === "sizes"
     ) {
       parts.push(value);
+      continue;
     }
+
+    // Remington feed puts actual product size into "Характеристики:S", "Характеристики:2XL".
+    // Accept only short size-like values.
+    if (key === "характеристики" && isSizeLikeParamValue(value)) {
+      parts.push(value);
+      continue;
+    }
+
+    // Do NOT generally use "Размер товара на модели" as available size.
+    // It describes the sample worn by the model, not stock availability.
   }
 
   return parts.join(" ");
@@ -2531,7 +2596,7 @@ function extractExplicitSizeText(row) {
 
 function buildCatalogSizes(row, category, rawText) {
   const text = extractExplicitSizeText(row);
-  const { letterSizes, shoeSizes } = normalizeCatalogSizes(text);
+  const { letterSizes, shoeSizes } = normalizeCatalogSizes(text, category);
   const c = String(category || "").toUpperCase();
 
   return {
