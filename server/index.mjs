@@ -2644,7 +2644,7 @@ function normalizeCatalogCategory(raw) {
     return "SHOES";
   }
 
-  if (/(шапк|кепк|cap|bag|сумк|belt|ремень|очки|очк|watch|час|перчат|шарф|рюкзак|кошелек|wallet|gloves|scarf)/i.test(s)) {
+  if (/(шапк|кепк|cap|bag|сумк|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|перчат|шарф|рюкзак|кошелек|wallet|gloves|scarf)/i.test(s)) {
     return "ACCESSORIES";
   }
 
@@ -2694,7 +2694,7 @@ function normalizeCatalogDisplayCategory(raw) {
     return "TOPS";
   }
 
-  if (/(шапк|кепк|cap|belt|ремень|очки|очк|watch|час|перчат|шарф|gloves|scarf)/i.test(s)) {
+  if (/(шапк|кепк|cap|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|перчат|шарф|gloves|scarf)/i.test(s)) {
     return "ACCESSORIES";
   }
 
