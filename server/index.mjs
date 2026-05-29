@@ -7258,6 +7258,7 @@ const CATALOG_PIPELINE_MERCHANTS = [
   "thecultt",
   "sportcourt",
   "sportmaster",
+  "finnflare",
 ];
 
 const CATALOG_PIPELINE_REPORT_DIR =
