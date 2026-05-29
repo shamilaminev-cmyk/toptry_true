@@ -164,12 +164,32 @@ function isExternalCatalogImageUrlForProxy(url) {
       "www.sportcourt.ru",
       "cdn.sportmaster.ru",
       "www.rendez-vous.ru",
+      "finn-flare.ru",
+      "www.finn-flare.ru",
+      "static.finn-flare.ru",
+      "cdn.finn-flare.ru",
+      "img.finn-flare.ru",
+      "media.finn-flare.ru",
+      "finnflare.com",
+      "www.finnflare.com",
+      "finn-flare.com",
+      "www.finn-flare.com",
       "static.rendez-vous.ru",
       "goods.thecultt.com",
       "thecultt.com",
       "www.thecultt.com",
       "remington.fashion",
       "www.remington.fashion",
+      "finn-flare.ru",
+      "www.finn-flare.ru",
+      "static.finn-flare.ru",
+      "cdn.finn-flare.ru",
+      "img.finn-flare.ru",
+      "media.finn-flare.ru",
+      "finnflare.com",
+      "www.finnflare.com",
+      "finn-flare.com",
+      "www.finn-flare.com",
     ]).has(host);
   } catch {
     return false;
@@ -2859,7 +2879,7 @@ function buildCatalogDbWhere({
   sizeShoes,
   sizeLoose,
 }) {
-  const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington"];
+  const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington", "finnflare"];
 
   const and = [{ isActive: true }];
 
@@ -3191,6 +3211,16 @@ async function isUsableCatalogImageUrl(url) {
   "www.thecultt.com",
   "remington.fashion",
   "www.remington.fashion",
+  "finn-flare.ru",
+  "www.finn-flare.ru",
+  "static.finn-flare.ru",
+  "cdn.finn-flare.ru",
+  "img.finn-flare.ru",
+  "media.finn-flare.ru",
+  "finnflare.com",
+  "www.finnflare.com",
+  "finn-flare.com",
+  "www.finn-flare.com",
 ].includes(parsed.hostname)) return false;
 
   try {
@@ -3372,7 +3402,7 @@ const catalogImportJobs = new Map();
 
 function startCatalogImportJob(merchant) {
   const m = String(merchant || "").trim().toLowerCase();
-  const allowed = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt"]);
+  const allowed = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt", "finnflare"]);
 
   if (!allowed.has(m)) {
     return { ok: false, status: 400, error: "Unknown merchant" };
@@ -4700,7 +4730,7 @@ app.post("/api/admin/catalog/ai-review/apply-safe-deactivate", async (req, res) 
     const limit = Math.max(1, Math.min(5000, Number(req.query.limit || 500)));
     const minConfidence = Math.max(0, Math.min(1, Number(req.query.minConfidence || 0.95)));
 
-    const allowedMerchants = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt"]);
+    const allowedMerchants = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt", "finnflare"]);
     if (merchant && !allowedMerchants.has(merchant)) {
       return res.status(400).json({ error: "Unknown merchant" });
     }
@@ -4837,7 +4867,7 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-dryrun", async (req, res) 
     const minConfidence = Math.max(0, Math.min(1, Number(req.query.minConfidence || 0.75)));
     const includeAccessories = String(req.query.includeAccessories || "") === "1";
 
-    const allowedMerchants = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt"]);
+    const allowedMerchants = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt", "finnflare"]);
     if (merchant && !allowedMerchants.has(merchant)) {
       return res.status(400).json({ error: "Unknown merchant" });
     }
@@ -5103,7 +5133,7 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-safe", async (req, res) =>
     const limit = Math.max(1, Math.min(5000, Number(req.query.limit || 500)));
     const minConfidence = Math.max(0, Math.min(1, Number(req.query.minConfidence || 0.9)));
 
-    const allowedMerchants = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt"]);
+    const allowedMerchants = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt", "finnflare"]);
     if (merchant && !allowedMerchants.has(merchant)) {
       return res.status(400).json({ error: "Unknown merchant" });
     }
@@ -5626,6 +5656,243 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
 
 
 
+function isFinnFlareCatalogItemRelevantAfterAllowList(row, title, brand = "") {
+  const stable = catalogStableIdentityText(row, title, brand);
+
+  if (!stable) return false;
+
+  const allowRe =
+    /(футболк|майк|лонгслив|рубаш|блуз|поло|топ\b|худи|толстовк|свитшот|джемпер|свитер|кардиган|водолазк|плать|сарафан|юбк|брюк|джинс|шорт|куртк|пальто|пуховик|ветровк|плащ|жилет|костюм|комбинезон|блейзер|жакет|пиджак|сумк|рюкзак|t-?shirt|tee\b|shirt|blouse|polo|hoodie|sweatshirt|sweater|cardigan|dress|skirt|pants|trousers|jeans|shorts|jacket|coat|vest|blazer|bag|backpack)/i;
+
+  if (!allowRe.test(stable)) return false;
+
+  const hardRejectRe =
+    /(нижн[её]е\s+бель[её]|термобель[её]|бель[её]|трус[ыов]?|бюстгальтер|лифчик|бра\b|носк[иов]?|гольф[ыов]?|колготк|купаль|плавк|бикини|пляж|swim|beach|underwear|briefs?|boxers?|bra\b|socks?|tights?|украшен|бижут|серьг|браслет|колье|очки|ремень|перчат|шарф|платок|шапк|панам|кепк|бейсболк)/i;
+
+  return !hardRejectRe.test(stable);
+}
+
+function isFinnFlareCatalogImageUrl(url) {
+  try {
+    const host = new URL(String(url || "").trim()).hostname.toLowerCase();
+    return [
+      "finn-flare.ru",
+      "www.finn-flare.ru",
+      "static.finn-flare.ru",
+      "cdn.finn-flare.ru",
+      "img.finn-flare.ru",
+      "media.finn-flare.ru",
+      "finnflare.com",
+      "www.finnflare.com",
+      "finn-flare.com",
+      "www.finn-flare.com",
+    ].includes(host) || host.includes("finn-flare") || host.includes("finnflare");
+  } catch {
+    return false;
+  }
+}
+
+function mergeCatalogSizeArrays(a = {}, b = {}) {
+  return {
+    sizesTop: sortCatalogDisplaySizes([...(a.sizesTop || []), ...(b.sizesTop || [])]),
+    sizesBottom: sortCatalogDisplaySizes([...(a.sizesBottom || []), ...(b.sizesBottom || [])]),
+    sizesShoes: sortCatalogDisplaySizes([...(a.sizesShoes || []), ...(b.sizesShoes || [])]),
+  };
+}
+
+app.post("/api/admin/catalog/import/finnflare", async (_req, res) => {
+  try {
+    const FEED_URL = process.env.ADMITAD_FINNFLARE_FEED_URL || "";
+    if (!FEED_URL) {
+      return res.status(500).json({ error: "ADMITAD_FINNFLARE_FEED_URL is not set" });
+    }
+
+    const resp = await fetch(FEED_URL);
+    if (!resp.ok) {
+      return res.status(502).json({ error: `Feed fetch failed: ${resp.status}` });
+    }
+
+    const csv = await resp.text();
+    const rows = parseCsv(csv);
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    let aggregatedRows = 0;
+    const seenRows = new Set();
+    const grouped = new Map();
+    const importDiag = createCatalogImportDiagnostics();
+
+    await prisma.catalogProduct.updateMany({
+      where: { merchant: "finnflare" },
+      data: { isActive: false },
+    });
+
+    for (const r of rows) {
+      const title = pickFirst(r, ["name", "title", "product_name", "model"]);
+      const brand = pickFirst(r, ["brand", "vendor", "manufacturer"]) || "FINN FLARE";
+      const imageUrl = pickFirst(r, ["image", "imageurl", "picture", "img"]);
+      const productUrl = pickFirst(r, ["url", "product_url", "link"]);
+      const affiliateUrl = pickFirst(r, ["deeplink", "affiliate_url", "url", "product_url", "link"]);
+      const price = toPrice(pickFirst(r, ["price", "current_price", "price_value"]));
+      const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
+
+      const rawCategory = [
+        pickFirst(r, ["categoryId"]),
+        pickFirst(r, ["market_category"]),
+        pickFirst(r, ["typePrefix"]),
+        pickFirst(r, ["param"]),
+        title,
+        brand,
+      ].join(" ").toLowerCase();
+
+      if (!title || !imageUrl || !affiliateUrl || price === null || price <= 0) {
+        importDiag.skip("missingRequired", r);
+        skipped++;
+        continue;
+      }
+
+      if (!isFinnFlareCatalogItemRelevantAfterAllowList(r, title, brand)) {
+        importDiag.skip("notTryOnRelevant", r);
+        skipped++;
+        continue;
+      }
+
+      const hasUsableImage = isFinnFlareCatalogImageUrl(imageUrl)
+        ? true
+        : await isUsableCatalogImageUrl(imageUrl);
+
+      if (!hasUsableImage) {
+        importDiag.skip("imageUnavailable", r);
+        skipped++;
+        continue;
+      }
+
+      const rowUniqueId = pickFirst(r, ["id", "barcode", "vendorCode", "url"]) || JSON.stringify(r);
+      if (seenRows.has(rowUniqueId)) {
+        importDiag.skip("duplicateSourceRow", r);
+        skipped++;
+        continue;
+      }
+      seenRows.add(rowUniqueId);
+
+      const haystack = [
+        title,
+        brand,
+        pickFirst(r, ["category", "category_name", "google_product_category"]),
+        pickFirst(r, ["categoryId"]),
+        pickFirst(r, ["market_category"]),
+        pickFirst(r, ["gender", "sex"]),
+        pickFirst(r, ["param"]),
+      ].join(" ");
+
+      const externalId = buildCatalogExternalId(r);
+      const gender = normalizeCatalogGender(haystack);
+      const category = normalizeCatalogCategory([rawCategory, title].join(" "));
+      const catalogSizes = buildCatalogSizes(r, category, [rawCategory, haystack].join(" "));
+
+      const existingGroup = grouped.get(externalId);
+
+      if (existingGroup) {
+        existingGroup.catalogSizes = mergeCatalogSizeArrays(existingGroup.catalogSizes, catalogSizes);
+        existingGroup.rawRowsCount += 1;
+        existingGroup.rawSizes = uniqueStrings([
+          ...(existingGroup.rawSizes || []),
+          ...catalogSizes.sizesTop,
+          ...catalogSizes.sizesBottom,
+          ...catalogSizes.sizesShoes,
+        ]);
+        aggregatedRows++;
+        continue;
+      }
+
+      grouped.set(externalId, {
+        externalId,
+        catalogSizes,
+        rawRowsCount: 1,
+        rawSizes: uniqueStrings([
+          ...catalogSizes.sizesTop,
+          ...catalogSizes.sizesBottom,
+          ...catalogSizes.sizesShoes,
+        ]),
+        data: {
+          id: `cat-finnflare-${externalId}`,
+          merchant: "finnflare",
+          externalId,
+          title,
+          brand: brand || "FINN FLARE",
+          category,
+          gender,
+          price,
+          oldPrice,
+          currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
+          imageUrl,
+          productUrl: productUrl || affiliateUrl,
+          affiliateUrl,
+          isActive: true,
+          rawPayload: r,
+        },
+      });
+    }
+
+    for (const group of grouped.values()) {
+      const data = {
+        ...group.data,
+        ...group.catalogSizes,
+        rawPayload: {
+          ...(group.data.rawPayload || {}),
+          _toptryAggregatedRows: group.rawRowsCount,
+          _toptryAggregatedSizes: group.rawSizes,
+        },
+      };
+
+      const existing = await prisma.catalogProduct.findUnique({
+        where: {
+          merchant_externalId: {
+            merchant: "finnflare",
+            externalId: group.externalId,
+          },
+        },
+      });
+
+      if (existing) {
+        await prisma.catalogProduct.update({
+          where: { id: existing.id },
+          data,
+        });
+        updated++;
+      } else {
+        await prisma.catalogProduct.create({ data });
+        created++;
+      }
+    }
+
+    const restoredSafe = { count: 0 };
+    const deactivatedBlocked = await deactivateBlockedCatalogProducts("finnflare");
+
+    return res.json({
+      ok: true,
+      merchant: "finnflare",
+      total: rows.length,
+      created,
+      updated,
+      skipped,
+      aggregatedRows,
+      importedGroups: grouped.size,
+      restoredSafe: restoredSafe.count || 0,
+      deactivatedBlocked: deactivatedBlocked.count || 0,
+      active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
+      skippedByReason: importDiag.byReason,
+      skippedSamples: importDiag.samples,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/import/finnflare error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
+
 function fetchUrlBufferViaNode(url, { headers = {}, timeoutMs = 20000, maxBytes = 12 * 1024 * 1024, maxRedirects = 4 } = {}) {
   return new Promise((resolve, reject) => {
     let parsed;
@@ -5895,6 +6162,16 @@ app.get("/api/catalog/image", async (req, res) => {
           "www.thecultt.com",
           "remington.fashion",
           "www.remington.fashion",
+          "finn-flare.ru",
+          "www.finn-flare.ru",
+          "static.finn-flare.ru",
+          "cdn.finn-flare.ru",
+          "img.finn-flare.ru",
+          "media.finn-flare.ru",
+          "finnflare.com",
+          "www.finnflare.com",
+          "finn-flare.com",
+          "www.finn-flare.com",
         ]);
 
         if (allowedHosts.has(parsed.hostname)) {
@@ -6749,7 +7026,9 @@ app.get("/api/catalog/products", async (req, res) => {
                 ? "The Cultt"
                 : p.merchant === "remington"
                   ? "Remington"
-                  : "Sportcourt",
+                  : p.merchant === "finnflare"
+                    ? "FINN FLARE"
+                    : "Sportcourt",
         availability: p.isActive,
         isCatalog: true,
         brand: p.brand || undefined,
