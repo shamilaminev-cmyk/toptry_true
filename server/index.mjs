@@ -2640,6 +2640,11 @@ function normalizeCatalogGender(raw) {
 function normalizeCatalogCategory(raw) {
   const s = String(raw || "").toLowerCase();
 
+  // "Джинсовая рубашка" is a shirt made of denim, not bottoms/jeans.
+  if (/(джинсов|denim).{0,40}(рубаш|сорочк|shirt)|(рубаш|сорочк|shirt).{0,40}(джинсов|denim)/i.test(s)) {
+    return "TOPS";
+  }
+
   if (/(кроссов|кед|ботин|ботильон|сапог|угг|туфл|балетк|лофер|мокас|босонож|эспадриль|shoe|sneaker|loafer|sandals|сандал|сланц|шл[её]п|домашняя обувь|espadrille)/i.test(s)) {
     return "SHOES";
   }
@@ -3327,7 +3332,8 @@ function inferCatalogTaxonomy(product) {
         ? "BLAZERS"
         : "OUTERWEAR";
     } else if (category === "BOTTOMS") {
-      if (/юбк|skirt/.test(sourceText)) taxonomySubgroup = "SKIRTS";
+      if (/(джинсов|denim).{0,40}(рубаш|сорочк|shirt)|(рубаш|сорочк|shirt).{0,40}(джинсов|denim)/.test(sourceText)) taxonomySubgroup = "SHIRTS";
+      else if (/юбк|skirt/.test(sourceText)) taxonomySubgroup = "SKIRTS";
       else if (/джинс|denim|jeans/.test(sourceText)) taxonomySubgroup = "DENIM";
       else taxonomySubgroup = "TROUSERS";
     } else if (category === "TOPS") {
@@ -4323,6 +4329,10 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "POLO";
     item.isTryOnRelevant = true;
+  } else if (/платье[-\s]+футболк|платья[-\s]+футболк|dress[-\s]+t-?shirt/i.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "DRESSES";
+    item.isTryOnRelevant = true;
   } else if (/футболк|t-?shirt|\btee\b/i.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "TSHIRTS";
@@ -5039,8 +5049,8 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     code: "TITLE_TSHIRTS",
     toGroup: "CLOTHING",
     toSubgroup: "TSHIRTS",
-    titleRe: /(футболк|майк|топ бра|спортивный бра|tank top|t-?shirt|tee\b)/i,
-    rejectTitleRe: /(рубашк|блузк|куртк|пуховик|ветровк|пальто|жилет|худи|толстовк|свитшот|джемпер|свитер|кардиган|водолазк)/i,
+    titleRe: /(?<!платье[-\s])(?<!платья[-\s])(футболк|майк|топ бра|спортивный бра|tank top|t-?shirt|tee\b)/i,
+    rejectTitleRe: /(плать|сарафан|комбинезон|dress|jumpsuit|рубашк|блузк|куртк|пуховик|ветровк|пальто|жилет|худи|толстовк|свитшот|джемпер|свитер|кардиган|водолазк)/i,
   },
   {
     code: "TITLE_HOODIES",
@@ -5087,6 +5097,7 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     toGroup: "CLOTHING",
     toSubgroup: "DENIM",
     titleRe: /(джинс|denim|jeans)/i,
+    rejectTitleRe: /(рубашк|сорочк|shirt|blouse)/i,
   },
   {
     code: "TITLE_SHIRTS",
