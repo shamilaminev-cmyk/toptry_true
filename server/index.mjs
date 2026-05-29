@@ -3336,7 +3336,8 @@ function inferCatalogTaxonomy(product) {
       if (knitPoloRe.test(sourceText)) taxonomySubgroup = "KNITWEAR";
       else if (/худи|hoodie|свитшот|sweatshirt|толстов/.test(sourceText)) taxonomySubgroup = "HOODIES";
       else if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(sourceText)) taxonomySubgroup = "KNITWEAR";
-      else if (/рубаш|сорочк|блуз|лонгслив|shirt|blouse|longsleeve|long sleeve/.test(sourceText)) taxonomySubgroup = "SHIRTS";
+      else if (/футболк|\bt-?shirt\b|\btee\b/.test(sourceText)) taxonomySubgroup = "TSHIRTS";
+    else if (/рубаш|сорочк|блуз|лонгслив|shirt|blouse|longsleeve|long sleeve/.test(sourceText)) taxonomySubgroup = "SHIRTS";
       else if (/футбол|майк|t-?shirt|tee/.test(sourceText)) taxonomySubgroup = "TSHIRTS";
       else if (/поло|polo/.test(sourceText)) taxonomySubgroup = "POLO";
       else taxonomySubgroup = "TOPS";
@@ -5091,7 +5092,7 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     code: "TITLE_SHIRTS",
     toGroup: "CLOTHING",
     toSubgroup: "SHIRTS",
-    titleRe: /(рубашк|сорочк|блузк|blouse|button[- ]?down|\bshirt\b)/i,
+    titleRe: /(?<!платье[-\s])(?<!платья[-\s])(рубашк|сорочк|блузк|blouse|button[- ]?down|\bshirt\b)/i,
     rejectTitleRe: /(куртк|пуховик|ветровк|пальто|жилет|футболк|t-?shirt|tee\b|top\b|tank top|майк|худи|толстовк|свитшот)/i,
   },
 ];
