@@ -172,6 +172,7 @@ function isExternalCatalogImageUrlForProxy(url) {
       "media.finn-flare.ru",
       "finnflare.com",
       "www.finnflare.com",
+      "cdn.finnflare.com",
       "finn-flare.com",
       "www.finn-flare.com",
       "static.rendez-vous.ru",
@@ -188,6 +189,7 @@ function isExternalCatalogImageUrlForProxy(url) {
       "media.finn-flare.ru",
       "finnflare.com",
       "www.finnflare.com",
+      "cdn.finnflare.com",
       "finn-flare.com",
       "www.finn-flare.com",
     ]).has(host);
@@ -3229,6 +3231,7 @@ async function isUsableCatalogImageUrl(url) {
   "media.finn-flare.ru",
   "finnflare.com",
   "www.finnflare.com",
+  "cdn.finnflare.com",
   "finn-flare.com",
   "www.finn-flare.com",
 ].includes(parsed.hostname)) return false;
@@ -5706,6 +5709,7 @@ function isFinnFlareCatalogImageUrl(url) {
       "media.finn-flare.ru",
       "finnflare.com",
       "www.finnflare.com",
+      "cdn.finnflare.com",
       "finn-flare.com",
       "www.finn-flare.com",
     ].includes(host) || host.includes("finn-flare") || host.includes("finnflare");
@@ -6192,6 +6196,7 @@ app.get("/api/catalog/image", async (req, res) => {
           "media.finn-flare.ru",
           "finnflare.com",
           "www.finnflare.com",
+          "cdn.finnflare.com",
           "finn-flare.com",
           "www.finn-flare.com",
         ]);
