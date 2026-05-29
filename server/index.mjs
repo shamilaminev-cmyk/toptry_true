@@ -2640,6 +2640,11 @@ function normalizeCatalogGender(raw) {
 function normalizeCatalogCategory(raw) {
   const s = String(raw || "").toLowerCase();
 
+  // "Куртка-рубашка" / overshirt is outerwear, even if it contains "рубашка".
+  if (/(куртк|jacket).{0,20}(рубаш|сорочк|shirt)|(рубаш|сорочк|shirt).{0,20}(куртк|jacket)/i.test(s)) {
+    return "JACKETS";
+  }
+
   // "Джинсовая рубашка" is a shirt made of denim, not bottoms/jeans.
   if (/(джинсов|denim).{0,40}(рубаш|сорочк|shirt)|(рубаш|сорочк|shirt).{0,40}(джинсов|denim)/i.test(s)) {
     return "TOPS";
@@ -3339,7 +3344,8 @@ function inferCatalogTaxonomy(product) {
     } else if (category === "TOPS") {
       const knitPoloRe = /(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)[\s\-]+поло|поло[\s\-]+(джемпер|свитер|кардиган|водолазк|knit|sweater|cardigan)/i;
 
-      if (knitPoloRe.test(sourceText)) taxonomySubgroup = "KNITWEAR";
+      if (/(куртк|jacket).{0,20}(рубаш|сорочк|shirt)|(рубаш|сорочк|shirt).{0,20}(куртк|jacket)/i.test(sourceText)) taxonomySubgroup = "OUTERWEAR";
+      else if (knitPoloRe.test(sourceText)) taxonomySubgroup = "KNITWEAR";
       else if (/худи|hoodie|свитшот|sweatshirt|толстов/.test(sourceText)) taxonomySubgroup = "HOODIES";
       else if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(sourceText)) taxonomySubgroup = "KNITWEAR";
       else if (/футболк|\bt-?shirt\b|\btee\b/.test(sourceText)) taxonomySubgroup = "TSHIRTS";
@@ -4332,6 +4338,10 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
   } else if (/платье[-\s]+футболк|платья[-\s]+футболк|dress[-\s]+t-?shirt/i.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "DRESSES";
+    item.isTryOnRelevant = true;
+  } else if (/(куртк|jacket).{0,20}(рубашк|сорочк|shirt)|(рубашк|сорочк|shirt).{0,20}(куртк|jacket)/i.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "OUTERWEAR";
     item.isTryOnRelevant = true;
   } else if (/футболк|t-?shirt|\btee\b/i.test(title)) {
     item.taxonomyGroup = "CLOTHING";
