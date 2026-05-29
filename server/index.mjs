@@ -2648,11 +2648,11 @@ function normalizeCatalogCategory(raw) {
     return "ACCESSORIES";
   }
 
-  if (/(куртк|пальто|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
+  if (/(куртк|пальто|плащ|пиджак|жакет|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
     return "JACKETS";
   }
 
-  if (/(плать|dress)/i.test(s)) {
+  if (/(плать|сарафан|комбинезон|jumpsuit|dress)/i.test(s)) {
     return "DRESS";
   }
 
@@ -2660,7 +2660,7 @@ function normalizeCatalogCategory(raw) {
     return "BOTTOMS";
   }
 
-  if (/(футбол|майк|поло|рубаш|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat|bra|бюстгаль|лиф|бикини)/i.test(s)) {
+  if (/(футбол|майк|поло|рубаш|сорочк|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat|bra|бюстгаль|лиф|бикини)/i.test(s)) {
     return "TOPS";
   }
 
@@ -2678,11 +2678,11 @@ function normalizeCatalogDisplayCategory(raw) {
     return "SHOES";
   }
 
-  if (/(куртк|пальто|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
+  if (/(куртк|пальто|плащ|пиджак|жакет|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
     return "OUTERWEAR";
   }
 
-  if (/(плать|dress)/i.test(s)) {
+  if (/(плать|сарафан|комбинезон|jumpsuit|dress)/i.test(s)) {
     return "DRESSES";
   }
 
@@ -2690,7 +2690,7 @@ function normalizeCatalogDisplayCategory(raw) {
     return "BOTTOMS";
   }
 
-  if (/(футбол|майк|поло|рубаш|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat)/i.test(s)) {
+  if (/(футбол|майк|поло|рубаш|сорочк|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat)/i.test(s)) {
     return "TOPS";
   }
 
@@ -3336,7 +3336,7 @@ function inferCatalogTaxonomy(product) {
       if (knitPoloRe.test(sourceText)) taxonomySubgroup = "KNITWEAR";
       else if (/худи|hoodie|свитшот|sweatshirt|толстов/.test(sourceText)) taxonomySubgroup = "HOODIES";
       else if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(sourceText)) taxonomySubgroup = "KNITWEAR";
-      else if (/рубаш|блуз|лонгслив|shirt|blouse|longsleeve|long sleeve/.test(sourceText)) taxonomySubgroup = "SHIRTS";
+      else if (/рубаш|сорочк|блуз|лонгслив|shirt|blouse|longsleeve|long sleeve/.test(sourceText)) taxonomySubgroup = "SHIRTS";
       else if (/футбол|майк|t-?shirt|tee/.test(sourceText)) taxonomySubgroup = "TSHIRTS";
       else if (/поло|polo/.test(sourceText)) taxonomySubgroup = "POLO";
       else taxonomySubgroup = "TOPS";
@@ -4326,7 +4326,7 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "TSHIRTS";
     item.isTryOnRelevant = true;
-  } else if (/рубашк|button[- ]?down|\bshirt\b/i.test(title)) {
+  } else if (/рубашк|сорочк|button[- ]?down|\bshirt\b/i.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "SHIRTS";
     item.isTryOnRelevant = true;
@@ -5079,7 +5079,7 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     code: "TITLE_DRESSES",
     toGroup: "CLOTHING",
     toSubgroup: "DRESSES",
-    titleRe: /(плать|dress)/i,
+    titleRe: /(плать|сарафан|комбинезон|jumpsuit|dress)/i,
   },
   {
     code: "TITLE_DENIM",
@@ -5091,7 +5091,7 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     code: "TITLE_SHIRTS",
     toGroup: "CLOTHING",
     toSubgroup: "SHIRTS",
-    titleRe: /(рубашк|блузк|blouse|button[- ]?down|\bshirt\b)/i,
+    titleRe: /(рубашк|сорочк|блузк|blouse|button[- ]?down|\bshirt\b)/i,
     rejectTitleRe: /(куртк|пуховик|ветровк|пальто|жилет|футболк|t-?shirt|tee\b|top\b|tank top|майк|худи|толстовк|свитшот)/i,
   },
 ];
