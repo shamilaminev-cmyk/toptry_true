@@ -25,6 +25,26 @@ const Profile = () => {
   }, [avatarOpen, busy]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const freshUser = await actions.refreshMe();
+        if (!cancelled && !freshUser) {
+          setErr('Сессия истекла. Войдите заново, чтобы продолжить.');
+          navigate('/auth');
+        }
+      } catch {
+        // ignore: store handles session state
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     setSizeTop(user?.sizeTop || '');
     setSizeBottom(user?.sizeBottom || '');
     setSizeShoes(user?.sizeShoes || '');
@@ -267,7 +287,14 @@ const Profile = () => {
               setErr(null);
               try {
                 await actions.updateProfileSizes(sizeTop, sizeBottom, sizeShoes);
+                await actions.refreshMe();
+                setErr('Размеры сохранены');
               } catch (e: any) {
+                if (e?.message === 'SESSION_EXPIRED') {
+                  setErr('Сессия истекла. Войдите заново, чтобы сохранить размеры.');
+                  navigate('/auth');
+                  return;
+                }
                 setErr(e?.message || 'Не удалось сохранить размеры');
               }
             }}

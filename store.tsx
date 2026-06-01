@@ -21,6 +21,7 @@ interface AppState {
     startPhoneAuth: (phone: string) => Promise<void>;
     verifyPhoneAuth: (phone: string, code: string) => Promise<any>;
     updateProfileSizes: (sizeTop: string, sizeBottom: string, sizeShoes: string) => Promise<void>;
+    refreshMe: () => Promise<User | null>;
     logout: () => Promise<void>;
     toggleHomeLayout: () => void;
     addToWardrobe: (product: Product) => void;
@@ -198,34 +199,52 @@ return () => clearTimeout(t);
     })();
   }, []);
 
-  // Restore server session (JWT in httpOnly cookie)
+  // Restore server session (JWT in httpOnly cookie).
+  // Important: backend is the source of truth. If /api/auth/me returns user:null,
+  // clear stale local user from localStorage/state so the app does not look logged in.
   useEffect(() => {
     (async () => {
       try {
         const resp = await fetch('/api/auth/me', { credentials: 'include' });
-        if (!resp.ok) return;
+
+        if (!resp.ok) {
+          if (resp.status === 401) {
+            setUser(null);
+            setWardrobe([]);
+            setLooks([]);
+          }
+          return;
+        }
+
         const data = await resp.json().catch(() => null);
-        if (!data?.user) return;
+
+        if (!data?.user) {
+          setUser(null);
+          setWardrobe([]);
+          setLooks([]);
+          return;
+        }
+
         const u = data.user;
-        setUser((prev) => {
-          return {
-            id: u.id,
-            email: u.email,
-            name: prev?.name || u.username,
-            username: u.username,
-            phone: prev?.phone || '',
-            avatarUrl: u.avatarUrl || prev?.avatarUrl,
-            selfieUrl: prev?.selfieUrl,
-            sizeTop: u.sizeTop || prev?.sizeTop,
-            sizeBottom: u.sizeBottom || prev?.sizeBottom,
-            sizeShoes: u.sizeShoes || prev?.sizeShoes,
-            tier: prev?.tier || SubscriptionTier.FREE,
-            limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
-            isPublic: !!u.isPublic,
-          };
-        });
+        setUser((prev) => ({
+          id: u.id,
+          email: u.email || undefined,
+          name: u.username || undefined,
+          username: u.username || undefined,
+          phone: u.phone || prev?.phone || '',
+          avatarUrl: u.avatarUrl || undefined,
+          selfieUrl: prev?.selfieUrl,
+          sizeTop: u.sizeTop || undefined,
+          sizeBottom: u.sizeBottom || undefined,
+          sizeShoes: u.sizeShoes || undefined,
+          tier: prev?.tier || SubscriptionTier.FREE,
+          limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
+          isPublic: !!u.isPublic,
+        }));
       } catch {
-        // ignore
+        // Network errors should not forcibly log the user out.
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -490,6 +509,13 @@ register: async (email: string, username: string, password: string) => {
 
       const data = await resp.json().catch(() => ({}));
 
+      if (resp.status === 401) {
+        setUser(null);
+        setWardrobe([]);
+        setLooks([]);
+        throw new Error('SESSION_EXPIRED');
+      }
+
       if (!resp.ok) {
         throw new Error(data?.error || 'Profile update failed');
       }
@@ -516,23 +542,47 @@ register: async (email: string, username: string, password: string) => {
     refreshMe: async () => {
       try {
         const resp = await fetch('/api/auth/me', { credentials: 'include' });
-        if (!resp.ok) return;
+
+        if (!resp.ok) {
+          if (resp.status === 401) {
+            setUser(null);
+            setWardrobe([]);
+            setLooks([]);
+          }
+          return null;
+        }
+
         const data = await resp.json().catch(() => null);
-        if (!data?.user) return;
+
+        if (!data?.user) {
+          setUser(null);
+          setWardrobe([]);
+          setLooks([]);
+          return null;
+        }
+
         const u = data.user;
-        setUser((prev) =>
-          prev
-            ? {
-                ...prev,
-                avatarUrl: u.avatarUrl || prev.avatarUrl,
-                sizeTop: u.sizeTop || prev.sizeTop,
-                sizeBottom: u.sizeBottom || prev.sizeBottom,
-                sizeShoes: u.sizeShoes || prev.sizeShoes,
-              }
-            : prev
-        );
+        const nextUser = {
+          id: u.id,
+          email: u.email || undefined,
+          name: u.username || undefined,
+          username: u.username || undefined,
+          phone: u.phone || '',
+          avatarUrl: u.avatarUrl || undefined,
+          selfieUrl: user?.selfieUrl,
+          sizeTop: u.sizeTop || undefined,
+          sizeBottom: u.sizeBottom || undefined,
+          sizeShoes: u.sizeShoes || undefined,
+          tier: user?.tier || SubscriptionTier.FREE,
+          limits: user?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
+          isPublic: !!u.isPublic,
+        };
+
+        setUser(nextUser);
+        return nextUser;
       } catch {
-        // ignore
+        // Network errors should not forcibly log the user out.
+        return user || null;
       }
     },
     toggleHomeLayout: () => setHomeLayout(prev => 
