@@ -36,6 +36,14 @@ function categoryLabel(value?: string) {
   return 'товар';
 }
 
+
+function productClickoutUrl(product: any, placement: string) {
+  const id = String(product?.id || '').trim();
+  if (!id) return '';
+  const params = new URLSearchParams({ placement });
+  return withApiOrigin(`/api/out/product/${encodeURIComponent(id)}?${params.toString()}`);
+}
+
 function productTypeCatalogParams(product: any) {
   const group = String(product?.taxonomyGroup || '').toUpperCase();
   const subgroup = String(product?.taxonomySubgroup || '').toUpperCase();
@@ -267,7 +275,8 @@ const ProductDetail = () => {
   }
 
   const image = product?.images?.[0] || '';
-  const buyUrl = product.affiliateUrl || product.productUrl || '';
+  const hasBuyUrl = !!(product.affiliateUrl || product.productUrl);
+  const buyUrl = productClickoutUrl(product, 'product_detail');
   const relatedParams = productTypeCatalogParams(product);
   const relatedTypeLabel = productTypeLabel(product);
   const relatedHref = `/catalog?${relatedParams}${
@@ -380,7 +389,7 @@ const ProductDetail = () => {
                 onClick={() => {
                   if (buyUrl) window.open(buyUrl, '_blank', 'noopener,noreferrer');
                 }}
-                disabled={!buyUrl}
+                disabled={!hasBuyUrl || !buyUrl}
                 className="h-12 rounded-full border border-zinc-200 bg-zinc-50 text-zinc-900 text-[10px] font-black uppercase tracking-[0.18em] hover:bg-white disabled:opacity-50 active:scale-95 transition-all"
               >
                 Купить на сайте продавца

@@ -25,6 +25,16 @@ const formatPriceRUB = (value: any) => {
   return `${Math.round(n).toLocaleString('ru-RU')} ₽`;
 };
 
+
+function sourceItemClickoutUrl(item: any, placement: string, lookId?: string, itemIndex?: number) {
+  const id = String(item?.id || '').trim();
+  if (!id) return '';
+  const params = new URLSearchParams({ placement });
+  if (lookId) params.set('lookId', String(lookId));
+  if (typeof itemIndex === 'number') params.set('itemIndex', String(itemIndex));
+  return withApiOrigin(`/api/out/product/${encodeURIComponent(id)}?${params.toString()}`);
+}
+
 const Looks = () => {
   const { looks, actions, user } = useAppState();
   const navigate = useNavigate();
@@ -290,7 +300,8 @@ const Looks = () => {
                       </h3>
                       <div className="space-y-3">
                         {sourceItems.slice(0, 3).map((item: any, idx: number) => {
-                          const buyUrl = item?.affiliateUrl || item?.productUrl || '';
+                          const hasBuyUrl = !!(item?.affiliateUrl || item?.productUrl);
+                          const buyUrl = sourceItemClickoutUrl(item, 'feed', String(look.id), idx);
                           const imageUrl = Array.isArray(item?.images) ? item.images[0] : item?.imageUrl;
 
                           return (
@@ -315,7 +326,7 @@ const Looks = () => {
                                   {formatPriceRUB(item?.price)}
                                 </p>
                               </div>
-                              {buyUrl ? (
+                              {hasBuyUrl && buyUrl ? (
                                 <a
                                   href={buyUrl}
                                   target="_blank"

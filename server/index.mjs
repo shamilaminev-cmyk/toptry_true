@@ -2295,6 +2295,91 @@ app.post("/api/looks/:id/comments", requireAuth, async (req, res) => {
 });
 
 
+// ---------- CPA / OUTBOUND CLICK TRACKING ----------
+
+function normalizeClickoutPlacement(value) {
+  const s = String(value || "").trim().toLowerCase();
+  if (!s) return "unknown";
+  return s.replace(/[^a-z0-9_\-:.]/g, "").slice(0, 80) || "unknown";
+}
+
+function normalizeClickoutOptionalString(value, maxLen = 500) {
+  const s = String(value || "").trim();
+  return s ? s.slice(0, maxLen) : null;
+}
+
+app.get("/api/out/product/:productId", async (req, res) => {
+  try {
+    const productId = String(req.params.productId || "").trim();
+    if (!productId) return res.status(400).send("Product id is required");
+
+    const product = await prisma.catalogProduct.findFirst({
+      where: { id: productId, isActive: true },
+      select: {
+        id: true,
+        merchant: true,
+        title: true,
+        affiliateUrl: true,
+        productUrl: true,
+      },
+    });
+
+    if (!product) return res.status(404).send("Product not found");
+
+    const targetUrl = String(product.affiliateUrl || product.productUrl || "").trim();
+    if (!targetUrl) return res.status(404).send("Product link not found");
+
+    try {
+      const parsed = new URL(targetUrl);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return res.status(400).send("Invalid product link");
+      }
+    } catch {
+      return res.status(400).send("Invalid product link");
+    }
+
+    const placement = normalizeClickoutPlacement(req.query.placement);
+    const lookId = normalizeClickoutOptionalString(req.query.lookId, 120);
+    const itemIndexRaw = String(req.query.itemIndex ?? "").trim();
+    const itemIndex = /^\d+$/.test(itemIndexRaw) ? Number(itemIndexRaw) : null;
+
+    try {
+      await prisma.clickout.create({
+        data: {
+          id: `clickout-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          userId: req.auth?.userId || null,
+          productId: product.id,
+          meta: {
+            merchant: product.merchant || null,
+            productTitle: product.title || null,
+            placement,
+            lookId,
+            itemIndex,
+            targetUrl,
+            referer: normalizeClickoutOptionalString(req.get("referer"), 1000),
+            userAgent: normalizeClickoutOptionalString(req.get("user-agent"), 1000),
+            ip: normalizeClickoutOptionalString(req.ip, 120),
+          },
+        },
+      });
+    } catch (e) {
+      console.warn("[toptry] clickout log failed", {
+        productId: product.id,
+        placement,
+        message: e?.message || String(e),
+      });
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    return res.redirect(302, targetUrl);
+  } catch (e) {
+    console.error("[toptry] /api/out/product/:productId error", e);
+    return res.status(500).send("Clickout failed");
+  }
+});
+
+
+
 
 // ---------- CATALOG (Admitad / Sportcourt) ----------
 

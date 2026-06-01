@@ -4,6 +4,16 @@ import { useAppState } from '../store';
 import { ICONS, CURRENCY } from '../constants';
 import { withApiOrigin } from '../utils/withApiOrigin';
 
+
+function sourceItemClickoutUrl(item: any, placement: string, lookId?: string, itemIndex?: number) {
+  const id = String(item?.id || '').trim();
+  if (!id) return '';
+  const params = new URLSearchParams({ placement });
+  if (lookId) params.set('lookId', String(lookId));
+  if (typeof itemIndex === 'number') params.set('itemIndex', String(itemIndex));
+  return withApiOrigin(`/api/out/product/${encodeURIComponent(id)}?${params.toString()}`);
+}
+
 const LookDetails = () => {
   const { id } = useParams();
   const location = useLocation();
@@ -303,7 +313,7 @@ const LookDetails = () => {
         <section className="space-y-4">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Вещи в образе</h2>
           <div className="space-y-3">
-            {lookProducts.map((p) => (
+            {lookProducts.map((p, idx) => (
               <div
                 key={p.id}
                 className="flex items-center gap-4 bg-zinc-50 p-3 rounded-2xl border border-zinc-100"
@@ -323,7 +333,7 @@ const LookDetails = () => {
                 </div>
                 {p.affiliateUrl || p.productUrl ? (
                   <a
-                    href={p.affiliateUrl || p.productUrl}
+                    href={sourceItemClickoutUrl(p, 'look_details', String(look.id), idx)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-zinc-900 text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest"
@@ -351,9 +361,10 @@ const LookDetails = () => {
                 <button
                   onClick={() => {
                     (look.sourceItems || [])
-                      .filter((i: any) => i.affiliateUrl || i.productUrl)
-                      .forEach((i: any) => {
-                        window.open(i.affiliateUrl || i.productUrl, '_blank');
+                      .map((i: any, idx: number) => sourceItemClickoutUrl(i, 'look_details_buy_all', String(look.id), idx))
+                      .filter(Boolean)
+                      .forEach((url: string) => {
+                        window.open(url, '_blank', 'noopener,noreferrer');
                       });
                   }}
                   className="bg-white text-black px-5 py-3 rounded-full text-xs font-bold uppercase tracking-widest"
