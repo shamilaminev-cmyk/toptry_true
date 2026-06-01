@@ -137,6 +137,22 @@ type CatalogFallbackInfo = {
 const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const SHOE_SIZES = ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'];
 
+const COLOR_FAMILY_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: 'black', label: 'Чёрный' },
+  { id: 'white', label: 'Белый' },
+  { id: 'gray', label: 'Серый' },
+  { id: 'beige', label: 'Бежевый' },
+  { id: 'brown', label: 'Коричневый' },
+  { id: 'blue', label: 'Синий' },
+  { id: 'green', label: 'Зелёный' },
+  { id: 'red', label: 'Красный' },
+  { id: 'pink', label: 'Розовый' },
+  { id: 'purple', label: 'Фиолетовый' },
+  { id: 'yellow', label: 'Жёлтый' },
+  { id: 'orange', label: 'Оранжевый' },
+  { id: 'multi', label: 'Мульти' },
+];
+
 
 const Catalog = () => {
   const navigate = useNavigate();
@@ -167,6 +183,7 @@ const Catalog = () => {
   const [draftSize, setDraftSize] = useState('');
   const [sizeLoose, setSizeLoose] = useState(false);
   const [draftSizeLoose, setDraftSizeLoose] = useState(false);
+  const [draftColorFamily, setDraftColorFamily] = useState('');
 
   // Hidden filters used by “Найти похожее” routes from old/snapshot looks.
   // They are intentionally not shown in the drawer yet.
@@ -351,6 +368,7 @@ const Catalog = () => {
     setSizeLoose(sizeLooseParam);
     setDraftSizeLoose(sizeLooseParam);
     setColorFamily(colorFamilyParam);
+    setDraftColorFamily(colorFamilyParam);
     setUnavailableMode(unavailableParam);
     setClothingType(clothingTypeParam);
     setDraftClothingType(clothingTypeParam);
@@ -392,9 +410,10 @@ const Catalog = () => {
     setDraftPriceMax(priceMax);
     setDraftSize(size);
     setDraftSizeLoose(size === 'MY' ? sizeLoose : false);
+    setDraftColorFamily(colorFamily);
     setDraftClothingType(clothingType);
     setDraftShoeType(shoeType);
-  }, [filtersOpen, gender, displayCategory, clothingType, shoeType, discountOnly, brand, priceMin, priceMax, size, sizeLoose]);
+  }, [filtersOpen, gender, displayCategory, clothingType, shoeType, discountOnly, brand, priceMin, priceMax, size, sizeLoose, colorFamily]);
 
   useEffect(() => {
     let cancelled = false;
@@ -643,6 +662,10 @@ const Catalog = () => {
     setSort('');
     setSize('');
     setSizeLoose(false);
+    setColorFamily('');
+    setDraftColorFamily('');
+    setUnavailableMode(false);
+    setFallbackInfo(null);
     setDraftDiscountOnly(false);
     setDraftBrand('');
     setDraftPriceMin('');
@@ -666,6 +689,7 @@ const Catalog = () => {
     setDraftPriceMax('');
     setDraftSize('');
     setDraftSizeLoose(false);
+    setDraftColorFamily('');
   };
 
   
@@ -687,6 +711,7 @@ const Catalog = () => {
         if (draftDiscountOnly) params.set('discountOnly', '1')
         if (draftPriceMin) params.set('priceMin', draftPriceMin)
         if (draftPriceMax) params.set('priceMax', draftPriceMax)
+        if (draftColorFamily) params.set('colorFamily', draftColorFamily)
         if (draftSize) params.set('size', draftSize)
         if (draftSize === 'MY' && draftSizeLoose) params.set('sizeLoose', '1')
 
@@ -724,6 +749,7 @@ const Catalog = () => {
     draftDiscountOnly,
     draftPriceMin,
     draftPriceMax,
+    draftColorFamily,
     draftSize,
     draftSizeLoose
   ])
@@ -738,8 +764,10 @@ const Catalog = () => {
     setBrand(draftBrand);
     setPriceMin(draftPriceMin);
     setPriceMax(draftPriceMax);
+    setColorFamily(draftColorFamily);
     setSize(draftSize);
     setSizeLoose(draftSize === 'MY' ? draftSizeLoose : false);
+    setFallbackInfo(null);
     setFiltersOpen(false);
   };
 
@@ -759,13 +787,13 @@ const Catalog = () => {
   const filteredCountLabel = useMemo(() => total, [total]);
   const activeFiltersCount = useMemo(
     () =>
-      [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', displayCategory === 'SHOES' ? shoeType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, colorFamily || unavailableMode ? 'similar' : '', size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+      [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', displayCategory === 'SHOES' ? shoeType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, colorFamily ? colorFamily : '', unavailableMode ? 'similar' : '', size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
     [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]
   );
   const draftActiveFiltersCount = useMemo(
     () =>
-      [draftGender, draftDisplayCategory, draftDisplayCategory === 'CLOTHING' ? draftClothingType : '', draftDisplayCategory === 'SHOES' ? draftShoeType : '', debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSize === 'MY' && draftSizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
-    [draftGender, draftDisplayCategory, draftClothingType, draftShoeType, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftSize, draftSizeLoose]
+      [draftGender, draftDisplayCategory, draftDisplayCategory === 'CLOTHING' ? draftClothingType : '', draftDisplayCategory === 'SHOES' ? draftShoeType : '', debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftColorFamily, draftSize, draftSize === 'MY' && draftSizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+    [draftGender, draftDisplayCategory, draftClothingType, draftShoeType, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftColorFamily, draftSize, draftSizeLoose]
   );
   const applyButtonLabel = useMemo(() => {
     if (loading) return 'Загружаем...';
@@ -1057,6 +1085,29 @@ const Catalog = () => {
               </div>
             )}
 
+
+            <div className="space-y-2 rounded-[28px] bg-zinc-50/70 border border-zinc-100 p-3">
+              <div className="px-1 text-[9px] font-black uppercase tracking-[0.28em] text-zinc-400">
+                Цвет
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {COLOR_FAMILY_OPTIONS.map((color) => {
+                  const active = draftColorFamily === color.id;
+                  return (
+                    <button
+                      key={color.id}
+                      type="button"
+                      onClick={() => setDraftColorFamily((current) => current === color.id ? '' : color.id)}
+                      className={`h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                        active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                      }`}
+                    >
+                      {color.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <select
               value={draftBrand}
