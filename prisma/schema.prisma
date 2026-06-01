@@ -259,3 +259,42 @@ model CatalogPipelineStep {
   @@index([status])
 }
 
+model CatalogProductPriceSnapshot {
+  productId   String   @id
+  merchant    String
+  title       String?
+  price       Float?
+  oldPrice    Float?
+  currency    String?
+  imageUrl    String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([merchant])
+  @@index([lastSeenAt])
+}
+
+model CatalogProductPriceChange {
+  id            String   @id
+  changeKey     String   @unique
+  productId     String
+  merchant      String
+  title         String?
+  previousPrice Float
+  currentPrice  Float
+  delta         Float
+  deltaPct      Float
+  direction     String
+  detectedAt    DateTime @default(now())
+  pipelineRunId String?
+  imageUrl       String?
+  productUrl     String?
+  affiliateUrl   String?
+
+  @@index([merchant])
+  @@index([productId])
+  @@index([detectedAt])
+  @@index([direction])
+}
+

@@ -9,6 +9,7 @@ const Home: React.FC = () => {
   const { user, looks } = useAppState();
   const [feedLooks, setFeedLooks] = useState<any[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
+  const [dealItems, setDealItems] = useState<any[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -30,6 +31,19 @@ const Home: React.FC = () => {
         setCatalogItems(Array.isArray(data?.products) ? data.products : []);
       } catch {
         setCatalogItems([]);
+      }
+    })();
+  }, []);
+
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const resp = await fetch(withApiOrigin('/api/catalog/deals?limit=4&minDiscount=30'), { credentials: 'include' });
+        const data = await resp.json().catch(() => ({}));
+        setDealItems(Array.isArray(data?.products) ? data.products : []);
+      } catch {
+        setDealItems([]);
       }
     })();
   }, []);
@@ -171,6 +185,68 @@ const Home: React.FC = () => {
           })}
         </div>
       </section>
+
+
+      {dealItems.length ? (
+        <section className="px-5 mt-12 md:px-8 md:max-w-6xl md:mx-auto">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">Скидки</p>
+              <h2 className="mt-2 text-2xl font-black uppercase">Выгодные находки</h2>
+            </div>
+            <Link to="/catalog" className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">
+              В каталог
+            </Link>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+            {dealItems.slice(0, 4).map((item: any) => {
+              const image =
+                Array.isArray(item.images) && item.images[0]
+                  ? item.images[0]
+                  : (item.imageUrl || item.image || item.imageSrc || item.mediaUrl || '');
+
+              const price = Number(item.price || 0);
+              const oldPrice = Number(item.oldPrice || 0);
+              const discount =
+                Number(item.discountPercent || 0) ||
+                (oldPrice > price && price > 0 ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0);
+
+              return (
+                <Link key={item.id} to="/catalog" className="rounded-[24px] bg-zinc-50 border border-zinc-100 p-3">
+                  <div className="relative aspect-[3/4] bg-white rounded-[20px] overflow-hidden">
+                    {discount > 0 ? (
+                      <div className="absolute left-2 top-2 z-10 rounded-full bg-zinc-950 px-2.5 py-1 text-[10px] font-black text-white">
+                        −{discount}%
+                      </div>
+                    ) : null}
+                    {image ? (
+                      <img
+                        src={catalogImageSrc(image, { w: 420 })}
+                        alt=""
+                        className="w-full h-full object-contain"
+                      />
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-[10px] font-black uppercase tracking-tight line-clamp-2">
+                    {item.title || 'Товар'}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <p className="text-xs font-black text-zinc-950">
+                      {price.toLocaleString('ru-RU')} ₽
+                    </p>
+                    {oldPrice > price ? (
+                      <p className="text-[10px] font-bold text-zinc-400 line-through">
+                        {oldPrice.toLocaleString('ru-RU')} ₽
+                      </p>
+                    ) : null}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <section className="px-5 mt-12 md:px-8 md:max-w-6xl md:mx-auto">
         <div className="flex items-end justify-between gap-4">

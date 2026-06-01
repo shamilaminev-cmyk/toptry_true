@@ -6847,6 +6847,248 @@ app.get("/api/catalog/products/:id", async (req, res) => {
 
 
 
+
+app.get("/api/catalog/deals", async (req, res) => {
+  try {
+    const rawLimit = Number(req.query.limit || 4);
+    const limit = Math.max(1, Math.min(16, Number.isFinite(rawLimit) ? rawLimit : 4));
+
+    const rawMinDiscount = Number(req.query.minDiscount || 30);
+    const minDiscount = Math.max(5, Math.min(90, Number.isFinite(rawMinDiscount) ? rawMinDiscount : 30));
+
+    const poolLimit = Math.max(160, Math.min(700, limit * 140));
+
+    const rows = await prisma.$queryRawUnsafe(
+      `
+      with latest_review as (
+        select distinct on (r."productId")
+          r."productId",
+          r."isTryOnRelevantSuggested",
+          r."rejectReasons",
+          r.confidence,
+          r."createdAt"
+        from "CatalogProductAIReview" r
+        order by r."productId", r."createdAt" desc
+      )
+      select
+        p.id,
+        p.merchant,
+        p."externalId",
+        p.title,
+        p.brand,
+        p.category,
+        p.gender,
+        p.price,
+        p."oldPrice",
+        p.currency,
+        p."imageUrl",
+        p."productUrl",
+        p."affiliateUrl",
+        p."sizesTop",
+        p."sizesBottom",
+        p."sizesShoes",
+        p."taxonomyGroup",
+        p."taxonomySubgroup",
+        p."styleTags",
+        p."occasionTags",
+        p."seasonTags",
+        p."colorFamily",
+        p."createdAt",
+        p."updatedAt",
+        round(((p."oldPrice" - p.price) / p."oldPrice" * 100)::numeric, 0)::int as "discountPercent"
+      from "CatalogProduct" p
+      join latest_review lr on lr."productId" = p.id
+      where p."isActive" = true
+        and p.price is not null
+        and p.price > 0
+        and p."oldPrice" is not null
+        and p."oldPrice" > p.price
+        and ((p."oldPrice" - p.price) / p."oldPrice" * 100) >= $1
+        and p."imageUrl" is not null
+        and p."imageUrl" <> ''
+        and coalesce(p."taxonomyGroup", '') in ('CLOTHING', 'SHOES', 'BAGS')
+        and lr."isTryOnRelevantSuggested" = true
+        and coalesce(cardinality(lr."rejectReasons"), 0) = 0
+      order by "discountPercent" desc, p."createdAt" desc, p."updatedAt" desc
+      limit $2
+      `,
+      minDiscount,
+      poolLimit
+    );
+
+    const sizeCount = (p) =>
+      (Array.isArray(p.sizesTop) ? p.sizesTop.length : 0) +
+      (Array.isArray(p.sizesBottom) ? p.sizesBottom.length : 0) +
+      (Array.isArray(p.sizesShoes) ? p.sizesShoes.length : 0);
+
+    const titleKey = (p) =>
+      String(p.title || "")
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .replace(/\b(черный|чёрный|белый|синий|серый|серебристый|красный|зеленый|зелёный|бежевый|розовый|мультицвет|black|white|blue|grey|gray|red|green|beige|pink)\b/gi, "")
+        .trim()
+        .slice(0, 90);
+
+    const now = Date.now();
+
+    const scored = rows.map((p) => {
+      const price = Number(p.price || 0);
+      const oldPrice = Number(p.oldPrice || 0);
+      const discountPercent =
+        oldPrice > price && price > 0
+          ? Math.round(((oldPrice - price) / oldPrice) * 100)
+          : Number(p.discountPercent || 0);
+
+      const discountScore = Math.min(discountPercent, 60) * 2.0;
+
+      const group = String(p.taxonomyGroup || "");
+      const subgroup = String(p.taxonomySubgroup || "");
+
+      const categoryScore =
+        group === "CLOTHING" ? 24 :
+        group === "SHOES" ? 22 :
+        group === "BAGS" ? 8 :
+        0;
+
+      const sizes = sizeCount(p);
+      const sizeScore = sizes > 0 ? 18 : -18;
+
+      const createdAtMs = p.createdAt ? new Date(p.createdAt).getTime() : 0;
+      const ageDays = createdAtMs ? Math.max(0, (now - createdAtMs) / 86400000) : 999;
+      const freshnessScore = Math.max(0, 28 - ageDays) * 0.8;
+
+      let priceScore = 0;
+      if (group === "BAGS") {
+        if (price <= 100000) priceScore += 8;
+        if (price > 150000) priceScore -= 35;
+      } else if (group === "SHOES") {
+        if (price >= 2500 && price <= 35000) priceScore += 12;
+        if (price > 60000) priceScore -= 25;
+      } else if (group === "CLOTHING") {
+        if (price >= 1200 && price <= 50000) priceScore += 12;
+        if (price > 90000) priceScore -= 25;
+      }
+
+      const luxuryOutlierPenalty = price > 100000 ? 25 : 0;
+
+      const tryOnCategoryBonus =
+        ["TSHIRTS", "SHIRTS", "KNITWEAR", "OUTERWEAR", "DRESSES", "TROUSERS", "DENIM", "SNEAKERS", "LOAFERS", "SANDALS", "BOOTS", "SHOES_CLASSIC"].includes(subgroup)
+          ? 8
+          : 0;
+
+      const score =
+        discountScore +
+        categoryScore +
+        sizeScore +
+        freshnessScore +
+        priceScore +
+        tryOnCategoryBonus -
+        luxuryOutlierPenalty;
+
+      return {
+        ...p,
+        _score: score,
+        _titleKey: titleKey(p),
+        _discountPercent: discountPercent,
+        _isLuxury: price > 100000,
+      };
+    }).sort((a, b) => b._score - a._score);
+
+    const pick = (merchantMax, groupMax, bagMax, luxuryMax, allowTitleDupes = false) => {
+      const selected = [];
+      const merchantCounts = new Map();
+      const groupCounts = new Map();
+      const seenTitles = new Set();
+      let bagCount = 0;
+      let luxuryCount = 0;
+
+      for (const p of scored) {
+        const merchant = String(p.merchant || "unknown");
+        const group = String(p.taxonomyGroup || "OTHER");
+        const tk = p._titleKey || p.id;
+        const isBag = group === "BAGS";
+        const isLuxury = Boolean(p._isLuxury);
+
+        if ((merchantCounts.get(merchant) || 0) >= merchantMax) continue;
+        if ((groupCounts.get(group) || 0) >= groupMax) continue;
+        if (isBag && bagCount >= bagMax) continue;
+        if (isLuxury && luxuryCount >= luxuryMax) continue;
+        if (!allowTitleDupes && seenTitles.has(tk)) continue;
+
+        selected.push(p);
+        merchantCounts.set(merchant, (merchantCounts.get(merchant) || 0) + 1);
+        groupCounts.set(group, (groupCounts.get(group) || 0) + 1);
+        seenTitles.add(tk);
+        if (isBag) bagCount += 1;
+        if (isLuxury) luxuryCount += 1;
+
+        if (selected.length >= limit) break;
+      }
+
+      return selected;
+    };
+
+    let selected = pick(2, 2, 1, 1, false);
+    if (selected.length < limit) selected = pick(3, 3, 1, 1, false);
+    if (selected.length < limit) selected = pick(4, 4, 2, 1, true);
+
+    const products = selected.slice(0, limit).map((p) => {
+      const price = Number(p.price || 0);
+      const oldPrice = Number(p.oldPrice || 0);
+      const discountPercent =
+        oldPrice > price && price > 0
+          ? Math.max(1, Math.round(((oldPrice - price) / oldPrice) * 100))
+          : Number(p._discountPercent || p.discountPercent || 0);
+
+      return {
+        id: p.id,
+        merchant: p.merchant,
+        externalId: p.externalId,
+        title: p.title,
+        brand: p.brand,
+        category: p.category,
+        gender: p.gender,
+        price,
+        oldPrice,
+        discountPercent,
+        currency: p.currency || "RUB",
+        imageUrl: p.imageUrl,
+        images: p.imageUrl ? [p.imageUrl] : [],
+        productUrl: p.productUrl,
+        affiliateUrl: p.affiliateUrl,
+        sizesTop: p.sizesTop || [],
+        sizesBottom: p.sizesBottom || [],
+        sizesShoes: p.sizesShoes || [],
+        taxonomyGroup: p.taxonomyGroup,
+        taxonomySubgroup: p.taxonomySubgroup,
+        styleTags: p.styleTags || [],
+        occasionTags: p.occasionTags || [],
+        seasonTags: p.seasonTags || [],
+        colorFamily: p.colorFamily || "",
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        dealScore: Math.round(Number(p._score || 0)),
+      };
+    });
+
+    res.json({
+      ok: true,
+      products,
+      meta: {
+        limit,
+        minDiscount,
+        pool: rows.length,
+        selected: products.length,
+        strategy: "deal_quality_score_discount_tryon_size_diverse",
+      },
+    });
+  } catch (e) {
+    console.error("[toptry] /api/catalog/deals error", e);
+    res.status(500).json({ error: "Failed to load catalog deals" });
+  }
+});
+
+
 app.get("/api/catalog/home-new", async (req, res) => {
   try {
     const rawLimit = Number(req.query.limit || 8);
@@ -7761,6 +8003,176 @@ async function runCatalogPipelineAiReviewForMerchant(runId, merchant, reportLine
   return totals;
 }
 
+
+app.post("/api/admin/catalog/record-price-changes", async (req, res) => {
+  try {
+    const pipelineRunId = String(req.query.runId || req.body?.runId || "").trim() || null;
+    const minDeltaRub = Math.max(1, Number(req.query.minDeltaRub || 1) || 1);
+    const minDeltaPct = Math.max(0, Number(req.query.minDeltaPct || 0) || 0);
+
+    await prisma.$executeRawUnsafe(`
+      create table if not exists "CatalogProductPriceSnapshot" (
+        "productId" text primary key,
+        merchant text not null,
+        title text,
+        price double precision,
+        "oldPrice" double precision,
+        currency text,
+        "imageUrl" text,
+        "firstSeenAt" timestamptz not null default now(),
+        "lastSeenAt" timestamptz not null default now(),
+        "updatedAt" timestamptz not null default now()
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      create table if not exists "CatalogProductPriceChange" (
+        id text primary key,
+        "changeKey" text not null unique,
+        "productId" text not null,
+        merchant text not null,
+        title text,
+        "previousPrice" double precision not null,
+        "currentPrice" double precision not null,
+        delta double precision not null,
+        "deltaPct" double precision not null,
+        direction text not null,
+        "detectedAt" timestamptz not null default now(),
+        "pipelineRunId" text,
+        "imageUrl" text,
+        "productUrl" text,
+        "affiliateUrl" text
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`create index if not exists "CatalogProductPriceSnapshot_merchant_idx" on "CatalogProductPriceSnapshot"(merchant);`);
+    await prisma.$executeRawUnsafe(`create index if not exists "CatalogProductPriceChange_merchant_idx" on "CatalogProductPriceChange"(merchant);`);
+    await prisma.$executeRawUnsafe(`create index if not exists "CatalogProductPriceChange_detectedAt_idx" on "CatalogProductPriceChange"("detectedAt");`);
+    await prisma.$executeRawUnsafe(`create index if not exists "CatalogProductPriceChange_direction_idx" on "CatalogProductPriceChange"(direction);`);
+
+    const insertedDrops = await prisma.$executeRawUnsafe(
+      `
+      insert into "CatalogProductPriceChange" (
+        id,
+        "changeKey",
+        "productId",
+        merchant,
+        title,
+        "previousPrice",
+        "currentPrice",
+        delta,
+        "deltaPct",
+        direction,
+        "detectedAt",
+        "pipelineRunId",
+        "imageUrl",
+        "productUrl",
+        "affiliateUrl"
+      )
+      select
+        'price-change-' || md5(p.id || ':' || s.price::text || ':' || p.price::text || ':' || to_char(now(), 'YYYY-MM-DD')),
+        md5(p.id || ':' || s.price::text || ':' || p.price::text || ':' || to_char(now(), 'YYYY-MM-DD')),
+        p.id,
+        p.merchant,
+        p.title,
+        s.price,
+        p.price,
+        s.price - p.price,
+        case when s.price > 0 then round((((s.price - p.price) / s.price) * 100)::numeric, 2)::double precision else 0 end,
+        'DROP',
+        now(),
+        $1,
+        p."imageUrl",
+        p."productUrl",
+        p."affiliateUrl"
+      from "CatalogProduct" p
+      join "CatalogProductPriceSnapshot" s on s."productId" = p.id
+      where p."isActive" = true
+        and p.price is not null
+        and p.price > 0
+        and s.price is not null
+        and s.price > p.price
+        and (s.price - p.price) >= $2
+        and (case when s.price > 0 then ((s.price - p.price) / s.price) * 100 else 0 end) >= $3
+      on conflict ("changeKey") do nothing
+      `,
+      pipelineRunId,
+      minDeltaRub,
+      minDeltaPct
+    );
+
+    const snapshotUpdated = await prisma.$executeRawUnsafe(
+      `
+      insert into "CatalogProductPriceSnapshot" (
+        "productId",
+        merchant,
+        title,
+        price,
+        "oldPrice",
+        currency,
+        "imageUrl",
+        "firstSeenAt",
+        "lastSeenAt",
+        "updatedAt"
+      )
+      select
+        p.id,
+        p.merchant,
+        p.title,
+        p.price,
+        p."oldPrice",
+        p.currency,
+        p."imageUrl",
+        now(),
+        now(),
+        now()
+      from "CatalogProduct" p
+      where p."isActive" = true
+        and p.price is not null
+        and p.price > 0
+      on conflict ("productId") do update set
+        merchant = excluded.merchant,
+        title = excluded.title,
+        price = excluded.price,
+        "oldPrice" = excluded."oldPrice",
+        currency = excluded.currency,
+        "imageUrl" = excluded."imageUrl",
+        "lastSeenAt" = now(),
+        "updatedAt" = now()
+      `
+    );
+
+    const byMerchant = await prisma.$queryRawUnsafe(
+      `
+      select
+        merchant,
+        count(*)::int as drops,
+        round(sum(delta)::numeric, 2)::double precision as "totalDeltaRub"
+      from "CatalogProductPriceChange"
+      where ($1::text is null or "pipelineRunId" = $1::text)
+        and direction = 'DROP'
+      group by merchant
+      order by drops desc, merchant asc
+      `,
+      pipelineRunId
+    );
+
+    res.json({
+      ok: true,
+      pipelineRunId,
+      insertedDrops,
+      snapshotUpdated,
+      byMerchant,
+      minDeltaRub,
+      minDeltaPct,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/record-price-changes error", e);
+    res.status(500).json({ error: e?.message || "Failed to record price changes" });
+  }
+});
+
+
 async function runCatalogNightlyPipeline({ runId = "", applySafe = false, trigger = "manual" } = {}) {
   runId = runId || `catalog-pipeline-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
   const startedAt = new Date();
@@ -7769,6 +8181,7 @@ async function runCatalogNightlyPipeline({ runId = "", applySafe = false, trigge
   const warnings = [];
   const stepResults = {
     imports: {},
+    priceChanges: null,
     backfillSizes: {},
     enrichTaxonomy: {},
     aiReview: {},
@@ -7819,6 +8232,22 @@ async function runCatalogNightlyPipeline({ runId = "", applySafe = false, trigge
         warnings
       );
       stepResults.imports[merchant] = r.result || { error: r.error };
+      if (!r.ok) finalStatus = "WARNING";
+    }
+
+    {
+      const r = await runPipelineStep(
+        runId,
+        "record-price-changes",
+        null,
+        () => callLocalCatalogPipelineJson(
+          `/api/admin/catalog/record-price-changes?runId=${encodeURIComponent(runId)}&minDeltaRub=1&minDeltaPct=0`,
+          { method: "POST", timeoutMs: 600000 }
+        ),
+        reportLines,
+        warnings
+      );
+      stepResults.priceChanges = r.result || { error: r.error };
       if (!r.ok) finalStatus = "WARNING";
     }
 
