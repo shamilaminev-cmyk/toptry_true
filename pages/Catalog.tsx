@@ -125,6 +125,14 @@ const IMG_FALLBACK = "";
 const PAGE_SIZE = 24;
 const CATALOG_FILTERS_STORAGE_KEY = 'toptry.catalog.filters.v1';
 
+type CatalogFallbackInfo = {
+  active: boolean;
+  reason?: string;
+  message?: string;
+  removedFilters?: string[];
+  originalColorFamily?: string;
+} | null;
+
 
 const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const SHOE_SIZES = ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'];
@@ -159,6 +167,12 @@ const Catalog = () => {
   const [draftSize, setDraftSize] = useState('');
   const [sizeLoose, setSizeLoose] = useState(false);
   const [draftSizeLoose, setDraftSizeLoose] = useState(false);
+
+  // Hidden filters used by “Найти похожее” routes from old/snapshot looks.
+  // They are intentionally not shown in the drawer yet.
+  const [colorFamily, setColorFamily] = useState('');
+  const [unavailableMode, setUnavailableMode] = useState(false);
+  const [fallbackInfo, setFallbackInfo] = useState<CatalogFallbackInfo>(null);
 
 
   const effectiveSizeCategory = filtersOpen ? draftDisplayCategory : displayCategory;
@@ -276,6 +290,8 @@ const Catalog = () => {
       sizeLoose?: boolean;
       clothingType?: string;
       shoeType?: string;
+      colorFamily?: string;
+      unavailable?: boolean;
     } = null;
 
     if (!hasHashFilters) {
@@ -311,6 +327,8 @@ const Catalog = () => {
       hasHashFilters ? (hashParams.get('shoeType') || '') : (saved?.shoeType || '')
     ).toUpperCase() as ShoeType;
     const sizeLooseParam = sizeParam === 'MY' && (hasHashFilters ? hashParams.get('sizeLoose') === '1' : Boolean(saved?.sizeLoose));
+    const colorFamilyParam = hasHashFilters ? (hashParams.get('colorFamily') || '') : (saved?.colorFamily || '');
+    const unavailableParam = hasHashFilters ? hashParams.get('unavailable') === '1' : Boolean(saved?.unavailable);
 
     setSearch(q);
     setDebouncedSearch(q);
@@ -332,6 +350,8 @@ const Catalog = () => {
     setDraftSize(sizeParam);
     setSizeLoose(sizeLooseParam);
     setDraftSizeLoose(sizeLooseParam);
+    setColorFamily(colorFamilyParam);
+    setUnavailableMode(unavailableParam);
     setClothingType(clothingTypeParam);
     setDraftClothingType(clothingTypeParam);
     setShoeType(shoeTypeParam);
@@ -392,6 +412,7 @@ const Catalog = () => {
         if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
         if (debouncedSearch) params.set('q', debouncedSearch);
         if (discountOnly) params.set('discountOnly', '1');
+        if (colorFamily) params.set('colorFamily', colorFamily);
 
         const url = withApiOrigin(`/api/catalog/brands?${params.toString()}`);
         const resp = await fetch(url, { credentials: 'include' });
@@ -421,7 +442,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand]);
+  }, [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, colorFamily]);
 
   const fetchCatalog = async (nextOffset: number, append: boolean) => {
     const params = new URLSearchParams();
@@ -438,6 +459,8 @@ const Catalog = () => {
     if (priceMin) params.set('priceMin', priceMin);
     if (priceMax) params.set('priceMax', priceMax);
     if (sort) params.set('sort', sort);
+    if (colorFamily) params.set('colorFamily', colorFamily);
+    if (unavailableMode) params.set('unavailable', '1');
     if (size) params.set('size', size);
     if (size === 'MY' && sizeLoose) params.set('sizeLoose', '1');
 
@@ -452,6 +475,9 @@ const Catalog = () => {
     const products = Array.isArray(data?.products) ? data.products : [];
 
     setItems((prev) => (append ? [...prev, ...products] : products));
+    if (!append) {
+      setFallbackInfo(data?.fallback?.active ? data.fallback : null);
+    }
     setTotal(Number(data?.total || 0));
     setOffset(Number(data?.offset || nextOffset));
     setHasMore(Boolean(data?.hasMore));
@@ -481,6 +507,8 @@ const Catalog = () => {
     if (priceMin) params.set('priceMin', priceMin);
     if (priceMax) params.set('priceMax', priceMax);
     if (sort) params.set('sort', sort);
+    if (colorFamily) params.set('colorFamily', colorFamily);
+    if (unavailableMode) params.set('unavailable', '1');
     if (size) params.set('size', size);
     if (size === 'MY' && sizeLoose) params.set('sizeLoose', '1');
 
@@ -493,6 +521,7 @@ const Catalog = () => {
 
         const products = Array.isArray(data?.products) ? data.products : [];
         setItems(products);
+        setFallbackInfo(data?.fallback?.active ? data.fallback : null);
         setTotal(Number(data?.total || 0));
         setOffset(Number(data?.offset || 0));
         setHasMore(Boolean(data?.hasMore));
@@ -500,6 +529,7 @@ const Catalog = () => {
         if (!cancelled) {
           console.error('[catalog] fetch error', e);
           setItems([]);
+          setFallbackInfo(null);
           setTotal(0);
           setOffset(0);
           setHasMore(false);
@@ -513,7 +543,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
+  }, [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]);
 
   useEffect(() => {
     try {
@@ -530,10 +560,12 @@ const Catalog = () => {
         sort,
         size,
         sizeLoose: size === 'MY' && sizeLoose,
+        colorFamily,
+        unavailable: unavailableMode,
       };
       window.sessionStorage.setItem(CATALOG_FILTERS_STORAGE_KEY, JSON.stringify(payload));
     } catch {}
-  }, [debouncedSearch, gender, displayCategory, clothingType, shoeType, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]);
+  }, [debouncedSearch, gender, displayCategory, clothingType, shoeType, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -548,6 +580,8 @@ const Catalog = () => {
     if (priceMin) params.set('priceMin', priceMin);
     if (priceMax) params.set('priceMax', priceMax);
     if (sort) params.set('sort', sort);
+    if (colorFamily) params.set('colorFamily', colorFamily);
+    if (unavailableMode) params.set('unavailable', '1');
     if (size) params.set('size', size);
     if (size === 'MY' && sizeLoose) params.set('sizeLoose', '1');
 
@@ -571,6 +605,8 @@ const Catalog = () => {
     sort,
     size,
     sizeLoose,
+    colorFamily,
+    unavailableMode,
   ]);
 
   const isInWardrobe = (product: any) => {
@@ -723,8 +759,8 @@ const Catalog = () => {
   const filteredCountLabel = useMemo(() => total, [total]);
   const activeFiltersCount = useMemo(
     () =>
-      [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', displayCategory === 'SHOES' ? shoeType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
-    [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose]
+      [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', displayCategory === 'SHOES' ? shoeType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, colorFamily || unavailableMode ? 'similar' : '', size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+    [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]
   );
   const draftActiveFiltersCount = useMemo(
     () =>
@@ -813,7 +849,7 @@ const Catalog = () => {
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           Найдено: {filteredCountLabel}
         </p>
-        {(gender || displayCategory || clothingType || shoeType || search || discountOnly || brand || priceMin || priceMax || sort || size || (size === 'MY' && sizeLoose)) && (
+        {(gender || displayCategory || clothingType || shoeType || search || discountOnly || brand || priceMin || priceMax || sort || size || colorFamily || unavailableMode || (size === 'MY' && sizeLoose)) && (
           <button
             onClick={clearFilters}
             className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 underline underline-offset-4"
@@ -1148,6 +1184,17 @@ const Catalog = () => {
         </div>
       ) : (
         <>
+          {fallbackInfo?.active && (
+            <div className="mx-4 mt-5 rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em]">
+                Похожие товары
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-relaxed">
+                {fallbackInfo.message || 'Точных совпадений нет — показываем похожие товары'}
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8 px-4 mt-6">
             {items.map((p: any) => {
               const added = isInWardrobe(p);
