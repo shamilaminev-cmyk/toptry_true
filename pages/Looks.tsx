@@ -35,6 +35,25 @@ function sourceItemClickoutUrl(item: any, placement: string, lookId?: string, it
   return withApiOrigin(`/api/out/product/${encodeURIComponent(id)}?${params.toString()}`);
 }
 
+function similarCatalogRoute(item: any) {
+  const q = [
+    item?.title,
+    item?.brand,
+    item?.storeName,
+    item?.merchant,
+  ]
+    .filter(Boolean)
+    .map(String)
+    .join(' ')
+    .trim();
+
+  const params = new URLSearchParams();
+  if (q) params.set('q', q.slice(0, 120));
+  params.set('unavailable', '1');
+
+  return `/catalog?${params.toString()}`;
+}
+
 const Looks = () => {
   const { looks, actions, user } = useAppState();
   const navigate = useNavigate();
@@ -336,9 +355,12 @@ const Looks = () => {
                                   Купить
                                 </a>
                               ) : (
-                                <span className="bg-zinc-200 text-zinc-400 px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest">
-                                  Нет ссылки
-                                </span>
+                                <Link
+                                    to={similarCatalogRoute(item)}
+                                    className="bg-zinc-100 text-zinc-700 px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-colors"
+                                  >
+                                    Найти похожее
+                                  </Link>
                               )}
                             </div>
                           );
