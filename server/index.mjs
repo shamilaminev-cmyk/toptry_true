@@ -3137,6 +3137,45 @@ function getCatalogDisplayCategoryPredicates(displayCategory) {
   return null;
 }
 
+
+const CATALOG_COLOR_FAMILY_ALIASES = {
+  grey: "gray",
+  silver: "gray",
+  gold: "yellow",
+  khaki: "green",
+  null: "",
+  none: "",
+  other: "",
+  unknown: "",
+};
+
+const CATALOG_COLOR_FAMILIES = new Set([
+  "black",
+  "white",
+  "gray",
+  "beige",
+  "brown",
+  "blue",
+  "green",
+  "red",
+  "pink",
+  "purple",
+  "yellow",
+  "orange",
+  "multi",
+]);
+
+function normalizeCatalogColorFamily(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+
+  const aliased = CATALOG_COLOR_FAMILY_ALIASES[raw] ?? raw;
+  if (!aliased) return "";
+
+  return CATALOG_COLOR_FAMILIES.has(aliased) ? aliased : "";
+}
+
+
 function buildCatalogDbWhere({
   merchant,
   gender,
@@ -3145,6 +3184,7 @@ function buildCatalogDbWhere({
   q,
   discountOnly,
   brand,
+  colorFamily,
   priceMin,
   priceMax,
   clothingType,
@@ -3187,6 +3227,11 @@ function buildCatalogDbWhere({
   const brandNeedle = String(brand || "").trim();
   if (brandNeedle) {
     and.push({ brand: { contains: brandNeedle, mode: "insensitive" } });
+  }
+
+  const normalizedColorFamily = normalizeCatalogColorFamily(colorFamily);
+  if (normalizedColorFamily) {
+    and.push({ colorFamily: normalizedColorFamily });
   }
 
   const minPrice = Number(priceMin || 0);
@@ -4710,6 +4755,149 @@ app.post("/internal/ai/catalog-review-text", async (req, res) => {
     return res.status(500).json({
       error: e?.message || "internal catalog AI review failed",
     });
+  }
+});
+
+
+
+app.post("/api/admin/catalog/apply-ai-colors", async (req, res) => {
+  try {
+    const merchant = String(req.query.merchant || "").trim().toLowerCase();
+    const dryRun = String(req.query.dryRun || "1") !== "0";
+    const force = String(req.query.force || "0") === "1";
+    const limit = Math.max(1, Math.min(200000, Number(req.query.limit || 80000)));
+    const minConfidenceRaw = Number(req.query.minConfidence ?? 0);
+    const minConfidence = Number.isFinite(minConfidenceRaw) ? minConfidenceRaw : 0;
+
+    const reviewWhere = {
+      ...(merchant ? { merchant } : {}),
+      colorFamilySuggested: { not: null },
+      ...(minConfidence > 0 ? { confidence: { gte: minConfidence } } : {}),
+    };
+
+    const reviews = await prisma.catalogProductAIReview.findMany({
+      where: reviewWhere,
+      select: {
+        productId: true,
+        merchant: true,
+        colorFamilySuggested: true,
+        confidence: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+
+    const latestByProduct = new Map();
+
+    for (const r of reviews) {
+      if (!r.productId || latestByProduct.has(r.productId)) continue;
+
+      const normalized = normalizeCatalogColorFamily(r.colorFamilySuggested);
+      if (!normalized) continue;
+
+      latestByProduct.set(r.productId, {
+        productId: r.productId,
+        merchant: r.merchant,
+        colorFamily: normalized,
+        rawColorFamily: r.colorFamilySuggested,
+        confidence: r.confidence,
+        createdAt: r.createdAt,
+      });
+    }
+
+    const productIds = Array.from(latestByProduct.keys());
+
+    if (!productIds.length) {
+      return res.json({
+        ok: true,
+        dryRun,
+        force,
+        merchant: merchant || null,
+        scannedReviews: reviews.length,
+        candidates: 0,
+        updatesPlanned: 0,
+        updated: 0,
+        byColor: {},
+        samples: [],
+      });
+    }
+
+    const products = await prisma.catalogProduct.findMany({
+      where: {
+        id: { in: productIds },
+        isActive: true,
+        ...(merchant ? { merchant } : {}),
+      },
+      select: {
+        id: true,
+        merchant: true,
+        title: true,
+        colorFamily: true,
+      },
+    });
+
+    const updates = [];
+
+    for (const p of products) {
+      const candidate = latestByProduct.get(p.id);
+      if (!candidate?.colorFamily) continue;
+
+      const current = normalizeCatalogColorFamily(p.colorFamily);
+      if (!force && current) continue;
+      if (current === candidate.colorFamily) continue;
+
+      updates.push({
+        id: p.id,
+        merchant: p.merchant,
+        title: p.title,
+        currentColorFamily: p.colorFamily || null,
+        colorFamily: candidate.colorFamily,
+        rawColorFamily: candidate.rawColorFamily,
+        confidence: candidate.confidence,
+      });
+    }
+
+    const byColor = {};
+    for (const u of updates) {
+      byColor[u.colorFamily] = (byColor[u.colorFamily] || 0) + 1;
+    }
+
+    let updated = 0;
+
+    if (!dryRun && updates.length) {
+      const idsByColor = {};
+      for (const u of updates) {
+        if (!idsByColor[u.colorFamily]) idsByColor[u.colorFamily] = [];
+        idsByColor[u.colorFamily].push(u.id);
+      }
+
+      for (const [color, ids] of Object.entries(idsByColor)) {
+        const result = await prisma.catalogProduct.updateMany({
+          where: { id: { in: ids } },
+          data: { colorFamily: color },
+        });
+        updated += result.count || 0;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      dryRun,
+      force,
+      merchant: merchant || null,
+      minConfidence,
+      scannedReviews: reviews.length,
+      candidates: latestByProduct.size,
+      activeProductsMatched: products.length,
+      updatesPlanned: updates.length,
+      updated,
+      byColor,
+      samples: updates.slice(0, 20),
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/apply-ai-colors error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
   }
 });
 
@@ -7648,6 +7836,7 @@ app.get("/api/catalog/products", async (req, res) => {
       q,
       discountOnly,
       brand,
+      colorFamily,
       priceMin,
       priceMax,
       clothingType,
