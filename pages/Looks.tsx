@@ -36,21 +36,183 @@ function sourceItemClickoutUrl(item: any, placement: string, lookId?: string, it
 }
 
 function similarCatalogRoute(item: any) {
-  const q = [
+  const rawText = [
     item?.title,
     item?.brand,
+    item?.category,
+    item?.displayCategory,
+    item?.taxonomyGroup,
+    item?.taxonomySubgroup,
+    item?.colorFamily,
+    item?.color,
     item?.storeName,
     item?.merchant,
   ]
     .filter(Boolean)
     .map(String)
     .join(' ')
-    .trim();
+    .toLowerCase();
 
   const params = new URLSearchParams();
-  if (q) params.set('q', q.slice(0, 120));
   params.set('unavailable', '1');
 
+  const normalizeGender = (value: any) => {
+    const s = String(value || '').trim().toUpperCase();
+    if (s === 'MALE' || s === 'FEMALE') return s;
+
+    const hay = [
+      value,
+      item?.title,
+      item?.category,
+      item?.gender,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+
+    if (/муж|male|men|man/.test(hay)) return 'MALE';
+    if (/жен|female|women|woman|girl/.test(hay)) return 'FEMALE';
+
+    return '';
+  };
+
+  const normalizeColor = (value: any) => {
+    const s = String(value || '').trim().toLowerCase();
+
+    const map: Record<string, string> = {
+      black: 'black',
+      white: 'white',
+      gray: 'gray',
+      grey: 'gray',
+      silver: 'gray',
+      beige: 'beige',
+      brown: 'brown',
+      blue: 'blue',
+      green: 'green',
+      red: 'red',
+      pink: 'pink',
+      purple: 'purple',
+      yellow: 'yellow',
+      gold: 'yellow',
+      orange: 'orange',
+      multi: 'multi',
+      khaki: 'green',
+    };
+
+    if (map[s]) return map[s];
+
+    const hay = [
+      value,
+      item?.title,
+      item?.color,
+      item?.colorFamily,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+
+    if (/черн|чёрн|black/.test(hay)) return 'black';
+    if (/бел|white/.test(hay)) return 'white';
+    if (/сер|gray|grey|silver/.test(hay)) return 'gray';
+    if (/беж|beige/.test(hay)) return 'beige';
+    if (/корич|brown/.test(hay)) return 'brown';
+    if (/син|голуб|blue/.test(hay)) return 'blue';
+    if (/зел|green|khaki/.test(hay)) return 'green';
+    if (/крас|бордов|red/.test(hay)) return 'red';
+    if (/роз|pink/.test(hay)) return 'pink';
+    if (/фиолет|сирен|purple/.test(hay)) return 'purple';
+    if (/желт|жёлт|yellow|gold/.test(hay)) return 'yellow';
+    if (/оранж|orange/.test(hay)) return 'orange';
+    if (/мульти|разноцвет|multi/.test(hay)) return 'multi';
+
+    return '';
+  };
+
+  const gender = normalizeGender(item?.gender);
+  const colorFamily = normalizeColor(item?.colorFamily || item?.color);
+
+  if (gender) params.set('gender', gender);
+  if (colorFamily) params.set('colorFamily', colorFamily);
+
+  const setClothing = (clothingType: string) => {
+    params.set('displayCategory', 'CLOTHING');
+    params.set('clothingType', clothingType);
+    return `/catalog?${params.toString()}`;
+  };
+
+  const setShoes = (shoeType: string) => {
+    params.set('displayCategory', 'SHOES');
+    params.set('shoeType', shoeType);
+    return `/catalog?${params.toString()}`;
+  };
+
+  const subgroup = String(item?.taxonomySubgroup || '').trim().toUpperCase();
+  const group = String(item?.taxonomyGroup || '').trim().toUpperCase();
+
+  if (group === 'CLOTHING' && subgroup) {
+    const allowed = new Set([
+      'BLAZERS',
+      'OUTERWEAR',
+      'SHIRTS',
+      'TSHIRTS',
+      'POLO',
+      'HOODIES',
+      'KNITWEAR',
+      'TROUSERS',
+      'DENIM',
+      'SKIRTS',
+      'DRESSES',
+    ]);
+    if (allowed.has(subgroup)) return setClothing(subgroup);
+  }
+
+  if (group === 'SHOES' && subgroup) {
+    const allowed = new Set([
+      'LOAFERS',
+      'SNEAKERS',
+      'SNEAKERS_CASUAL',
+      'BALLET',
+      'TALL_BOOTS',
+      'BOOTS',
+      'SHOES_CLASSIC',
+      'SANDALS',
+    ]);
+    if (allowed.has(subgroup)) return setShoes(subgroup);
+  }
+
+  if (/пиджак|жакет|blazer/.test(rawText)) return setClothing('BLAZERS');
+  if (/пальто|куртк|пуховик|ветровк|плащ|бомбер|жилет|outerwear|jacket|coat|parka|vest/.test(rawText)) return setClothing('OUTERWEAR');
+  if (/рубаш|сорочк|блуз|shirt|blouse/.test(rawText)) return setClothing('SHIRTS');
+  if (/футболк|майк|t-?shirt|tee/.test(rawText)) return setClothing('TSHIRTS');
+  if (/поло|polo/.test(rawText)) return setClothing('POLO');
+  if (/худи|толстовк|свитшот|hoodie|sweatshirt/.test(rawText)) return setClothing('HOODIES');
+  if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(rawText)) return setClothing('KNITWEAR');
+  if (/брюк|trouser|pants|slacks/.test(rawText)) return setClothing('TROUSERS');
+  if (/джинс|denim|jeans/.test(rawText)) return setClothing('DENIM');
+  if (/юбк|skirt/.test(rawText)) return setClothing('SKIRTS');
+  if (/плать|сарафан|dress/.test(rawText)) return setClothing('DRESSES');
+
+  if (/лофер|loafer/.test(rawText)) return setShoes('LOAFERS');
+  if (/кроссов|sneaker|trainer|runner/.test(rawText)) return setShoes('SNEAKERS');
+  if (/кед|слипон|canvas|slip[-\s]?on/.test(rawText)) return setShoes('SNEAKERS_CASUAL');
+  if (/балетк|ballet/.test(rawText)) return setShoes('BALLET');
+  if (/сапог|ботфорт|угг|tall boot|ugg/.test(rawText)) return setShoes('TALL_BOOTS');
+  if (/ботин|ботильон|boot|chelsea|chukka/.test(rawText)) return setShoes('BOOTS');
+  if (/туфл|oxford|дерби|монк|brogue|formal shoe|shoes/.test(rawText)) return setShoes('SHOES_CLASSIC');
+  if (/босонож|сандал|сабо|эспадриль|сланц|шл[её]п|sandals?|espadrille/.test(rawText)) return setShoes('SANDALS');
+
+  if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошелек|wallet/.test(rawText)) {
+    params.set('displayCategory', 'BAGS');
+    return `/catalog?${params.toString()}`;
+  }
+
+  const title = String(item?.title || '').trim();
+  const brand = String(item?.brand || '').trim();
+  const q = [brand, title].filter(Boolean).join(' ').trim();
+
+  if (q) params.set('q', q.slice(0, 120));
   return `/catalog?${params.toString()}`;
 }
 
