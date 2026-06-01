@@ -4823,19 +4823,31 @@ app.post("/api/admin/catalog/apply-ai-colors", async (req, res) => {
       });
     }
 
-    const products = await prisma.catalogProduct.findMany({
-      where: {
-        id: { in: productIds },
-        isActive: true,
-        ...(merchant ? { merchant } : {}),
-      },
-      select: {
-        id: true,
-        merchant: true,
-        title: true,
-        colorFamily: true,
-      },
-    });
+    const chunkArray = (arr, size) => {
+      const chunks = [];
+      for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    };
+
+    const products = [];
+    for (const idsChunk of chunkArray(productIds, 5000)) {
+      const chunkProducts = await prisma.catalogProduct.findMany({
+        where: {
+          id: { in: idsChunk },
+          isActive: true,
+          ...(merchant ? { merchant } : {}),
+        },
+        select: {
+          id: true,
+          merchant: true,
+          title: true,
+          colorFamily: true,
+        },
+      });
+      products.push(...chunkProducts);
+    }
 
     const updates = [];
 
@@ -4873,11 +4885,13 @@ app.post("/api/admin/catalog/apply-ai-colors", async (req, res) => {
       }
 
       for (const [color, ids] of Object.entries(idsByColor)) {
-        const result = await prisma.catalogProduct.updateMany({
-          where: { id: { in: ids } },
-          data: { colorFamily: color },
-        });
-        updated += result.count || 0;
+        for (const idsChunk of chunkArray(ids, 5000)) {
+          const result = await prisma.catalogProduct.updateMany({
+            where: { id: { in: idsChunk } },
+            data: { colorFamily: color },
+          });
+          updated += result.count || 0;
+        }
       }
     }
 
