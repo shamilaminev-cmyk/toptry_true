@@ -1185,11 +1185,11 @@ const Catalog = () => {
       ) : (
         <>
           {fallbackInfo?.active && (
-            <div className="mx-4 mt-5 rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em]">
+            <div className="mx-4 mt-5 rounded-[22px] border border-zinc-200 bg-white px-4 py-3 text-zinc-900 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
                 Похожие товары
               </p>
-              <p className="mt-1 text-xs font-semibold leading-relaxed">
+              <p className="mt-1 text-xs font-semibold leading-relaxed text-zinc-900">
                 {fallbackInfo.message || 'Точных совпадений нет — показываем похожие товары'}
               </p>
             </div>
