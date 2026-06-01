@@ -974,6 +974,297 @@ app.get("/media/:key(*)", async (req, res) => {
   }
 });
 
+
+// ---------- USAGE / ENTITLEMENTS ----------
+const TOPTRY_USAGE_EVENT_TYPE_LOOK_GENERATION = "LOOK_GENERATION";
+
+const TOPTRY_PLAN_LIMITS = {
+  FREE: { dailyLookLimit: 3, monthlyLookLimit: 20, isAdmin: false },
+  TESTER: { dailyLookLimit: 20, monthlyLookLimit: 100, isAdmin: false },
+  ADMIN: { dailyLookLimit: 100, monthlyLookLimit: 1000, isAdmin: true },
+};
+
+function normalizeToptryPlan(value) {
+  const plan = String(value || "FREE").trim().toUpperCase();
+  return TOPTRY_PLAN_LIMITS[plan] ? plan : "FREE";
+}
+
+function toptryPlanDefaults(planValue) {
+  const plan = normalizeToptryPlan(planValue);
+  return {
+    plan,
+    ...(TOPTRY_PLAN_LIMITS[plan] || TOPTRY_PLAN_LIMITS.FREE),
+  };
+}
+
+function startOfUtcDay(date = new Date()) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
+}
+
+function startOfUtcMonth(date = new Date()) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0));
+}
+
+async function ensureUserEntitlement(userId, overrides = {}) {
+  const id = String(userId || "").trim();
+  if (!id) throw new Error("userId is required for entitlement");
+
+  const existing = await prisma.userEntitlement.findUnique({
+    where: { userId: id },
+  });
+
+  if (existing) return existing;
+
+  const defaults = toptryPlanDefaults(overrides.plan || "FREE");
+
+  return prisma.userEntitlement.create({
+    data: {
+      id: `ent-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      userId: id,
+      plan: defaults.plan,
+      isAdmin: Boolean(defaults.isAdmin),
+      dailyLookLimit: Number(defaults.dailyLookLimit || 3),
+      monthlyLookLimit: Number(defaults.monthlyLookLimit || 20),
+      meta: {
+        source: "auto_create",
+      },
+    },
+  });
+}
+
+async function getLookGenerationUsageSummary(userId) {
+  const id = String(userId || "").trim();
+  if (!id) throw new Error("userId is required for usage summary");
+
+  const now = new Date();
+  const dayStart = startOfUtcDay(now);
+  const monthStart = startOfUtcMonth(now);
+  const entitlement = await ensureUserEntitlement(id);
+
+  const whereBase = {
+    userId: id,
+    type: TOPTRY_USAGE_EVENT_TYPE_LOOK_GENERATION,
+    status: "SUCCEEDED",
+  };
+
+  const [dailyUsed, monthlyUsed] = await Promise.all([
+    prisma.usageEvent.count({
+      where: {
+        ...whereBase,
+        createdAt: { gte: dayStart },
+      },
+    }),
+    prisma.usageEvent.count({
+      where: {
+        ...whereBase,
+        createdAt: { gte: monthStart },
+      },
+    }),
+  ]);
+
+  const dailyLimit = Math.max(0, Number(entitlement.dailyLookLimit || 0));
+  const monthlyLimit = Math.max(0, Number(entitlement.monthlyLookLimit || 0));
+
+  return {
+    entitlement,
+    dailyUsed,
+    monthlyUsed,
+    dailyLimit,
+    monthlyLimit,
+    dailyRemaining: Math.max(0, dailyLimit - dailyUsed),
+    monthlyRemaining: Math.max(0, monthlyLimit - monthlyUsed),
+    dayStart,
+    monthStart,
+  };
+}
+
+async function assertCanGenerateLook({ userId, qualityMode, itemCount }) {
+  const summary = await getLookGenerationUsageSummary(userId);
+
+  const dailyBlocked = summary.dailyLimit > 0 && summary.dailyUsed >= summary.dailyLimit;
+  const monthlyBlocked = summary.monthlyLimit > 0 && summary.monthlyUsed >= summary.monthlyLimit;
+
+  if (!dailyBlocked && !monthlyBlocked) {
+    return summary;
+  }
+
+  const limitType = dailyBlocked ? "daily" : "monthly";
+  const err = new Error(
+    dailyBlocked
+      ? "Лимит генераций на сегодня исчерпан"
+      : "Месячный лимит генераций исчерпан"
+  );
+
+  err.statusCode = 429;
+  err.code = "LOOK_GENERATION_LIMIT_REACHED";
+  err.limitType = limitType;
+  err.usage = {
+    plan: summary.entitlement.plan,
+    isAdmin: !!summary.entitlement.isAdmin,
+    dailyUsed: summary.dailyUsed,
+    dailyLimit: summary.dailyLimit,
+    dailyRemaining: summary.dailyRemaining,
+    monthlyUsed: summary.monthlyUsed,
+    monthlyLimit: summary.monthlyLimit,
+    monthlyRemaining: summary.monthlyRemaining,
+  };
+
+  try {
+    await prisma.usageEvent.create({
+      data: {
+        id: `usage-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        userId,
+        type: TOPTRY_USAGE_EVENT_TYPE_LOOK_GENERATION,
+        status: "BLOCKED_LIMIT",
+        qualityMode: qualityMode || null,
+        itemCount: Number.isFinite(Number(itemCount)) ? Number(itemCount) : null,
+        error: err.message,
+        meta: {
+          code: err.code,
+          limitType,
+          usage: err.usage,
+        },
+      },
+    });
+  } catch (logErr) {
+    console.warn("[toptry] usage blocked log failed", logErr?.message || logErr);
+  }
+
+  throw err;
+}
+
+async function createLookUsageStartedEvent({ userId, qualityMode, itemCount, meta = {} }) {
+  const event = await prisma.usageEvent.create({
+    data: {
+      id: `usage-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      userId,
+      type: TOPTRY_USAGE_EVENT_TYPE_LOOK_GENERATION,
+      status: "STARTED",
+      qualityMode: qualityMode || null,
+      itemCount: Number.isFinite(Number(itemCount)) ? Number(itemCount) : null,
+      meta,
+    },
+    select: { id: true },
+  });
+
+  return event.id;
+}
+
+async function finishLookUsageEvent(eventId, data = {}) {
+  const id = String(eventId || "").trim();
+  if (!id) return;
+
+  try {
+    await prisma.usageEvent.update({
+      where: { id },
+      data,
+    });
+  } catch (e) {
+    console.warn("[toptry] usage event update failed", {
+      eventId: id,
+      message: e?.message || String(e),
+    });
+  }
+}
+
+app.get("/api/usage/me", requireAuth, async (req, res) => {
+  try {
+    const summary = await getLookGenerationUsageSummary(req.auth.userId);
+
+    return res.json({
+      ok: true,
+      usage: {
+        plan: summary.entitlement.plan,
+        isAdmin: !!summary.entitlement.isAdmin,
+        dailyUsed: summary.dailyUsed,
+        dailyLimit: summary.dailyLimit,
+        dailyRemaining: summary.dailyRemaining,
+        monthlyUsed: summary.monthlyUsed,
+        monthlyLimit: summary.monthlyLimit,
+        monthlyRemaining: summary.monthlyRemaining,
+      },
+    });
+  } catch (e) {
+    console.error("[toptry] /api/usage/me error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.post("/api/admin/users/entitlement-by-phone", async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body?.phone || req.query.phone);
+    if (!phone) {
+      return res.status(400).json({ error: "Valid phone is required" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true, phone: true, username: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found for phone" });
+    }
+
+    const plan = normalizeToptryPlan(req.body?.plan || req.query.plan || "FREE");
+    const defaults = toptryPlanDefaults(plan);
+
+    const dailyLookLimitRaw = Number(req.body?.dailyLookLimit ?? req.query.dailyLookLimit ?? defaults.dailyLookLimit);
+    const monthlyLookLimitRaw = Number(req.body?.monthlyLookLimit ?? req.query.monthlyLookLimit ?? defaults.monthlyLookLimit);
+
+    const dailyLookLimit = Number.isFinite(dailyLookLimitRaw)
+      ? Math.max(0, Math.min(10000, Math.floor(dailyLookLimitRaw)))
+      : defaults.dailyLookLimit;
+
+    const monthlyLookLimit = Number.isFinite(monthlyLookLimitRaw)
+      ? Math.max(0, Math.min(100000, Math.floor(monthlyLookLimitRaw)))
+      : defaults.monthlyLookLimit;
+
+    const isAdmin =
+      req.body?.isAdmin !== undefined || req.query.isAdmin !== undefined
+        ? String(req.body?.isAdmin ?? req.query.isAdmin).trim() === "1" ||
+          String(req.body?.isAdmin ?? req.query.isAdmin).trim().toLowerCase() === "true"
+        : Boolean(defaults.isAdmin);
+
+    const entitlement = await prisma.userEntitlement.upsert({
+      where: { userId: user.id },
+      create: {
+        id: `ent-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        userId: user.id,
+        plan,
+        isAdmin,
+        dailyLookLimit,
+        monthlyLookLimit,
+        meta: {
+          source: "admin_entitlement_by_phone",
+          phone,
+        },
+      },
+      update: {
+        plan,
+        isAdmin,
+        dailyLookLimit,
+        monthlyLookLimit,
+        meta: {
+          source: "admin_entitlement_by_phone",
+          phone,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    return res.json({
+      ok: true,
+      user,
+      entitlement,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/users/entitlement-by-phone error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
 /**
  * POST /api/looks/create
  * Server-first create: saves look in DB/MinIO and returns persistent URLs
@@ -1161,6 +1452,13 @@ app.post("/internal/ai/tryon", async (req, res) => {
 
 
 app.post("/api/looks/create", requireAuth, async (req, res) => {
+  let usageEventId = "";
+  let usageStartedAt = Date.now();
+  let usageContext = {
+    qualityMode: null,
+    itemCount: null,
+  };
+
   try {
     console.log("[debug looks/create] hit", {
       userId: req.auth?.userId,
@@ -1182,6 +1480,11 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
     const itemIds = Array.isArray(b.itemIds) ? b.itemIds.map(String) : [];
     const priceBuyNowRUB = Number(b.priceBuyNowRUB || 0);
 
+    usageContext = {
+      qualityMode,
+      itemCount: Array.isArray(itemImageUrls) ? itemImageUrls.length : null,
+    };
+
     if (!selfieDataUrl || !Array.isArray(itemImageUrls) || itemImageUrls.length === 0) {
       return res
         .status(400)
@@ -1190,6 +1493,28 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
     if (itemImageUrls.length > 5) {
       return res.status(400).json({ error: "Maximum 5 items per try-on in MVP" });
     }
+
+    const usageSummary = await assertCanGenerateLook({
+      userId: req.auth.userId,
+      qualityMode,
+      itemCount: itemImageUrls.length,
+    });
+
+    usageStartedAt = Date.now();
+    usageEventId = await createLookUsageStartedEvent({
+      userId: req.auth.userId,
+      qualityMode,
+      itemCount: itemImageUrls.length,
+      meta: {
+        aspectRatio: aspectRatio || null,
+        source: "api_looks_create",
+        plan: usageSummary.entitlement.plan,
+        dailyUsedBefore: usageSummary.dailyUsed,
+        dailyLimit: usageSummary.dailyLimit,
+        monthlyUsedBefore: usageSummary.monthlyUsed,
+        monthlyLimit: usageSummary.monthlyLimit,
+      },
+    });
 
     const selfieAbs = absUrlFromReq(req, selfieDataUrl);
     const itemsAbs = itemImageUrls.map((u) => absUrlFromReq(req, u));
@@ -1280,9 +1605,44 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
       buyLinks,
     };
 
+    await finishLookUsageEvent(usageEventId, {
+      status: "SUCCEEDED",
+      lookId: id,
+      durationMs: Date.now() - usageStartedAt,
+      meta: {
+        resultImageKey,
+        itemIds,
+        source: "api_looks_create",
+      },
+    });
+
     return res.json({ look });
   } catch (e) {
+    if (usageEventId) {
+      await finishLookUsageEvent(usageEventId, {
+        status: "FAILED",
+        durationMs: Date.now() - usageStartedAt,
+        error: String(e?.message || e).slice(0, 1000),
+        meta: {
+          source: "api_looks_create",
+          code: e?.code || null,
+          qualityMode: usageContext.qualityMode,
+          itemCount: usageContext.itemCount,
+        },
+      });
+    }
+
     console.error("[toptry] /api/looks/create error", e?.stack || e);
+
+    if (e?.statusCode === 429 || e?.code === "LOOK_GENERATION_LIMIT_REACHED") {
+      return res.status(429).json({
+        error: e.message || "Лимит генераций исчерпан",
+        code: e.code || "LOOK_GENERATION_LIMIT_REACHED",
+        limitType: e.limitType || null,
+        usage: e.usage || null,
+      });
+    }
+
     return res.status(500).json({ error: (e && e.message) ? e.message : String(e) });
   }
 });
