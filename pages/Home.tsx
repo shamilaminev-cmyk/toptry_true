@@ -25,7 +25,7 @@ const Home: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch('/api/catalog/products?merchant=rendezvous&limit=8');
+        const resp = await fetch(withApiOrigin('/api/catalog/home-new?limit=8'), { credentials: 'include' });
         const data = await resp.json().catch(() => ({}));
         setCatalogItems(Array.isArray(data?.products) ? data.products : []);
       } catch {
@@ -135,7 +135,7 @@ const Home: React.FC = () => {
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-400">Каталог</p>
-            <h2 className="mt-2 text-2xl font-black uppercase">Новые вещи</h2>
+            <h2 className="mt-2 text-2xl font-black uppercase">Новое в каталоге</h2>
           </div>
           <Link to="/catalog" className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">
             Смотреть все
@@ -143,25 +143,32 @@ const Home: React.FC = () => {
         </div>
 
         <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-          {catalogItems.slice(0, 4).map((item: any) => (
-            <Link key={item.id} to="/catalog" className="rounded-[24px] bg-zinc-50 border border-zinc-100 p-3">
-              <div className="aspect-[3/4] bg-white rounded-[20px] overflow-hidden">
-                {item.imageUrl ? (
-                  <img
-                    src={catalogImageSrc(item.imageUrl)}
-                    alt=""
-                    className="w-full h-full object-contain"
-                  />
-                ) : null}
-              </div>
-              <p className="mt-3 text-[10px] font-black uppercase tracking-tight line-clamp-2">
-                {item.title || 'Товар'}
-              </p>
-              <p className="mt-1 text-xs font-bold text-zinc-500">
-                {Number(item.price || 0).toLocaleString('ru-RU')} ₽
-              </p>
-            </Link>
-          ))}
+          {catalogItems.slice(0, 4).map((item: any) => {
+            const image =
+              Array.isArray(item.images) && item.images[0]
+                ? item.images[0]
+                : (item.imageUrl || item.image || item.imageSrc || item.mediaUrl || '');
+
+            return (
+              <Link key={item.id} to="/catalog" className="rounded-[24px] bg-zinc-50 border border-zinc-100 p-3">
+                <div className="aspect-[3/4] bg-white rounded-[20px] overflow-hidden">
+                  {image ? (
+                    <img
+                      src={catalogImageSrc(image, { w: 420 })}
+                      alt=""
+                      className="w-full h-full object-contain"
+                    />
+                  ) : null}
+                </div>
+                <p className="mt-3 text-[10px] font-black uppercase tracking-tight line-clamp-2">
+                  {item.title || 'Товар'}
+                </p>
+                <p className="mt-1 text-xs font-bold text-zinc-500">
+                  {Number(item.price || 0).toLocaleString('ru-RU')} ₽
+                </p>
+              </Link>
+            );
+          })}
         </div>
       </section>
 

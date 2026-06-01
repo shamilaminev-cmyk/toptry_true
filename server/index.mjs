@@ -6846,6 +6846,173 @@ app.get("/api/catalog/products/:id", async (req, res) => {
 });
 
 
+
+app.get("/api/catalog/home-new", async (req, res) => {
+  try {
+    const rawLimit = Number(req.query.limit || 8);
+    const limit = Math.max(1, Math.min(16, Number.isFinite(rawLimit) ? rawLimit : 8));
+    const poolLimit = Math.max(120, Math.min(500, limit * 80));
+
+    const rows = await prisma.$queryRawUnsafe(
+      `
+      with latest_review as (
+        select distinct on (r."productId")
+          r."productId",
+          r."isTryOnRelevantSuggested",
+          r."rejectReasons",
+          r.confidence,
+          r."createdAt"
+        from "CatalogProductAIReview" r
+        order by r."productId", r."createdAt" desc
+      )
+      select
+        p.id,
+        p.merchant,
+        p."externalId",
+        p.title,
+        p.brand,
+        p.category,
+        p.gender,
+        p.price,
+        p."oldPrice",
+        p.currency,
+        p."imageUrl",
+        p."productUrl",
+        p."affiliateUrl",
+        p."sizesTop",
+        p."sizesBottom",
+        p."sizesShoes",
+        p."taxonomyGroup",
+        p."taxonomySubgroup",
+        p."styleTags",
+        p."occasionTags",
+        p."seasonTags",
+        p."colorFamily",
+        p."createdAt",
+        p."updatedAt"
+      from "CatalogProduct" p
+      join latest_review lr on lr."productId" = p.id
+      where p."isActive" = true
+        and p.price is not null
+        and p.price > 0
+        and p."imageUrl" is not null
+        and p."imageUrl" <> ''
+        and coalesce(p."taxonomyGroup", '') in ('CLOTHING', 'SHOES', 'BAGS')
+        and lr."isTryOnRelevantSuggested" = true
+        and coalesce(cardinality(lr."rejectReasons"), 0) = 0
+      order by p."createdAt" desc, p."updatedAt" desc
+      limit $1
+      `,
+      poolLimit
+    );
+
+    const sizeCount = (p) =>
+      (Array.isArray(p.sizesTop) ? p.sizesTop.length : 0) +
+      (Array.isArray(p.sizesBottom) ? p.sizesBottom.length : 0) +
+      (Array.isArray(p.sizesShoes) ? p.sizesShoes.length : 0);
+
+    const titleKey = (p) =>
+      String(p.title || "")
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .replace(/\b(черный|чёрный|белый|синий|серый|красный|зеленый|зелёный|мультицвет|black|white|blue|grey|gray|red|green)\b/gi, "")
+        .trim()
+        .slice(0, 80);
+
+    const scored = rows.map((p, idx) => {
+      const price = Number(p.price || 0);
+      const oldPrice = Number(p.oldPrice || 0);
+      const discountPct = oldPrice > price && price > 0
+        ? Math.round(((oldPrice - price) / oldPrice) * 100)
+        : 0;
+
+      const hasSizes = sizeCount(p) > 0 ? 1 : 0;
+
+      // Freshness dominates: rows are already ordered by createdAt desc.
+      // Discount and size availability only break ties / improve merchandising.
+      const score =
+        (rows.length - idx) * 100 +
+        Math.min(discountPct, 70) * 2 +
+        hasSizes * 25;
+
+      return { ...p, _score: score, _titleKey: titleKey(p) };
+    }).sort((a, b) => b._score - a._score);
+
+    const pickWithLimits = (merchantMax, groupMax, allowTitleDupes = false) => {
+      const picked = [];
+      const merchantCounts = new Map();
+      const groupCounts = new Map();
+      const seenTitles = new Set();
+
+      for (const p of scored) {
+        const merchant = String(p.merchant || "unknown");
+        const group = String(p.taxonomyGroup || "OTHER");
+        const tk = p._titleKey || p.id;
+
+        if ((merchantCounts.get(merchant) || 0) >= merchantMax) continue;
+        if ((groupCounts.get(group) || 0) >= groupMax) continue;
+        if (!allowTitleDupes && seenTitles.has(tk)) continue;
+
+        picked.push(p);
+        merchantCounts.set(merchant, (merchantCounts.get(merchant) || 0) + 1);
+        groupCounts.set(group, (groupCounts.get(group) || 0) + 1);
+        seenTitles.add(tk);
+
+        if (picked.length >= limit) break;
+      }
+
+      return picked;
+    };
+
+    let selected = pickWithLimits(2, 2, false);
+    if (selected.length < limit) selected = pickWithLimits(3, 3, false);
+    if (selected.length < limit) selected = pickWithLimits(4, 4, true);
+
+    const products = selected.slice(0, limit).map((p) => ({
+      id: p.id,
+      merchant: p.merchant,
+      externalId: p.externalId,
+      title: p.title,
+      brand: p.brand,
+      category: p.category,
+      gender: p.gender,
+      price: p.price,
+      oldPrice: p.oldPrice,
+      currency: p.currency || "RUB",
+      imageUrl: p.imageUrl,
+      images: p.imageUrl ? [p.imageUrl] : [],
+      productUrl: p.productUrl,
+      affiliateUrl: p.affiliateUrl,
+      sizesTop: p.sizesTop || [],
+      sizesBottom: p.sizesBottom || [],
+      sizesShoes: p.sizesShoes || [],
+      taxonomyGroup: p.taxonomyGroup,
+      taxonomySubgroup: p.taxonomySubgroup,
+      styleTags: p.styleTags || [],
+      occasionTags: p.occasionTags || [],
+      seasonTags: p.seasonTags || [],
+      colorFamily: p.colorFamily || "",
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    }));
+
+    res.json({
+      ok: true,
+      products,
+      meta: {
+        limit,
+        pool: rows.length,
+        selected: products.length,
+        strategy: "fresh_ai_clean_diverse",
+      },
+    });
+  } catch (e) {
+    console.error("[toptry] /api/catalog/home-new error", e);
+    res.status(500).json({ error: "Failed to load home catalog products" });
+  }
+});
+
+
 app.get("/api/catalog/products", async (req, res) => {
   try {
     const limit = Math.min(
