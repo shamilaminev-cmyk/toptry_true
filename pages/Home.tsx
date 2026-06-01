@@ -25,7 +25,7 @@ const Home: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch(withApiOrigin('/api/catalog/home-new?limit=8'), { credentials: 'include' });
+        const resp = await fetch(withApiOrigin('/api/catalog/home-new?limit=4'), { credentials: 'include' });
         const data = await resp.json().catch(() => ({}));
         setCatalogItems(Array.isArray(data?.products) ? data.products : []);
       } catch {
