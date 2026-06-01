@@ -8039,7 +8039,115 @@ app.get("/api/catalog/products", async (req, res) => {
       ]);
     }
 
-    const products = rows.map(mapProduct);
+    let products = rows.map(mapProduct);
+
+    const isUnavailableSimilarFallback =
+      String(req.query.unavailable || "").trim() === "1" &&
+      offset === 0 &&
+      total === 0 &&
+      !!colorFamily &&
+      !!(displayCategory || category || clothingType || shoeType);
+
+    if (isUnavailableSimilarFallback) {
+      const fallbackWhere = buildCatalogDbWhere({
+        merchant,
+        gender,
+        category,
+        displayCategory,
+        q,
+        discountOnly,
+        brand,
+        colorFamily: "",
+        priceMin,
+        priceMax,
+        clothingType,
+        shoeType,
+        size: rawSize === "MY" ? "" : rawSize,
+        sizeTop: effectiveMySizeTop,
+        sizeBottom: effectiveMySizeBottom,
+        sizeShoes: effectiveMySizeShoes,
+        sizeLoose,
+      });
+
+      let fallbackRows = [];
+      let fallbackTotal = 0;
+
+      if (rawSize === "MY") {
+        let allFallbackRows = await prisma.catalogProduct.findMany({
+          where: fallbackWhere,
+          orderBy: sort === "discount_desc" ? [{ updatedAt: "desc" }] : orderBy,
+        });
+
+        allFallbackRows = allFallbackRows.filter(matchesEffectiveMySize);
+
+        if (sort === "discount_desc") {
+          allFallbackRows.sort((a, b) => {
+            const priceA = Number(a.price || 0);
+            const oldA = Number(a.oldPrice || 0);
+            const discountA = oldA > priceA && priceA > 0 ? (oldA - priceA) / oldA : 0;
+
+            const priceB = Number(b.price || 0);
+            const oldB = Number(b.oldPrice || 0);
+            const discountB = oldB > priceB && priceB > 0 ? (oldB - priceB) / oldB : 0;
+
+            if (discountB !== discountA) return discountB - discountA;
+            return Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
+          });
+        }
+
+        fallbackTotal = allFallbackRows.length;
+        fallbackRows = allFallbackRows.slice(0, limit);
+      } else if (sort === "discount_desc") {
+        const allFallbackRows = await prisma.catalogProduct.findMany({
+          where: fallbackWhere,
+          orderBy: [{ updatedAt: "desc" }],
+        });
+
+        allFallbackRows.sort((a, b) => {
+          const priceA = Number(a.price || 0);
+          const oldA = Number(a.oldPrice || 0);
+          const discountA = oldA > priceA && priceA > 0 ? (oldA - priceA) / oldA : 0;
+
+          const priceB = Number(b.price || 0);
+          const oldB = Number(b.oldPrice || 0);
+          const discountB = oldB > priceB && priceB > 0 ? (oldB - priceB) / oldB : 0;
+
+          if (discountB !== discountA) return discountB - discountA;
+          return Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
+        });
+
+        fallbackTotal = allFallbackRows.length;
+        fallbackRows = allFallbackRows.slice(0, limit);
+      } else {
+        [fallbackRows, fallbackTotal] = await Promise.all([
+          prisma.catalogProduct.findMany({
+            where: fallbackWhere,
+            orderBy,
+            skip: 0,
+            take: limit,
+          }),
+          prisma.catalogProduct.count({ where: fallbackWhere }),
+        ]);
+      }
+
+      products = fallbackRows.map(mapProduct);
+
+      return res.json({
+        products,
+        total: fallbackTotal,
+        originalTotal: 0,
+        limit,
+        offset,
+        hasMore: products.length < fallbackTotal,
+        fallback: {
+          active: true,
+          reason: "no_exact_color_match",
+          message: "Точных совпадений нет — показываем похожие товары других цветов",
+          removedFilters: ["colorFamily"],
+          originalColorFamily: normalizeCatalogColorFamily(colorFamily) || colorFamily,
+        },
+      });
+    }
 
     return res.json({
       products,
