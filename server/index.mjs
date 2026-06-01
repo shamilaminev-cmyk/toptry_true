@@ -2310,11 +2310,12 @@ function normalizeClickoutOptionalString(value, maxLen = 500) {
 
 app.get("/api/out/product/:productId", async (req, res) => {
   try {
-    const productId = String(req.params.productId || "").trim();
-    if (!productId) return res.status(400).send("Product id is required");
+    const requestedId = String(req.params.productId || "").trim();
+    if (!requestedId) return res.status(400).send("Product id is required");
 
-    const product = await prisma.catalogProduct.findFirst({
-      where: { id: productId, isActive: true },
+    let resolvedKind = "catalog_product";
+    let product = await prisma.catalogProduct.findFirst({
+      where: { id: requestedId, isActive: true },
       select: {
         id: true,
         merchant: true,
@@ -2324,9 +2325,59 @@ app.get("/api/out/product/:productId", async (req, res) => {
       },
     });
 
-    if (!product) return res.status(404).send("Product not found");
+    // Old generated looks may store wardrobe ids for catalog items:
+    // w-cat-cat-rendezvous-dedupe-... -> cat-rendezvous-dedupe-...
+    if (!product && requestedId.startsWith("w-cat-")) {
+      const possibleCatalogId = requestedId.slice("w-cat-".length);
+      product = await prisma.catalogProduct.findFirst({
+        where: { id: possibleCatalogId, isActive: true },
+        select: {
+          id: true,
+          merchant: true,
+          title: true,
+          affiliateUrl: true,
+          productUrl: true,
+        },
+      });
 
-    const targetUrl = String(product.affiliateUrl || product.productUrl || "").trim();
+      if (product) {
+        resolvedKind = "catalog_product_from_wardrobe_id";
+      }
+    }
+
+    let wardrobeItem = null;
+
+    if (!product) {
+      wardrobeItem = await prisma.wardrobeItem.findFirst({
+        where: {
+          id: requestedId,
+          sourceType: "catalog",
+        },
+        select: {
+          id: true,
+          title: true,
+          storeId: true,
+          storeName: true,
+          affiliateUrl: true,
+          productUrl: true,
+        },
+      });
+
+      if (wardrobeItem) {
+        resolvedKind = "wardrobe_catalog_item";
+      }
+    }
+
+    if (!product && !wardrobeItem) return res.status(404).send("Product not found");
+
+    const targetUrl = String(
+      product?.affiliateUrl ||
+      product?.productUrl ||
+      wardrobeItem?.affiliateUrl ||
+      wardrobeItem?.productUrl ||
+      ""
+    ).trim();
+
     if (!targetUrl) return res.status(404).send("Product link not found");
 
     try {
@@ -2343,18 +2394,28 @@ app.get("/api/out/product/:productId", async (req, res) => {
     const itemIndexRaw = String(req.query.itemIndex ?? "").trim();
     const itemIndex = /^\d+$/.test(itemIndexRaw) ? Number(itemIndexRaw) : null;
 
+    const resolvedId = product?.id || wardrobeItem?.id || requestedId;
+    const merchant =
+      product?.merchant ||
+      wardrobeItem?.storeId ||
+      wardrobeItem?.storeName ||
+      null;
+
     try {
       await prisma.clickout.create({
         data: {
           id: `clickout-${Date.now()}-${Math.random().toString(16).slice(2)}`,
           userId: req.auth?.userId || null,
-          productId: product.id,
+          productId: product?.id || wardrobeItem?.id || requestedId,
           meta: {
-            merchant: product.merchant || null,
-            productTitle: product.title || null,
+            merchant,
+            productTitle: product?.title || wardrobeItem?.title || null,
             placement,
             lookId,
             itemIndex,
+            requestedId,
+            resolvedId,
+            resolvedKind,
             targetUrl,
             referer: normalizeClickoutOptionalString(req.get("referer"), 1000),
             userAgent: normalizeClickoutOptionalString(req.get("user-agent"), 1000),
@@ -2364,7 +2425,9 @@ app.get("/api/out/product/:productId", async (req, res) => {
       });
     } catch (e) {
       console.warn("[toptry] clickout log failed", {
-        productId: product.id,
+        requestedId,
+        resolvedId,
+        resolvedKind,
         placement,
         message: e?.message || String(e),
       });
