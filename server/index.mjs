@@ -2313,6 +2313,27 @@ app.get("/api/out/product/:productId", async (req, res) => {
     const requestedId = String(req.params.productId || "").trim();
     if (!requestedId) return res.status(400).send("Product id is required");
 
+    const webOrigin = String(process.env.PUBLIC_WEB_ORIGIN || "https://toptry.ru").replace(/\/+$/, "");
+
+    const buildCatalogFallbackUrl = (source = {}) => {
+      const q = [
+        source?.title,
+        source?.brand,
+        source?.merchant,
+        source?.storeName,
+      ]
+        .filter(Boolean)
+        .map(String)
+        .join(" ")
+        .trim();
+
+      const params = new URLSearchParams();
+      if (q) params.set("q", q.slice(0, 120));
+      params.set("unavailable", "1");
+
+      return `${webOrigin}/#/catalog?${params.toString()}`;
+    };
+
     let resolvedKind = "catalog_product";
     let product = await prisma.catalogProduct.findFirst({
       where: { id: requestedId, isActive: true },
@@ -2320,28 +2341,56 @@ app.get("/api/out/product/:productId", async (req, res) => {
         id: true,
         merchant: true,
         title: true,
+        brand: true,
         affiliateUrl: true,
         productUrl: true,
+        isActive: true,
       },
     });
 
     // Old generated looks may store wardrobe ids for catalog items:
     // w-cat-cat-rendezvous-dedupe-... -> cat-rendezvous-dedupe-...
-    if (!product && requestedId.startsWith("w-cat-")) {
-      const possibleCatalogId = requestedId.slice("w-cat-".length);
+    const possibleCatalogId = requestedId.startsWith("w-cat-")
+      ? requestedId.slice("w-cat-".length)
+      : "";
+
+    if (!product && possibleCatalogId) {
       product = await prisma.catalogProduct.findFirst({
         where: { id: possibleCatalogId, isActive: true },
         select: {
           id: true,
           merchant: true,
           title: true,
+          brand: true,
           affiliateUrl: true,
           productUrl: true,
+          isActive: true,
         },
       });
 
       if (product) {
         resolvedKind = "catalog_product_from_wardrobe_id";
+      }
+    }
+
+    // Keep a non-active catalog row only as metadata / last-link fallback.
+    // It should not block fallback to look snapshot.
+    let inactiveProduct = null;
+    if (!product) {
+      const inactiveIds = [requestedId, possibleCatalogId].filter(Boolean);
+      if (inactiveIds.length) {
+        inactiveProduct = await prisma.catalogProduct.findFirst({
+          where: { id: { in: inactiveIds } },
+          select: {
+            id: true,
+            merchant: true,
+            title: true,
+            brand: true,
+            affiliateUrl: true,
+            productUrl: true,
+            isActive: true,
+          },
+        });
       }
     }
 
@@ -2356,6 +2405,7 @@ app.get("/api/out/product/:productId", async (req, res) => {
         select: {
           id: true,
           title: true,
+          brand: true,
           storeId: true,
           storeName: true,
           affiliateUrl: true,
@@ -2368,37 +2418,97 @@ app.get("/api/out/product/:productId", async (req, res) => {
       }
     }
 
-    if (!product && !wardrobeItem) return res.status(404).send("Product not found");
-
-    const targetUrl = String(
-      product?.affiliateUrl ||
-      product?.productUrl ||
-      wardrobeItem?.affiliateUrl ||
-      wardrobeItem?.productUrl ||
-      ""
-    ).trim();
-
-    if (!targetUrl) return res.status(404).send("Product link not found");
-
-    try {
-      const parsed = new URL(targetUrl);
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        return res.status(400).send("Invalid product link");
-      }
-    } catch {
-      return res.status(400).send("Invalid product link");
-    }
-
     const placement = normalizeClickoutPlacement(req.query.placement);
     const lookId = normalizeClickoutOptionalString(req.query.lookId, 120);
     const itemIndexRaw = String(req.query.itemIndex ?? "").trim();
     const itemIndex = /^\d+$/.test(itemIndexRaw) ? Number(itemIndexRaw) : null;
 
-    const resolvedId = product?.id || wardrobeItem?.id || requestedId;
+    let snapshotItem = null;
+
+    if (!product && lookId) {
+      const look = await prisma.look.findUnique({
+        where: { id: lookId },
+        select: {
+          id: true,
+          userId: true,
+          isPublic: true,
+          sourceItems: true,
+        },
+      });
+
+      const canUseLookSnapshot =
+        !!look &&
+        (look.isPublic || (req.auth?.userId && look.userId === req.auth.userId));
+
+      if (canUseLookSnapshot) {
+        const items = Array.isArray(look.sourceItems) ? look.sourceItems : [];
+
+        if (itemIndex !== null && itemIndex >= 0 && itemIndex < items.length) {
+          snapshotItem = items[itemIndex] || null;
+        }
+
+        if (!snapshotItem) {
+          snapshotItem = items.find((item) => {
+            const id = String(item?.id || "").trim();
+            return id && (id === requestedId || id === possibleCatalogId);
+          }) || null;
+        }
+
+        if (snapshotItem) {
+          resolvedKind = "look_source_item_snapshot";
+        }
+      }
+    }
+
+    const sourceForLink =
+      product ||
+      snapshotItem ||
+      wardrobeItem ||
+      inactiveProduct ||
+      null;
+
+    let targetUrl = String(sourceForLink?.affiliateUrl || sourceForLink?.productUrl || "").trim();
+
+    // If there is no saved seller link anymore, do not show a raw server error.
+    // Send the user back to TopTry catalog with a search for similar active items.
+    let redirectedToFallbackCatalog = false;
+    if (!targetUrl) {
+      targetUrl = buildCatalogFallbackUrl(sourceForLink || inactiveProduct || snapshotItem || wardrobeItem || product || {});
+      redirectedToFallbackCatalog = true;
+      if (!sourceForLink && !inactiveProduct && !snapshotItem && !wardrobeItem && !product) {
+        resolvedKind = "fallback_catalog_no_source";
+      } else {
+        resolvedKind = `${resolvedKind}_fallback_catalog`;
+      }
+    }
+
+    try {
+      const parsed = new URL(targetUrl);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        targetUrl = buildCatalogFallbackUrl(sourceForLink || {});
+        redirectedToFallbackCatalog = true;
+        resolvedKind = `${resolvedKind}_invalid_url_fallback_catalog`;
+      }
+    } catch {
+      targetUrl = buildCatalogFallbackUrl(sourceForLink || {});
+      redirectedToFallbackCatalog = true;
+      resolvedKind = `${resolvedKind}_invalid_url_fallback_catalog`;
+    }
+
+    const resolvedId =
+      product?.id ||
+      snapshotItem?.id ||
+      wardrobeItem?.id ||
+      inactiveProduct?.id ||
+      requestedId;
+
     const merchant =
       product?.merchant ||
+      snapshotItem?.merchant ||
+      snapshotItem?.storeId ||
       wardrobeItem?.storeId ||
       wardrobeItem?.storeName ||
+      inactiveProduct?.merchant ||
       null;
 
     try {
@@ -2406,16 +2516,22 @@ app.get("/api/out/product/:productId", async (req, res) => {
         data: {
           id: `clickout-${Date.now()}-${Math.random().toString(16).slice(2)}`,
           userId: req.auth?.userId || null,
-          productId: product?.id || wardrobeItem?.id || requestedId,
+          productId: product?.id || wardrobeItem?.id || inactiveProduct?.id || snapshotItem?.id || requestedId,
           meta: {
             merchant,
-            productTitle: product?.title || wardrobeItem?.title || null,
+            productTitle:
+              product?.title ||
+              snapshotItem?.title ||
+              wardrobeItem?.title ||
+              inactiveProduct?.title ||
+              null,
             placement,
             lookId,
             itemIndex,
             requestedId,
             resolvedId,
             resolvedKind,
+            redirectedToFallbackCatalog,
             targetUrl,
             referer: normalizeClickoutOptionalString(req.get("referer"), 1000),
             userAgent: normalizeClickoutOptionalString(req.get("user-agent"), 1000),
@@ -2437,7 +2553,7 @@ app.get("/api/out/product/:productId", async (req, res) => {
     return res.redirect(302, targetUrl);
   } catch (e) {
     console.error("[toptry] /api/out/product/:productId error", e);
-    return res.status(500).send("Clickout failed");
+    return res.redirect(302, "https://toptry.ru/#/catalog?unavailable=1");
   }
 });
 
