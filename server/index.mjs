@@ -7059,6 +7059,10 @@ app.get("/api/catalog/brands", async (req, res) => {
         : "";
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
+    const colorFamily =
+      typeof req.query.colorFamily === "string" && req.query.colorFamily.trim()
+        ? req.query.colorFamily.trim()
+        : "";
 
     const where = buildCatalogDbWhere({
       merchant,
@@ -7068,6 +7072,7 @@ app.get("/api/catalog/brands", async (req, res) => {
       q,
       discountOnly,
       brand: "",
+      colorFamily,
       priceMin: "",
       priceMax: "",
       clothingType,
@@ -7748,6 +7753,10 @@ app.get("/api/catalog/products", async (req, res) => {
     const brand =
       typeof req.query.brand === "string" && req.query.brand.trim()
         ? req.query.brand.trim()
+        : "";
+    const colorFamily =
+      typeof req.query.colorFamily === "string" && req.query.colorFamily.trim()
+        ? req.query.colorFamily.trim()
         : "";
     const priceMin =
       typeof req.query.priceMin === "string" && req.query.priceMin.trim()
