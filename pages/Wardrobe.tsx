@@ -66,6 +66,61 @@ const Wardrobe = () => {
       ? wardrobe
       : wardrobe.filter((i) => i.category === activeCategory);
 
+  const isCatalogWardrobeItem = (item: WardrobeItem | null | undefined) =>
+    item?.sourceType === 'catalog' || !!item?.isCatalog;
+
+  const buildSimilarCatalogHref = (item: WardrobeItem) => {
+    const params = new URLSearchParams();
+
+    const title = String(item.title || '').trim();
+    if (title && title !== 'Без названия' && title !== 'Моя вещь') {
+      params.set('q', title.slice(0, 120));
+    }
+
+    switch (item.category) {
+      case Category.TOPS:
+        params.set('displayCategory', 'CLOTHING');
+        params.set('clothingType', 'TOPS');
+        break;
+      case Category.BOTTOMS:
+        params.set('displayCategory', 'CLOTHING');
+        params.set('clothingType', 'TROUSERS');
+        break;
+      case Category.DRESSES:
+        params.set('displayCategory', 'CLOTHING');
+        params.set('clothingType', 'DRESSES');
+        break;
+      case Category.OUTERWEAR:
+        params.set('displayCategory', 'CLOTHING');
+        params.set('clothingType', 'OUTERWEAR');
+        break;
+      case Category.SHOES:
+        params.set('displayCategory', 'SHOES');
+        break;
+      case Category.ACCESSORIES:
+        params.set('displayCategory', 'ACCESSORIES');
+        break;
+      default:
+        break;
+    }
+
+    if (item.gender && item.gender !== Gender.UNISEX) {
+      params.set('gender', String(item.gender));
+    }
+
+    return `/catalog?${params.toString()}`;
+  };
+
+  const openBuyForWardrobeItem = (item: WardrobeItem) => {
+    if (!isCatalogWardrobeItem(item)) return;
+
+    const url = withApiOrigin(
+      `/api/out/product/${encodeURIComponent(item.id)}?placement=wardrobe`
+    );
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const readAsDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -596,14 +651,18 @@ const Wardrobe = () => {
 
   const openSimilarFromMenu = () => {
     if (!menuItem) return;
-    const params = new URLSearchParams();
 
-    if (menuItem.category) {
-      params.set('category', String(menuItem.category));
-    }
-
+    const href = buildSimilarCatalogHref(menuItem);
     setMenuItem(null);
-    navigate(`/catalog?${params.toString()}`);
+    navigate(href);
+  };
+
+  const openBuyFromMenu = () => {
+    if (!menuItem || !isCatalogWardrobeItem(menuItem)) return;
+
+    const item = menuItem;
+    setMenuItem(null);
+    openBuyForWardrobeItem(item);
   };
 
   const requestDeleteFromMenu = () => {
@@ -1029,17 +1088,32 @@ const Wardrobe = () => {
                           <div className="mt-1 text-[11px] font-medium text-zinc-500">
                             {item.price ? `${item.price} ₽` : ''}
                           </div>
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openBuyForWardrobeItem(item);
+                              }}
+                              className="h-7 flex-1 rounded-full bg-zinc-900 text-white text-[8px] font-black uppercase tracking-[0.14em]"
+                            >
+                              Купить
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(buildSimilarCatalogHref(item));
+                              }}
+                              className="h-7 flex-1 rounded-full bg-white/90 border border-zinc-200 text-zinc-700 text-[8px] font-black uppercase tracking-[0.14em]"
+                            >
+                              Похожие
+                            </button>
+                          </div>
                         </>
                       ) : (
                         <button
-                          onClick={() => {
-                            const params = new URLSearchParams();
-
-                            if (item.category) {
-                              params.set('category', String(item.category));
-                            }
-
-                            navigate(`/catalog?${params.toString()}`);
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(buildSimilarCatalogHref(item));
                           }}
                           className="mt-1 text-[10px] font-medium text-zinc-500 underline underline-offset-2"
                         >
@@ -1114,6 +1188,15 @@ const Wardrobe = () => {
             </div>
 
             <div className="p-2">
+              {isCatalogWardrobeItem(menuItem) && (
+                <button
+                  onClick={openBuyFromMenu}
+                  className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 transition"
+                >
+                  Купить у продавца
+                </button>
+              )}
+
               <button
                 onClick={openSimilarFromMenu}
                 className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 transition"

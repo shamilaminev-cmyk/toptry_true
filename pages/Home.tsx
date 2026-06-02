@@ -164,7 +164,7 @@ const Home: React.FC = () => {
                 : (item.imageUrl || item.image || item.imageSrc || item.mediaUrl || '');
 
             return (
-              <Link key={item.id} to="/catalog" className="rounded-[24px] bg-zinc-50 border border-zinc-100 p-3">
+              <Link key={item.id} to={`/product/${encodeURIComponent(item.id)}`} className="rounded-[24px] bg-zinc-50 border border-zinc-100 p-3">
                 <div className="aspect-[3/4] bg-white rounded-[20px] overflow-hidden">
                   {image ? (
                     <img
@@ -213,7 +213,7 @@ const Home: React.FC = () => {
                 (oldPrice > price && price > 0 ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0);
 
               return (
-                <Link key={item.id} to="/catalog" className="rounded-[24px] bg-zinc-50 border border-zinc-100 p-3">
+                <Link key={item.id} to={`/product/${encodeURIComponent(item.id)}`} className="rounded-[24px] bg-zinc-50 border border-zinc-100 p-3">
                   <div className="relative aspect-[3/4] bg-white rounded-[20px] overflow-hidden">
                     {discount > 0 ? (
                       <div className="absolute left-2 top-2 z-10 rounded-full bg-zinc-950 px-2.5 py-1 text-[10px] font-black text-white">
