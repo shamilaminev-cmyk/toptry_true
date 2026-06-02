@@ -622,6 +622,7 @@ app.post("/api/auth/phone/verify", async (req, res) => {
 
     const phone = normalizePhone(req.body?.phone);
     const code = String(req.body?.code || "").trim();
+    const referralCode = normalizeReferralCode(req.body?.referralCode || req.body?.ref || req.query?.referralCode || req.query?.ref);
 
     if (!phone || !code) {
       return res.status(400).json({ error: "phone and code are required" });
@@ -666,6 +667,8 @@ app.post("/api/auth/phone/verify", async (req, res) => {
       where: { phone },
     });
 
+    const isNewUser = !user;
+
     if (!user) {
       user = await p.user.create({
         data: {
@@ -680,6 +683,13 @@ app.post("/api/auth/phone/verify", async (req, res) => {
         data: { phoneVerifiedAt: new Date() },
       });
     }
+
+    const referralReward = await applyReferralRewardForVerifiedUser({
+      userId: user.id,
+      phone,
+      referralCode,
+      isNewUser,
+    });
 
     const token = signSession(user);
     const { cookieName, cookieOptions } = getAuthConfig();
@@ -705,6 +715,7 @@ app.post("/api/auth/phone/verify", async (req, res) => {
         createdAt: user.createdAt,
       },
       needsProfileCompletion: !user.username,
+      referralReward,
     });
   } catch (e) {
     console.error("[toptry] /api/auth/phone/verify error", e);
@@ -984,6 +995,17 @@ const TOPTRY_PLAN_LIMITS = {
   ADMIN: { dailyLookLimit: 100, monthlyLookLimit: 1000, isAdmin: true },
 };
 
+const REFERRAL_INVITER_CREDIT_AMOUNT = Number(process.env.REFERRAL_INVITER_CREDIT_AMOUNT || 3);
+const REFERRAL_INVITED_CREDIT_AMOUNT = Number(process.env.REFERRAL_INVITED_CREDIT_AMOUNT || 1);
+
+const TOPTRY_GENERATION_CREDIT_REASONS = new Set([
+  "REFERRAL_INVITER",
+  "REFERRAL_INVITED",
+  "PURCHASE_CONFIRMED",
+  "ADMIN",
+  "PROMO",
+]);
+
 function normalizeToptryPlan(value) {
   const plan = String(value || "FREE").trim().toUpperCase();
   return TOPTRY_PLAN_LIMITS[plan] ? plan : "FREE";
@@ -1040,6 +1062,7 @@ async function getLookGenerationUsageSummary(userId) {
   const dayStart = startOfUtcDay(now);
   const monthStart = startOfUtcMonth(now);
   const entitlement = await ensureUserEntitlement(id);
+  const credits = await getGenerationCreditsSummary(id);
 
   const whereBase = {
     userId: id,
@@ -1073,6 +1096,7 @@ async function getLookGenerationUsageSummary(userId) {
     monthlyLimit,
     dailyRemaining: Math.max(0, dailyLimit - dailyUsed),
     monthlyRemaining: Math.max(0, monthlyLimit - monthlyUsed),
+    generationCredits: credits,
     dayStart,
     monthStart,
   };
@@ -1085,7 +1109,11 @@ async function assertCanGenerateLook({ userId, qualityMode, itemCount }) {
   const monthlyBlocked = summary.monthlyLimit > 0 && summary.monthlyUsed >= summary.monthlyLimit;
 
   if (!dailyBlocked && !monthlyBlocked) {
-    return summary;
+    return { ...summary, willUseGenerationCredit: false };
+  }
+
+  if (summary.generationCredits?.remaining > 0) {
+    return { ...summary, willUseGenerationCredit: true };
   }
 
   const limitType = dailyBlocked ? "daily" : "monthly";
@@ -1107,6 +1135,7 @@ async function assertCanGenerateLook({ userId, qualityMode, itemCount }) {
     monthlyUsed: summary.monthlyUsed,
     monthlyLimit: summary.monthlyLimit,
     monthlyRemaining: summary.monthlyRemaining,
+    generationCreditsRemaining: summary.generationCredits?.remaining || 0,
   };
 
   try {
@@ -1167,6 +1196,243 @@ async function finishLookUsageEvent(eventId, data = {}) {
   }
 }
 
+
+function normalizeReferralCode(value) {
+  const s = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+  return s.slice(0, 32);
+}
+
+function generateReferralCode(userId) {
+  const src = `${String(userId || "")}|${String(process.env.REFERRAL_CODE_SECRET || "toptry")}`;
+  return crypto.createHash("sha256").update(src).digest("base64url").slice(0, 8).toLowerCase();
+}
+
+async function ensureReferralCodeForUser(userId) {
+  const id = String(userId || "").trim();
+  if (!id) throw new Error("userId is required for referral code");
+
+  const existing = await prisma.referralCode.findUnique({
+    where: { userId: id },
+  });
+
+  if (existing?.code) return existing;
+
+  let code = generateReferralCode(id);
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await prisma.referralCode.create({
+        data: {
+          id: `refcode-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          userId: id,
+          code,
+        },
+      });
+    } catch {
+      code = `${generateReferralCode(id)}${attempt + 1}`;
+    }
+  }
+
+  throw new Error("Failed to create referral code");
+}
+
+function normalizeGenerationCreditReason(value) {
+  const reason = String(value || "ADMIN").trim().toUpperCase();
+  return TOPTRY_GENERATION_CREDIT_REASONS.has(reason) ? reason : "ADMIN";
+}
+
+async function getGenerationCreditsSummary(userId) {
+  const id = String(userId || "").trim();
+  if (!id) return { remaining: 0, grants: [] };
+
+  const now = new Date();
+
+  const grants = await prisma.generationCreditGrant.findMany({
+    where: {
+      userId: id,
+      remaining: { gt: 0 },
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: now } },
+      ],
+    },
+    orderBy: [
+      { expiresAt: "asc" },
+      { createdAt: "asc" },
+    ],
+    select: {
+      id: true,
+      amount: true,
+      remaining: true,
+      reason: true,
+      expiresAt: true,
+      createdAt: true,
+    },
+  });
+
+  return {
+    remaining: grants.reduce((sum, grant) => sum + Math.max(0, Number(grant.remaining || 0)), 0),
+    grants,
+  };
+}
+
+async function grantGenerationCredits({ userId, amount, reason = "ADMIN", expiresAt = null, meta = {} }) {
+  const id = String(userId || "").trim();
+  const n = Math.max(0, Math.min(10000, Math.floor(Number(amount || 0))));
+
+  if (!id) throw new Error("userId is required");
+  if (!n) throw new Error("amount must be positive");
+
+  return prisma.generationCreditGrant.create({
+    data: {
+      id: `credit-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      userId: id,
+      amount: n,
+      remaining: n,
+      reason: normalizeGenerationCreditReason(reason),
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      meta,
+    },
+  });
+}
+
+async function consumeGenerationCreditForLook({ userId, lookId, usageEventId = "" }) {
+  const id = String(userId || "").trim();
+  if (!id) return null;
+
+  const now = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const grant = await tx.generationCreditGrant.findFirst({
+      where: {
+        userId: id,
+        remaining: { gt: 0 },
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: now } },
+        ],
+      },
+      orderBy: [
+        { expiresAt: "asc" },
+        { createdAt: "asc" },
+      ],
+    });
+
+    if (!grant) return null;
+
+    const currentMeta =
+      grant.meta && typeof grant.meta === "object" && !Array.isArray(grant.meta)
+        ? grant.meta
+        : {};
+
+    const updated = await tx.generationCreditGrant.update({
+      where: { id: grant.id },
+      data: {
+        remaining: { decrement: 1 },
+        meta: {
+          ...currentMeta,
+          lastConsumedAt: now.toISOString(),
+          lastLookId: lookId || null,
+          lastUsageEventId: usageEventId || null,
+        },
+      },
+    });
+
+    return {
+      id: updated.id,
+      reason: updated.reason,
+      remaining: updated.remaining,
+    };
+  });
+}
+
+async function applyReferralRewardForVerifiedUser({ userId, phone, referralCode, isNewUser }) {
+  const invitedUserId = String(userId || "").trim();
+  const code = normalizeReferralCode(referralCode);
+
+  // Referral bonus only for new phone-verified users.
+  // Existing users logging in via someone else's link should not trigger rewards.
+  if (!isNewUser || !invitedUserId || !code) return null;
+
+  const referral = await prisma.referralCode.findUnique({
+    where: { code },
+  });
+
+  if (!referral?.userId) return null;
+  if (referral.userId === invitedUserId) return null;
+
+  const existingReward = await prisma.referralReward.findUnique({
+    where: { invitedUserId },
+  });
+
+  if (existingReward) return null;
+
+  return prisma.$transaction(async (tx) => {
+    const duplicate = await tx.referralReward.findUnique({
+      where: { invitedUserId },
+    });
+
+    if (duplicate) return null;
+
+    const inviterGrant = await tx.generationCreditGrant.create({
+      data: {
+        id: `credit-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        userId: referral.userId,
+        amount: REFERRAL_INVITER_CREDIT_AMOUNT,
+        remaining: REFERRAL_INVITER_CREDIT_AMOUNT,
+        reason: "REFERRAL_INVITER",
+        meta: {
+          referralCode: code,
+          invitedUserId,
+          invitedPhone: phone || null,
+        },
+      },
+    });
+
+    const invitedGrant = await tx.generationCreditGrant.create({
+      data: {
+        id: `credit-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        userId: invitedUserId,
+        amount: REFERRAL_INVITED_CREDIT_AMOUNT,
+        remaining: REFERRAL_INVITED_CREDIT_AMOUNT,
+        reason: "REFERRAL_INVITED",
+        meta: {
+          referralCode: code,
+          inviterUserId: referral.userId,
+        },
+      },
+    });
+
+    const reward = await tx.referralReward.create({
+      data: {
+        id: `refreward-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        inviterUserId: referral.userId,
+        invitedUserId,
+        referralCode: code,
+        status: "REWARDED",
+        inviterCreditGrantId: inviterGrant.id,
+        invitedCreditGrantId: invitedGrant.id,
+        meta: {
+          inviterCredits: REFERRAL_INVITER_CREDIT_AMOUNT,
+          invitedCredits: REFERRAL_INVITED_CREDIT_AMOUNT,
+          invitedPhone: phone || null,
+        },
+      },
+    });
+
+    return {
+      ok: true,
+      rewardId: reward.id,
+      inviterCredits: REFERRAL_INVITER_CREDIT_AMOUNT,
+      invitedCredits: REFERRAL_INVITED_CREDIT_AMOUNT,
+    };
+  });
+}
+
 app.get("/api/usage/me", requireAuth, async (req, res) => {
   try {
     const summary = await getLookGenerationUsageSummary(req.auth.userId);
@@ -1182,6 +1448,8 @@ app.get("/api/usage/me", requireAuth, async (req, res) => {
         monthlyUsed: summary.monthlyUsed,
         monthlyLimit: summary.monthlyLimit,
         monthlyRemaining: summary.monthlyRemaining,
+        generationCreditsRemaining: summary.generationCredits?.remaining || 0,
+        generationCreditGrants: summary.generationCredits?.grants || [],
       },
     });
   } catch (e) {
@@ -1189,6 +1457,108 @@ app.get("/api/usage/me", requireAuth, async (req, res) => {
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
+
+
+app.get("/api/referrals/me", requireAuth, async (req, res) => {
+  try {
+    const referral = await ensureReferralCodeForUser(req.auth.userId);
+    const webOrigin = String(process.env.PUBLIC_WEB_ORIGIN || "https://toptry.ru").replace(/\/+$/, "");
+    const credits = await getGenerationCreditsSummary(req.auth.userId);
+
+    const [invitedCount, rewards] = await Promise.all([
+      prisma.referralReward.count({
+        where: {
+          inviterUserId: req.auth.userId,
+          status: "REWARDED",
+        },
+      }),
+      prisma.referralReward.findMany({
+        where: { inviterUserId: req.auth.userId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          invitedUserId: true,
+          status: true,
+          createdAt: true,
+          meta: true,
+        },
+      }),
+    ]);
+
+    return res.json({
+      ok: true,
+      referral: {
+        code: referral.code,
+        link: `${webOrigin}/#/auth?ref=${encodeURIComponent(referral.code)}`,
+        inviterRewardCredits: REFERRAL_INVITER_CREDIT_AMOUNT,
+        invitedRewardCredits: REFERRAL_INVITED_CREDIT_AMOUNT,
+        invitedCount,
+        creditsRemaining: credits.remaining,
+        rewards,
+      },
+    });
+  } catch (e) {
+    console.error("[toptry] /api/referrals/me error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.post("/api/admin/users/credits-by-phone", async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body?.phone || req.query.phone);
+    if (!phone) {
+      return res.status(400).json({ error: "Valid phone is required" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true, phone: true, username: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found for phone" });
+    }
+
+    const amountRaw = Number(req.body?.amount ?? req.query.amount ?? 0);
+    const amount = Number.isFinite(amountRaw)
+      ? Math.max(0, Math.min(10000, Math.floor(amountRaw)))
+      : 0;
+
+    if (!amount) {
+      return res.status(400).json({ error: "Positive amount is required" });
+    }
+
+    const reason = normalizeGenerationCreditReason(req.body?.reason || req.query.reason || "ADMIN");
+    const expiresAt = req.body?.expiresAt || req.query.expiresAt || null;
+    const comment = String(req.body?.comment || req.query.comment || "").trim();
+
+    const grant = await grantGenerationCredits({
+      userId: user.id,
+      amount,
+      reason,
+      expiresAt,
+      meta: {
+        source: "admin_credits_by_phone",
+        phone,
+        comment: comment || null,
+      },
+    });
+
+    const credits = await getGenerationCreditsSummary(user.id);
+
+    return res.json({
+      ok: true,
+      user,
+      grant,
+      generationCreditsRemaining: credits.remaining,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/users/credits-by-phone error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
 
 app.post("/api/admin/users/entitlement-by-phone", async (req, res) => {
   try {
@@ -1605,6 +1975,14 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
       buyLinks,
     };
 
+    const consumedCredit = usageSummary?.willUseGenerationCredit
+      ? await consumeGenerationCreditForLook({
+          userId,
+          lookId: id,
+          usageEventId,
+        })
+      : null;
+
     await finishLookUsageEvent(usageEventId, {
       status: "SUCCEEDED",
       lookId: id,
@@ -1613,6 +1991,7 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
         resultImageKey,
         itemIds,
         source: "api_looks_create",
+        credit: consumedCredit,
       },
     });
 

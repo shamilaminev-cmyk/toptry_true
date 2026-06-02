@@ -340,3 +340,47 @@ model UsageEvent {
   @@index([status])
 }
 
+model GenerationCreditGrant {
+  id        String    @id
+  userId    String
+  amount    Int
+  remaining Int
+  reason    String
+  expiresAt DateTime?
+  meta      Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, remaining])
+  @@index([userId, reason])
+  @@index([reason])
+  @@index([expiresAt])
+}
+
+model ReferralCode {
+  id        String   @id
+  userId    String   @unique
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+}
+
+model ReferralReward {
+  id                   String   @id
+  inviterUserId         String
+  invitedUserId         String   @unique
+  referralCode          String
+  status                String   @default("REWARDED")
+  inviterCreditGrantId  String?
+  invitedCreditGrantId  String?
+  meta                  Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([inviterUserId])
+  @@index([referralCode])
+  @@index([status])
+}
+
