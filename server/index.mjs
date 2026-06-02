@@ -3794,7 +3794,6 @@ function getCatalogClothingTypePredicates(clothingType) {
       "CARDIGANS",
       "TURTLENECKS",
     ],
-
     TSHIRTS: ["TSHIRTS"],
     POLO: ["POLO"],
     SHIRTS: ["SHIRTS", "FORMAL_SHIRTS", "CASUAL_SHIRTS", "LINEN_SHIRTS", "DENIM_SHIRTS"],
@@ -3803,17 +3802,36 @@ function getCatalogClothingTypePredicates(clothingType) {
     OVERSHIRTS: ["OVERSHIRTS"],
     LINEN_SHIRTS: ["LINEN_SHIRTS"],
     DENIM_SHIRTS: ["DENIM_SHIRTS"],
-
     HOODIES: ["HOODIES"],
     KNITWEAR: ["KNITWEAR", "SWEATERS", "CARDIGANS", "TURTLENECKS"],
     SWEATERS: ["SWEATERS"],
     CARDIGANS: ["CARDIGANS"],
     TURTLENECKS: ["TURTLENECKS"],
 
-    BLAZERS: ["BLAZERS"],
+    BOTTOMS: [
+      "TROUSERS",
+      "CARGO_PANTS",
+      "CHINOS",
+      "FORMAL_TROUSERS",
+      "JOGGERS",
+      "SHORTS",
+      "LEGGINGS",
+      "DENIM",
+      "SKIRTS",
+    ],
+    TROUSERS: ["TROUSERS", "CARGO_PANTS", "CHINOS", "FORMAL_TROUSERS", "JOGGERS", "SHORTS", "LEGGINGS"],
+    CARGO_PANTS: ["CARGO_PANTS"],
+    CHINOS: ["CHINOS"],
+    FORMAL_TROUSERS: ["FORMAL_TROUSERS"],
+    JOGGERS: ["JOGGERS"],
+    SHORTS: ["SHORTS"],
+    LEGGINGS: ["LEGGINGS"],
+    DENIM: ["DENIM"],
+    SKIRTS: ["SKIRTS"],
 
     OUTERWEAR: [
       "OUTERWEAR",
+      "BLAZERS",
       "COATS",
       "PUFFER_JACKETS",
       "BOMBERS",
@@ -3822,7 +3840,9 @@ function getCatalogClothingTypePredicates(clothingType) {
       "LEATHER_JACKETS",
       "DENIM_JACKETS",
       "VESTS",
+      "OVERSHIRTS",
     ],
+    BLAZERS: ["BLAZERS"],
     COATS: ["COATS"],
     PUFFER_JACKETS: ["PUFFER_JACKETS"],
     BOMBERS: ["BOMBERS"],
@@ -3832,33 +3852,15 @@ function getCatalogClothingTypePredicates(clothingType) {
     DENIM_JACKETS: ["DENIM_JACKETS"],
     VESTS: ["VESTS"],
 
-    SKIRTS: ["SKIRTS"],
-
-    TROUSERS: [
-      "TROUSERS",
-      "CARGO_PANTS",
-      "CHINOS",
-      "FORMAL_TROUSERS",
-      "JOGGERS",
-      "SHORTS",
-      "LEGGINGS",
-    ],
-    CARGO_PANTS: ["CARGO_PANTS"],
-    CHINOS: ["CHINOS"],
-    FORMAL_TROUSERS: ["FORMAL_TROUSERS"],
-    JOGGERS: ["JOGGERS"],
-    SHORTS: ["SHORTS"],
-    LEGGINGS: ["LEGGINGS"],
-
-    DENIM: ["DENIM"],
-
     SUITS: ["SUITS"],
   };
 
   const taxonomy = taxonomyGroups[ct];
   if (!taxonomy?.length) return null;
 
-  const fallbackEmptyTaxonomy = { OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }] };
+  const fallbackEmptyTaxonomy = {
+    OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }],
+  };
 
   const titleContains = (category, needle) => ({
     category,
@@ -3869,129 +3871,39 @@ function getCatalogClothingTypePredicates(clothingType) {
   return [
     { taxonomySubgroup: { in: taxonomy } },
 
-    // broad legacy fallbacks
     ...(ct === "DRESSES" ? [{ category: "DRESS", ...fallbackEmptyTaxonomy }] : []),
     ...(ct === "TOPS" ? [{ category: "TOPS", ...fallbackEmptyTaxonomy }] : []),
+    ...(ct === "BOTTOMS" ? [{ category: "BOTTOMS", ...fallbackEmptyTaxonomy }] : []),
     ...(ct === "OUTERWEAR" ? [{ category: "JACKETS", ...fallbackEmptyTaxonomy }] : []),
 
-    // jackets / outerwear
-    ...(ct === "BLAZERS" ? [
-      titleContains("JACKETS", "жакет"),
-      titleContains("JACKETS", "пиджак"),
-      titleContains("JACKETS", "blazer"),
-    ] : []),
-    ...(ct === "COATS" ? [
-      titleContains("JACKETS", "пальто"),
-      titleContains("JACKETS", "coat"),
-    ] : []),
-    ...(ct === "PUFFER_JACKETS" ? [
-      titleContains("JACKETS", "пухов"),
-      titleContains("JACKETS", "puffer"),
-      titleContains("JACKETS", "down jacket"),
-    ] : []),
-    ...(ct === "BOMBERS" ? [
-      titleContains("JACKETS", "бомбер"),
-      titleContains("JACKETS", "bomber"),
-    ] : []),
-    ...(ct === "PARKAS" ? [
-      titleContains("JACKETS", "парка"),
-      titleContains("JACKETS", "parka"),
-    ] : []),
-    ...(ct === "TRENCHES" ? [
-      titleContains("JACKETS", "тренч"),
-      titleContains("JACKETS", "плащ"),
-      titleContains("JACKETS", "trench"),
-    ] : []),
-    ...(ct === "LEATHER_JACKETS" ? [
-      titleContains("JACKETS", "кожан"),
-      titleContains("JACKETS", "leather"),
-    ] : []),
-    ...(ct === "DENIM_JACKETS" ? [
-      titleContains("JACKETS", "джинсов"),
-      titleContains("JACKETS", "denim"),
-    ] : []),
-    ...(ct === "VESTS" ? [
-      titleContains("JACKETS", "жилет"),
-      titleContains("JACKETS", "vest"),
-      titleContains("JACKETS", "gilet"),
-    ] : []),
-
-    // bottoms
-    ...(ct === "SKIRTS" ? [titleContains("BOTTOMS", "юб")] : []),
-    ...(ct === "TROUSERS" ? [titleContains("BOTTOMS", "брюк")] : []),
-    ...(ct === "CARGO_PANTS" ? [
+    ...(ct === "BOTTOMS" ? [
+      titleContains("BOTTOMS", "брюк"),
+      titleContains("BOTTOMS", "джинс"),
+      titleContains("BOTTOMS", "юб"),
+      titleContains("BOTTOMS", "шорт"),
       titleContains("BOTTOMS", "карго"),
       titleContains("BOTTOMS", "cargo"),
     ] : []),
-    ...(ct === "CHINOS" ? [
-      titleContains("BOTTOMS", "чинос"),
-      titleContains("BOTTOMS", "chino"),
-    ] : []),
-    ...(ct === "FORMAL_TROUSERS" ? [
-      titleContains("BOTTOMS", "классическ"),
-      titleContains("BOTTOMS", "костюмн"),
-      titleContains("BOTTOMS", "formal"),
-    ] : []),
-    ...(ct === "JOGGERS" ? [
-      titleContains("BOTTOMS", "джоггер"),
-      titleContains("BOTTOMS", "jogger"),
-    ] : []),
-    ...(ct === "SHORTS" ? [
-      titleContains("BOTTOMS", "шорт"),
-      titleContains("BOTTOMS", "shorts"),
-    ] : []),
-    ...(ct === "LEGGINGS" ? [
-      titleContains("BOTTOMS", "леггин"),
-      titleContains("BOTTOMS", "лосин"),
-      titleContains("BOTTOMS", "legging"),
-    ] : []),
-    ...(ct === "DENIM" ? [
-      { OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "джинс", mode: "insensitive" } },
-      { OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "denim", mode: "insensitive" } },
-      { OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "jeans", mode: "insensitive" } },
-    ] : []),
 
-    // tops
-    ...(ct === "TSHIRTS" ? [titleContains("TOPS", "футбол")] : []),
-    ...(ct === "POLO" ? [titleContains("TOPS", "поло")] : []),
-    ...(ct === "HOODIES" ? [
-      titleContains("TOPS", "худи"),
-      titleContains("TOPS", "свитшот"),
-      titleContains("TOPS", "толстов"),
-    ] : []),
-    ...(ct === "KNITWEAR" ? [
-      titleContains("TOPS", "свитер"),
-      titleContains("TOPS", "джемпер"),
-      titleContains("TOPS", "кардиган"),
-      titleContains("TOPS", "водолаз"),
-    ] : []),
-    ...(ct === "SWEATERS" ? [
-      titleContains("TOPS", "свитер"),
-      titleContains("TOPS", "джемпер"),
-      titleContains("TOPS", "sweater"),
-    ] : []),
-    ...(ct === "CARDIGANS" ? [
-      titleContains("TOPS", "кардиган"),
-      titleContains("TOPS", "cardigan"),
-    ] : []),
-    ...(ct === "TURTLENECKS" ? [
-      titleContains("TOPS", "водолаз"),
-      titleContains("TOPS", "turtleneck"),
-    ] : []),
-    ...(ct === "SHIRTS" ? [
-      titleContains("TOPS", "рубаш"),
-      titleContains("TOPS", "сороч"),
-      titleContains("TOPS", "блуз"),
-    ] : []),
-    ...(ct === "FORMAL_SHIRTS" ? [
-      titleContains("TOPS", "классическ"),
-      titleContains("TOPS", "сороч"),
-      titleContains("TOPS", "formal shirt"),
-    ] : []),
-    ...(ct === "CASUAL_SHIRTS" ? [
-      titleContains("TOPS", "casual"),
-      titleContains("TOPS", "повседнев"),
-    ] : []),
+    ...(ct === "TROUSERS" ? [titleContains("BOTTOMS", "брюк")] : []),
+    ...(ct === "CARGO_PANTS" ? [titleContains("BOTTOMS", "карго"), titleContains("BOTTOMS", "cargo")] : []),
+    ...(ct === "CHINOS" ? [titleContains("BOTTOMS", "чинос"), titleContains("BOTTOMS", "chino")] : []),
+    ...(ct === "FORMAL_TROUSERS" ? [titleContains("BOTTOMS", "классическ"), titleContains("BOTTOMS", "костюмн"), titleContains("BOTTOMS", "formal")] : []),
+    ...(ct === "JOGGERS" ? [titleContains("BOTTOMS", "джоггер"), titleContains("BOTTOMS", "jogger")] : []),
+    ...(ct === "SHORTS" ? [titleContains("BOTTOMS", "шорт"), titleContains("BOTTOMS", "shorts")] : []),
+    ...(ct === "LEGGINGS" ? [titleContains("BOTTOMS", "леггин"), titleContains("BOTTOMS", "лосин"), titleContains("BOTTOMS", "legging")] : []),
+    ...(ct === "DENIM" ? [titleContains("BOTTOMS", "джинс"), titleContains("BOTTOMS", "denim"), titleContains("BOTTOMS", "jeans")] : []),
+    ...(ct === "SKIRTS" ? [titleContains("BOTTOMS", "юб"), titleContains("BOTTOMS", "skirt")] : []),
+
+    ...(ct === "BLAZERS" ? [titleContains("JACKETS", "жакет"), titleContains("JACKETS", "пиджак"), titleContains("JACKETS", "blazer")] : []),
+    ...(ct === "COATS" ? [titleContains("JACKETS", "пальто"), titleContains("JACKETS", "coat")] : []),
+    ...(ct === "PUFFER_JACKETS" ? [titleContains("JACKETS", "пухов"), titleContains("JACKETS", "puffer"), titleContains("JACKETS", "down jacket")] : []),
+    ...(ct === "BOMBERS" ? [titleContains("JACKETS", "бомбер"), titleContains("JACKETS", "bomber")] : []),
+    ...(ct === "PARKAS" ? [titleContains("JACKETS", "парка"), titleContains("JACKETS", "parka")] : []),
+    ...(ct === "TRENCHES" ? [titleContains("JACKETS", "тренч"), titleContains("JACKETS", "плащ"), titleContains("JACKETS", "trench")] : []),
+    ...(ct === "LEATHER_JACKETS" ? [titleContains("JACKETS", "кожан"), titleContains("JACKETS", "leather")] : []),
+    ...(ct === "DENIM_JACKETS" ? [titleContains("JACKETS", "джинсов"), titleContains("JACKETS", "denim")] : []),
+    ...(ct === "VESTS" ? [titleContains("JACKETS", "жилет"), titleContains("JACKETS", "vest"), titleContains("JACKETS", "gilet")] : []),
     ...(ct === "OVERSHIRTS" ? [
       titleContains("TOPS", "куртка-рубаш"),
       titleContains("TOPS", "рубашка-курт"),
@@ -4000,14 +3912,20 @@ function getCatalogClothingTypePredicates(clothingType) {
       titleContains("JACKETS", "рубашка-курт"),
       titleContains("JACKETS", "overshirt"),
     ] : []),
-    ...(ct === "LINEN_SHIRTS" ? [
-      titleContains("TOPS", "льнян"),
-      titleContains("TOPS", "linen"),
-    ] : []),
-    ...(ct === "DENIM_SHIRTS" ? [
-      titleContains("TOPS", "джинсов"),
-      titleContains("TOPS", "denim"),
-    ] : []),
+
+    ...(ct === "TSHIRTS" ? [titleContains("TOPS", "футбол")] : []),
+    ...(ct === "POLO" ? [titleContains("TOPS", "поло")] : []),
+    ...(ct === "HOODIES" ? [titleContains("TOPS", "худи"), titleContains("TOPS", "свитшот"), titleContains("TOPS", "толстов")] : []),
+    ...(ct === "KNITWEAR" ? [titleContains("TOPS", "свитер"), titleContains("TOPS", "джемпер"), titleContains("TOPS", "кардиган"), titleContains("TOPS", "водолаз")] : []),
+    ...(ct === "SWEATERS" ? [titleContains("TOPS", "свитер"), titleContains("TOPS", "джемпер"), titleContains("TOPS", "sweater")] : []),
+    ...(ct === "CARDIGANS" ? [titleContains("TOPS", "кардиган"), titleContains("TOPS", "cardigan")] : []),
+    ...(ct === "TURTLENECKS" ? [titleContains("TOPS", "водолаз"), titleContains("TOPS", "turtleneck")] : []),
+    ...(ct === "SHIRTS" ? [titleContains("TOPS", "рубаш"), titleContains("TOPS", "сороч"), titleContains("TOPS", "блуз")] : []),
+    ...(ct === "FORMAL_SHIRTS" ? [titleContains("TOPS", "классическ"), titleContains("TOPS", "сороч"), titleContains("TOPS", "formal shirt")] : []),
+    ...(ct === "CASUAL_SHIRTS" ? [titleContains("TOPS", "casual"), titleContains("TOPS", "повседнев")] : []),
+    ...(ct === "LINEN_SHIRTS" ? [titleContains("TOPS", "льнян"), titleContains("TOPS", "linen")] : []),
+    ...(ct === "DENIM_SHIRTS" ? [titleContains("TOPS", "джинсов"), titleContains("TOPS", "denim")] : []),
+
     ...(ct === "SUITS" ? [
       { OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "костюм", mode: "insensitive" } },
       { OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }], title: { contains: "suit", mode: "insensitive" } },

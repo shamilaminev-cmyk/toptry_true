@@ -33,6 +33,7 @@ type ClothingType =
   | 'CARDIGANS'
   | 'TURTLENECKS'
   | 'SKIRTS'
+  | 'BOTTOMS'
   | 'TROUSERS'
   | 'CARGO_PANTS'
   | 'CHINOS'
@@ -79,66 +80,96 @@ const CATEGORY_TABS: Array<{ id: '' | DisplayCategory; label: string }> = [
   { id: 'ACCESSORIES', label: 'Аксессуары' },
 ];
 
-const CLOTHING_TABS_MIXED: Array<{ id: ClothingType; label: string }> = [
-  { id: 'FEMALE_CLOTHING', label: 'Женская одежда' },
-  { id: 'MALE_CLOTHING', label: 'Мужская одежда' },
+type ClothingGroup =
+  | ''
+  | 'TOP'
+  | 'BOTTOM'
+  | 'OUTERWEAR'
+  | 'DRESSES'
+  | 'SUITS';
+
+type ClothingGroupTab = { id: ClothingGroup; label: string; wideType: ClothingType };
+type ClothingSubtypeTab = { id: ClothingType; label: string };
+
+const CLOTHING_GROUP_TABS_FEMALE: ClothingGroupTab[] = [
+  { id: '', label: 'Вся одежда', wideType: '' },
+  { id: 'TOP', label: 'Верх', wideType: 'TOPS' },
+  { id: 'BOTTOM', label: 'Низ', wideType: 'BOTTOMS' },
+  { id: 'OUTERWEAR', label: 'Верхняя одежда', wideType: 'OUTERWEAR' },
+  { id: 'DRESSES', label: 'Платья', wideType: 'DRESSES' },
+  { id: 'SUITS', label: 'Костюмы', wideType: 'SUITS' },
 ];
 
-const CLOTHING_TABS_FEMALE: Array<{ id: ClothingType; label: string }> = [
-  { id: '', label: 'Все' },
-  { id: 'DRESSES', label: 'Платья' },
-  { id: 'BLAZERS', label: 'Жакеты' },
-  { id: 'COATS', label: 'Пальто' },
-  { id: 'PUFFER_JACKETS', label: 'Пуховики' },
-  { id: 'TRENCHES', label: 'Тренчи' },
-  { id: 'VESTS', label: 'Жилеты' },
-  { id: 'SHIRTS', label: 'Блузы и рубашки' },
-  { id: 'TSHIRTS', label: 'Футболки' },
-  { id: 'HOODIES', label: 'Худи и свитшоты' },
-  { id: 'KNITWEAR', label: 'Трикотаж' },
-  { id: 'TURTLENECKS', label: 'Водолазки' },
-  { id: 'SKIRTS', label: 'Юбки' },
-  { id: 'TROUSERS', label: 'Брюки' },
-  { id: 'CARGO_PANTS', label: 'Карго' },
-  { id: 'JOGGERS', label: 'Джоггеры' },
-  { id: 'SHORTS', label: 'Шорты' },
-  { id: 'LEGGINGS', label: 'Легинсы' },
-  { id: 'DENIM', label: 'Джинсы' },
+const CLOTHING_GROUP_TABS_MALE: ClothingGroupTab[] = [
+  { id: '', label: 'Вся одежда', wideType: '' },
+  { id: 'TOP', label: 'Верх', wideType: 'TOPS' },
+  { id: 'BOTTOM', label: 'Низ', wideType: 'BOTTOMS' },
+  { id: 'OUTERWEAR', label: 'Верхняя одежда', wideType: 'OUTERWEAR' },
+  { id: 'SUITS', label: 'Костюмы', wideType: 'SUITS' },
 ];
 
-const CLOTHING_TABS_MALE: Array<{ id: ClothingType; label: string }> = [
-  { id: '', label: 'Все' },
-  { id: 'TSHIRTS', label: 'Футболки' },
-  { id: 'POLO', label: 'Поло' },
-  { id: 'SHIRTS', label: 'Рубашки' },
-  { id: 'FORMAL_SHIRTS', label: 'Классические рубашки' },
-  { id: 'OVERSHIRTS', label: 'Куртки-рубашки' },
-  { id: 'HOODIES', label: 'Худи и свитшоты' },
-  { id: 'KNITWEAR', label: 'Трикотаж' },
-  { id: 'CARDIGANS', label: 'Кардиганы' },
-  { id: 'TURTLENECKS', label: 'Водолазки' },
-  { id: 'BLAZERS', label: 'Пиджаки' },
-  { id: 'COATS', label: 'Пальто' },
-  { id: 'PUFFER_JACKETS', label: 'Пуховики' },
-  { id: 'BOMBERS', label: 'Бомберы' },
-  { id: 'PARKAS', label: 'Парки' },
-  { id: 'TRENCHES', label: 'Плащи и тренчи' },
-  { id: 'LEATHER_JACKETS', label: 'Кожаные куртки' },
-  { id: 'VESTS', label: 'Жилеты' },
-  { id: 'TROUSERS', label: 'Брюки' },
-  { id: 'CARGO_PANTS', label: 'Карго' },
-  { id: 'CHINOS', label: 'Чиносы' },
-  { id: 'FORMAL_TROUSERS', label: 'Классические брюки' },
-  { id: 'JOGGERS', label: 'Джоггеры' },
-  { id: 'SHORTS', label: 'Шорты' },
-  { id: 'DENIM', label: 'Джинсы' },
-  { id: 'SUITS', label: 'Костюмы' },
-];
+const CLOTHING_SUBTYPE_TABS: Record<'TOP' | 'BOTTOM' | 'OUTERWEAR', ClothingSubtypeTab[]> = {
+  TOP: [
+    { id: 'TOPS', label: 'Все' },
+    { id: 'TSHIRTS', label: 'Футболки' },
+    { id: 'POLO', label: 'Поло' },
+    { id: 'SHIRTS', label: 'Рубашки' },
+    { id: 'FORMAL_SHIRTS', label: 'Классические рубашки' },
+    { id: 'OVERSHIRTS', label: 'Куртки-рубашки' },
+    { id: 'HOODIES', label: 'Худи и свитшоты' },
+    { id: 'KNITWEAR', label: 'Трикотаж' },
+    { id: 'CARDIGANS', label: 'Кардиганы' },
+    { id: 'TURTLENECKS', label: 'Водолазки' },
+  ],
+  BOTTOM: [
+    { id: 'BOTTOMS', label: 'Все' },
+    { id: 'TROUSERS', label: 'Брюки' },
+    { id: 'CARGO_PANTS', label: 'Карго' },
+    { id: 'CHINOS', label: 'Чиносы' },
+    { id: 'FORMAL_TROUSERS', label: 'Классические брюки' },
+    { id: 'JOGGERS', label: 'Джоггеры' },
+    { id: 'SHORTS', label: 'Шорты' },
+    { id: 'DENIM', label: 'Джинсы' },
+    { id: 'SKIRTS', label: 'Юбки' },
+    { id: 'LEGGINGS', label: 'Легинсы' },
+  ],
+  OUTERWEAR: [
+    { id: 'OUTERWEAR', label: 'Все' },
+    { id: 'BLAZERS', label: 'Пиджаки / жакеты' },
+    { id: 'COATS', label: 'Пальто' },
+    { id: 'PUFFER_JACKETS', label: 'Пуховики' },
+    { id: 'BOMBERS', label: 'Бомберы' },
+    { id: 'PARKAS', label: 'Парки' },
+    { id: 'TRENCHES', label: 'Плащи и тренчи' },
+    { id: 'LEATHER_JACKETS', label: 'Кожаные куртки' },
+    { id: 'DENIM_JACKETS', label: 'Джинсовые куртки' },
+    { id: 'VESTS', label: 'Жилеты' },
+  ],
+};
 
-const getClothingTabs = (gender: '' | Gender): Array<{ id: ClothingType; label: string }> => {
-  if (gender === Gender.FEMALE) return CLOTHING_TABS_FEMALE;
-  if (gender === Gender.MALE) return CLOTHING_TABS_MALE;
-  return CLOTHING_TABS_MIXED;
+const getClothingGroupTabs = (gender: '' | Gender): ClothingGroupTab[] => {
+  if (gender === Gender.MALE) return CLOTHING_GROUP_TABS_MALE;
+  return CLOTHING_GROUP_TABS_FEMALE;
+};
+
+const getClothingGroupForType = (type: ClothingType): ClothingGroup => {
+  if (!type || type === 'FEMALE_CLOTHING' || type === 'MALE_CLOTHING') return '';
+  if (type === 'DRESSES') return 'DRESSES';
+  if (type === 'SUITS') return 'SUITS';
+  if (['BOTTOMS', 'TROUSERS', 'CARGO_PANTS', 'CHINOS', 'FORMAL_TROUSERS', 'JOGGERS', 'SHORTS', 'LEGGINGS', 'DENIM', 'SKIRTS'].includes(type)) return 'BOTTOM';
+  if (['OUTERWEAR', 'BLAZERS', 'COATS', 'PUFFER_JACKETS', 'BOMBERS', 'PARKAS', 'TRENCHES', 'LEATHER_JACKETS', 'DENIM_JACKETS', 'VESTS'].includes(type)) return 'OUTERWEAR';
+  return 'TOP';
+};
+
+const getClothingSubtypeTabs = (group: ClothingGroup, gender: '' | Gender): ClothingSubtypeTab[] => {
+  if (group !== 'TOP' && group !== 'BOTTOM' && group !== 'OUTERWEAR') return [];
+  const tabs = CLOTHING_SUBTYPE_TABS[group];
+
+  if (gender === Gender.MALE && group === 'BOTTOM') {
+    return tabs.filter((tab) => tab.id !== 'SKIRTS' && tab.id !== 'LEGGINGS');
+  }
+
+  return tabs;
 };
 
 const SHOE_TABS_FEMALE: Array<{ id: ShoeType; label: string }> = [
@@ -222,6 +253,7 @@ const Catalog = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftDisplayCategory, setDraftDisplayCategory] = useState<'' | DisplayCategory>('');
   const [draftClothingType, setDraftClothingType] = useState<ClothingType>('');
+  const [draftClothingGroup, setDraftClothingGroup] = useState<ClothingGroup>('');
   const [draftShoeType, setDraftShoeType] = useState<ShoeType>('');
   const [draftDiscountOnly, setDraftDiscountOnly] = useState(false);
   const [draftBrand, setDraftBrand] = useState('');
@@ -624,6 +656,7 @@ const Catalog = () => {
     setUnavailableMode(unavailableParam);
     setClothingType(clothingTypeParam);
     setDraftClothingType(clothingTypeParam);
+    setDraftClothingGroup(getClothingGroupForType(clothingTypeParam));
     setShoeType(shoeTypeParam);
     setDraftShoeType(shoeTypeParam);
 
@@ -664,6 +697,7 @@ const Catalog = () => {
     setDraftSizeLoose(size === 'MY' ? sizeLoose : false);
     setDraftColorFamily(colorFamily);
     setDraftClothingType(clothingType);
+    setDraftClothingGroup(getClothingGroupForType(clothingType));
     setDraftShoeType(shoeType);
   }, [filtersOpen, gender, displayCategory, clothingType, shoeType, discountOnly, brand, priceMin, priceMax, size, sizeLoose, colorFamily]);
 
@@ -934,6 +968,7 @@ const Catalog = () => {
     setDraftGender('');
     setDraftDisplayCategory('');
     setDraftClothingType('');
+    setDraftClothingGroup('');
     setDraftShoeType('');
     setDraftDiscountOnly(false);
     setDraftBrand('');
@@ -1090,6 +1125,7 @@ const Catalog = () => {
               setDraftSize(size);
               setDraftSizeLoose(size === 'MY' ? sizeLoose : false);
               setDraftClothingType(clothingType);
+              setDraftClothingGroup(getClothingGroupForType(clothingType));
               setDraftShoeType(shoeType);
               setFiltersOpen(true);
             }}
@@ -1174,7 +1210,10 @@ const Catalog = () => {
                     onClick={() => {
                       const nextCategory = tab.id;
                       setDraftDisplayCategory(nextCategory);
-                      if (nextCategory !== 'CLOTHING') setDraftClothingType('');
+                      if (nextCategory !== 'CLOTHING') {
+                        setDraftClothingType('');
+                        setDraftClothingGroup('');
+                      }
                       if (nextCategory !== 'SHOES') setDraftShoeType('');
 
                       setDraftSize((current) => {
@@ -1228,6 +1267,7 @@ const Catalog = () => {
                           onClick={() => {
                             setDraftGender(tab.id);
                             setDraftClothingType('');
+                            setDraftClothingGroup('');
                           }}
                           className="flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border border-zinc-200 bg-white text-zinc-600 transition-all active:scale-[0.98]"
                         >
@@ -1237,29 +1277,33 @@ const Catalog = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3 px-1">
                       <div className="text-[9px] font-black uppercase tracking-[0.28em] text-zinc-400">
-                        Категории
+                        Группа одежды
                       </div>
                       <button
                         onClick={() => {
                           setDraftGender('');
                           setDraftClothingType('');
+                          setDraftClothingGroup('');
                         }}
                         className="text-[9px] font-black uppercase tracking-[0.22em] text-zinc-400 underline underline-offset-4"
                       >
-                        изменить
+                        изменить пол
                       </button>
                     </div>
 
                     <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                      {getClothingTabs(draftGender).map((tab) => {
-                        const active = draftClothingType === tab.id;
+                      {getClothingGroupTabs(draftGender).map((tab) => {
+                        const active = draftClothingGroup === tab.id;
                         return (
                           <button
-                            key={String(tab.id || 'all-clothing')}
-                            onClick={() => setDraftClothingType(tab.id)}
+                            key={String(tab.id || 'all-clothing-groups')}
+                            onClick={() => {
+                              setDraftClothingGroup(tab.id);
+                              setDraftClothingType(tab.wideType);
+                            }}
                             className={`flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
                               active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
                             }`}
@@ -1269,6 +1313,30 @@ const Catalog = () => {
                         );
                       })}
                     </div>
+
+                    {getClothingSubtypeTabs(draftClothingGroup, draftGender).length > 0 && (
+                      <div className="space-y-2 pt-1">
+                        <div className="px-1 text-[9px] font-black uppercase tracking-[0.28em] text-zinc-400">
+                          Тип
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                          {getClothingSubtypeTabs(draftClothingGroup, draftGender).map((tab) => {
+                            const active = draftClothingType === tab.id;
+                            return (
+                              <button
+                                key={String(tab.id || 'all-clothing-subtypes')}
+                                onClick={() => setDraftClothingType(tab.id)}
+                                className={`flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                                  active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                                }`}
+                              >
+                                {tab.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
