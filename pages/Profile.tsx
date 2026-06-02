@@ -3,7 +3,18 @@ import { withApiOrigin } from "../utils/withApiOrigin";
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../store';
 import { ICONS } from '../constants';
-import { SubscriptionTier } from '../types';
+
+type UsageInfo = {
+  plan: string;
+  isAdmin: boolean;
+  dailyUsed: number;
+  dailyLimit: number;
+  dailyRemaining: number;
+  monthlyUsed: number;
+  monthlyLimit: number;
+  monthlyRemaining: number;
+  generationCreditsRemaining: number;
+};
 
 type ReferralInfo = {
   code: string;
@@ -26,6 +37,7 @@ const Profile = () => {
   const [sizeShoes, setSizeShoes] = useState(user?.sizeShoes || '');
   const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
   const [referralCopied, setReferralCopied] = useState(false);
+  const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
   useEffect(() => {
     if (!avatarOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -92,6 +104,37 @@ const Profile = () => {
     };
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    const loadUsage = async () => {
+      try {
+        const res = await fetch('/api/usage/me', {
+          credentials: 'include',
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data?.error || 'Не удалось загрузить лимиты');
+        }
+
+        if (!cancelled) {
+          setUsageInfo(data?.usage || null);
+        }
+      } catch (e) {
+        console.warn('[profile usage] failed', e);
+      }
+    };
+
+    loadUsage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   const copyReferralLink = async () => {
     const link = referralInfo?.link;
     if (!link) return;
@@ -118,12 +161,6 @@ const Profile = () => {
       </div>
     );
   }
-
-  const tierColors = {
-    [SubscriptionTier.FREE]: 'bg-zinc-100 text-zinc-400',
-    [SubscriptionTier.SILVER]: 'bg-zinc-200 text-zinc-900',
-    [SubscriptionTier.GOLD]: 'bg-zinc-900 text-white',
-  };
 
   const bigSrc = withApiOrigin(user.avatarUrl || user.selfieUrl || "");
 
@@ -275,26 +312,71 @@ const Profile = () => {
         </div>
 
         <div className="bg-zinc-50 rounded-[32px] p-6 space-y-6 border border-zinc-100">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">Твой тариф</p>
-              <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] ${tierColors[user.tier]}`}>
-                {user.tier}
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
+                Генерации образов
+              </p>
+              <div className="inline-flex px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] bg-zinc-900 text-white">
+                {usageInfo?.plan || 'FREE'}
               </div>
             </div>
-            <button className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 underline underline-offset-4">Улучшить</button>
+
+            <div className="text-right">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                Пакеты генераций
+              </p>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-900">
+                скоро появятся
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-zinc-100">
-              <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">HD Примерки</p>
-              <p className="text-lg font-bold">{user.limits.hdTryOnRemaining} <span className="text-zinc-300 text-sm">/ 20</span></p>
+          {usageInfo ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-zinc-100">
+                <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                  Сегодня
+                </p>
+                <p className="text-lg font-bold">
+                  {usageInfo.dailyUsed}
+                  <span className="text-zinc-300 text-sm"> / {usageInfo.dailyLimit}</span>
+                </p>
+                <p className="mt-1 text-[10px] text-zinc-400 uppercase tracking-widest">
+                  осталось {usageInfo.dailyRemaining}
+                </p>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-zinc-100">
+                <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                  В месяц
+                </p>
+                <p className="text-lg font-bold">
+                  {usageInfo.monthlyUsed}
+                  <span className="text-zinc-300 text-sm"> / {usageInfo.monthlyLimit}</span>
+                </p>
+                <p className="mt-1 text-[10px] text-zinc-400 uppercase tracking-widest">
+                  осталось {usageInfo.monthlyRemaining}
+                </p>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-zinc-100">
+                <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                  Бонусные
+                </p>
+                <p className="text-lg font-bold">
+                  {usageInfo.generationCreditsRemaining}
+                </p>
+                <p className="mt-1 text-[10px] text-zinc-400 uppercase tracking-widest">
+                  приглашения и пакеты
+                </p>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-zinc-100">
-              <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">Новые образы</p>
-              <p className="text-lg font-bold">{user.limits.looksRemaining} <span className="text-zinc-300 text-sm">/ 100</span></p>
+          ) : (
+            <div className="rounded-2xl bg-white border border-zinc-100 p-4 text-xs text-zinc-400">
+              Загружаем лимиты генераций...
             </div>
-          </div>
+          )}
         </div>
 
         <div className="bg-white rounded-[32px] p-6 space-y-4 border border-zinc-100">
