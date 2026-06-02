@@ -3642,6 +3642,76 @@ function normalizeCatalogGender(raw) {
   return "UNISEX";
 }
 
+function getCatalogRowGenderSignal(row, title = "", brand = "") {
+  return [
+    row?.categoryId,
+    row?.market_category,
+    row?.typePrefix,
+    row?.param,
+    row?.gender,
+    row?.sex,
+    row?.url,
+    title,
+    brand,
+  ].filter(Boolean).join(" ");
+}
+
+function detectCatalogFeedGenderCoverage(rows) {
+  let male = 0;
+  let female = 0;
+  let unisex = 0;
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const title = pickFirst(row, ["name", "title", "product_name", "model"]);
+    const brand = pickFirst(row, ["brand", "vendor", "manufacturer"]);
+    const gender = normalizeCatalogGender(getCatalogRowGenderSignal(row, title, brand));
+
+    if (gender === "MALE") male++;
+    else if (gender === "FEMALE") female++;
+    else unisex++;
+  }
+
+  const total = male + female + unisex;
+  const hasMale = male > 0;
+  const hasFemale = female > 0;
+
+  let segment = "mixed_or_unknown";
+  if (hasFemale && !hasMale) segment = "female_only";
+  else if (hasMale && !hasFemale) segment = "male_only";
+  else if (hasMale && hasFemale) segment = "mixed";
+
+  return { total, male, female, unisex, hasMale, hasFemale, segment };
+}
+
+async function deactivateCatalogProductsForFeedCoverage(merchant, coverage) {
+  const m = String(merchant || "").trim().toLowerCase();
+  if (!m) return { count: 0, mode: "none" };
+
+  const segment = String(coverage?.segment || "");
+
+  if (segment === "female_only") {
+    const result = await prisma.catalogProduct.updateMany({
+      where: { merchant: m, gender: "FEMALE" },
+      data: { isActive: false },
+    });
+    return { count: result.count || 0, mode: "female_only" };
+  }
+
+  if (segment === "male_only") {
+    const result = await prisma.catalogProduct.updateMany({
+      where: { merchant: m, gender: "MALE" },
+      data: { isActive: false },
+    });
+    return { count: result.count || 0, mode: "male_only" };
+  }
+
+  const result = await prisma.catalogProduct.updateMany({
+    where: { merchant: m },
+    data: { isActive: false },
+  });
+  return { count: result.count || 0, mode: "full_merchant" };
+}
+
 function normalizeCatalogCategory(raw) {
   const s = String(raw || "").toLowerCase();
 
@@ -6964,9 +7034,12 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
     const seen = new Set();
     const importDiag = createCatalogImportDiagnostics();
 
-    await prisma.catalogProduct.updateMany({
-      where: { merchant: "rendezvous" },
-      data: { isActive: false },
+    const feedGenderCoverage = detectCatalogFeedGenderCoverage(rows);
+    const preDeactivated = await deactivateCatalogProductsForFeedCoverage("rendezvous", feedGenderCoverage);
+
+    console.log("[toptry] rendezvous import gender coverage", {
+      coverage: feedGenderCoverage,
+      deactivation: preDeactivated,
     });
 
     for (const r of rows) {
@@ -7117,6 +7190,9 @@ app.post("/api/admin/catalog/import/rendezvous", async (_req, res) => {
       updated,
       skipped,
       restoredSafe: restoredSafe.count || 0,
+      preDeactivated: preDeactivated.count || 0,
+      preDeactivateMode: preDeactivated.mode || null,
+      feedGenderCoverage,
       deactivatedBlocked: deactivatedBlocked.count || 0,
       active: created + updated + (restoredSafe.count || 0) - (deactivatedBlocked.count || 0),
       skippedByReason: importDiag.byReason,
