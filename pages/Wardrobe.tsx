@@ -1234,7 +1234,7 @@ const Wardrobe = () => {
                   onClick={openBuyFromMenu}
                   className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 transition"
                 >
-                  Купить у продавца
+                  Посмотреть/купить у продавца
                 </button>
               )}
 

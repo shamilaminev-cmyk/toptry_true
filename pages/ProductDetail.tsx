@@ -392,7 +392,7 @@ const ProductDetail = () => {
                 disabled={!hasBuyUrl || !buyUrl}
                 className="h-12 rounded-full border border-zinc-200 bg-zinc-50 text-zinc-900 text-[10px] font-black uppercase tracking-[0.18em] hover:bg-white disabled:opacity-50 active:scale-95 transition-all"
               >
-                Купить на сайте продавца
+                Посмотреть/купить на сайте продавца
               </button>
             </div>
           </div>

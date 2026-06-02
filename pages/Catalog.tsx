@@ -192,7 +192,111 @@ const Catalog = () => {
   const [fallbackInfo, setFallbackInfo] = useState<CatalogFallbackInfo>(null);
 
 
-  const effectiveSizeCategory = filtersOpen ? draftDisplayCategory : displayCategory;
+  const inferCatalogIntentFromSearch = (value: string): {
+    displayCategory: '' | DisplayCategory;
+    clothingType: ClothingType;
+    shoeType: ShoeType;
+  } => {
+    const q = String(value || '').trim().toLowerCase();
+
+    if (!q) {
+      return { displayCategory: '', clothingType: '', shoeType: '' };
+    }
+
+    if (/карго|брюк|брюч|trouser|pants|slacks|чинос|chino/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'TROUSERS', shoeType: '' };
+    }
+
+    if (/джинс|denim|jeans/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'DENIM', shoeType: '' };
+    }
+
+    if (/юбк|skirt/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'SKIRTS', shoeType: '' };
+    }
+
+    if (/плать|сарафан|dress/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'DRESSES', shoeType: '' };
+    }
+
+    if (/пиджак|жакет|blazer/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'BLAZERS', shoeType: '' };
+    }
+
+    if (/куртк|пальто|плащ|пуховик|бомбер|парка|ветровк|жилет|outerwear|jacket|coat|parka|vest/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'OUTERWEAR', shoeType: '' };
+    }
+
+    if (/рубаш|сорочк|блуз|shirt|blouse/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'SHIRTS', shoeType: '' };
+    }
+
+    if (/футболк|майк|t-?shirt|tee/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'TSHIRTS', shoeType: '' };
+    }
+
+    if (/поло|polo/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'POLO', shoeType: '' };
+    }
+
+    if (/худи|толстовк|свитшот|hoodie|sweatshirt/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'HOODIES', shoeType: '' };
+    }
+
+    if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'KNITWEAR', shoeType: '' };
+    }
+
+    if (/кроссов|sneaker|trainer|runner/.test(q)) {
+      return { displayCategory: 'SHOES', clothingType: '', shoeType: 'SNEAKERS' };
+    }
+
+    if (/кед|слипон|canvas|slip[-\s]?on/.test(q)) {
+      return { displayCategory: 'SHOES', clothingType: '', shoeType: 'SNEAKERS_CASUAL' };
+    }
+
+    if (/лофер|loafer/.test(q)) {
+      return { displayCategory: 'SHOES', clothingType: '', shoeType: 'LOAFERS' };
+    }
+
+    if (/туфл|oxford|дерби|монк|brogue|formal shoe/.test(q)) {
+      return { displayCategory: 'SHOES', clothingType: '', shoeType: 'SHOES_CLASSIC' };
+    }
+
+    if (/ботин|ботильон|boot|chelsea|chukka/.test(q)) {
+      return { displayCategory: 'SHOES', clothingType: '', shoeType: 'BOOTS' };
+    }
+
+    if (/сапог|ботфорт|угг|tall boot|ugg/.test(q)) {
+      return { displayCategory: 'SHOES', clothingType: '', shoeType: 'TALL_BOOTS' };
+    }
+
+    if (/босонож|сандал|сабо|эспадриль|сланц|шл[её]п|sandals?|espadrille/.test(q)) {
+      return { displayCategory: 'SHOES', clothingType: '', shoeType: 'SANDALS' };
+    }
+
+    if (/обув|shoe|shoes/.test(q)) {
+      return { displayCategory: 'SHOES', clothingType: '', shoeType: '' };
+    }
+
+    if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошелек|wallet/.test(q)) {
+      return { displayCategory: 'BAGS', clothingType: '', shoeType: '' };
+    }
+
+    return { displayCategory: '', clothingType: '', shoeType: '' };
+  };
+
+  const inferredSearchIntent = useMemo(
+    () => inferCatalogIntentFromSearch(search || debouncedSearch),
+    [search, debouncedSearch]
+  );
+
+  const effectiveDisplayCategory = displayCategory || inferredSearchIntent.displayCategory;
+  const effectiveClothingType = clothingType || inferredSearchIntent.clothingType;
+  const effectiveDraftDisplayCategory = draftDisplayCategory || inferredSearchIntent.displayCategory;
+  const effectiveDraftClothingType = draftClothingType || inferredSearchIntent.clothingType;
+
+  const effectiveSizeCategory = filtersOpen ? effectiveDraftDisplayCategory : effectiveDisplayCategory;
 
   const isShoesCategory = effectiveSizeCategory === 'SHOES';
   const isClothingCategory = effectiveSizeCategory === 'CLOTHING';
@@ -246,11 +350,11 @@ const Catalog = () => {
   };
 
   const currentMySizeValue = getProfileSizeForFilters(
-    filtersOpen ? draftDisplayCategory : displayCategory,
-    filtersOpen ? draftClothingType : clothingType
+    filtersOpen ? effectiveDraftDisplayCategory : effectiveDisplayCategory,
+    filtersOpen ? effectiveDraftClothingType : effectiveClothingType
   );
 
-  const draftMySizeValue = getProfileSizeForFilters(draftDisplayCategory, draftClothingType);
+  const draftMySizeValue = getProfileSizeForFilters(effectiveDraftDisplayCategory, effectiveDraftClothingType);
 
   const expandProfileSizeForLooseFilter = (value: string) => {
     const raw = String(value || '').trim().toUpperCase();
