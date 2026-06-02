@@ -69,14 +69,48 @@ const Wardrobe = () => {
   const isCatalogWardrobeItem = (item: WardrobeItem | null | undefined) =>
     item?.sourceType === 'catalog' || !!item?.isCatalog;
 
+  const normalizeWardrobeColorFamily = (item: WardrobeItem) => {
+    const direct = String((item as any)?.colorFamily || item.color || '').trim().toLowerCase();
+
+    const hay = [
+      direct,
+      item.title,
+      ...(Array.isArray(item.tags) ? item.tags : []),
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+
+    const map: Array<[RegExp, string]> = [
+      [/черн|чёрн|black/, 'black'],
+      [/бел|white/, 'white'],
+      [/сер|gray|grey|silver/, 'gray'],
+      [/беж|beige/, 'beige'],
+      [/корич|brown/, 'brown'],
+      [/син|голуб|blue/, 'blue'],
+      [/зел|green|khaki|хаки/, 'green'],
+      [/крас|бордов|red|burgundy/, 'red'],
+      [/роз|pink/, 'pink'],
+      [/фиолет|сирен|purple/, 'purple'],
+      [/желт|жёлт|yellow|gold/, 'yellow'],
+      [/оранж|orange/, 'orange'],
+      [/мульти|разноцвет|multi/, 'multi'],
+    ];
+
+    for (const [re, color] of map) {
+      if (re.test(hay)) return color;
+    }
+
+    return '';
+  };
+
   const buildSimilarCatalogHref = (item: WardrobeItem) => {
     const params = new URLSearchParams();
 
-    const title = String(item.title || '').trim();
-    if (title && title !== 'Без названия' && title !== 'Моя вещь') {
-      params.set('q', title.slice(0, 120));
-    }
-
+    // “Найти похожее” should search by product meaning, not by exact title/brand.
+    // Exact q often drags the original brand/manufacturer into results and makes
+    // recommendations worse. Use category + gender + color instead.
     switch (item.category) {
       case Category.TOPS:
         params.set('displayCategory', 'CLOTHING');
@@ -107,6 +141,13 @@ const Wardrobe = () => {
     if (item.gender && item.gender !== Gender.UNISEX) {
       params.set('gender', String(item.gender));
     }
+
+    const colorFamily = normalizeWardrobeColorFamily(item);
+    if (colorFamily) {
+      params.set('colorFamily', colorFamily);
+    }
+
+    params.set('unavailable', '1');
 
     return `/catalog?${params.toString()}`;
   };
