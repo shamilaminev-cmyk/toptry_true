@@ -22,13 +22,35 @@ type ClothingType =
   | 'TSHIRTS'
   | 'POLO'
   | 'SHIRTS'
+  | 'FORMAL_SHIRTS'
+  | 'CASUAL_SHIRTS'
+  | 'OVERSHIRTS'
+  | 'LINEN_SHIRTS'
+  | 'DENIM_SHIRTS'
   | 'HOODIES'
   | 'KNITWEAR'
+  | 'SWEATERS'
+  | 'CARDIGANS'
+  | 'TURTLENECKS'
   | 'SKIRTS'
   | 'TROUSERS'
+  | 'CARGO_PANTS'
+  | 'CHINOS'
+  | 'FORMAL_TROUSERS'
+  | 'JOGGERS'
+  | 'SHORTS'
+  | 'LEGGINGS'
   | 'DENIM'
   | 'BLAZERS'
   | 'OUTERWEAR'
+  | 'COATS'
+  | 'PUFFER_JACKETS'
+  | 'BOMBERS'
+  | 'PARKAS'
+  | 'TRENCHES'
+  | 'LEATHER_JACKETS'
+  | 'DENIM_JACKETS'
+  | 'VESTS'
   | 'SUITS';
 
 type ShoeType =
@@ -65,13 +87,23 @@ const CLOTHING_TABS_MIXED: Array<{ id: ClothingType; label: string }> = [
 const CLOTHING_TABS_FEMALE: Array<{ id: ClothingType; label: string }> = [
   { id: '', label: 'Все' },
   { id: 'DRESSES', label: 'Платья' },
-  { id: 'TOPS', label: 'Топы' },
+  { id: 'BLAZERS', label: 'Жакеты' },
+  { id: 'COATS', label: 'Пальто' },
+  { id: 'PUFFER_JACKETS', label: 'Пуховики' },
+  { id: 'TRENCHES', label: 'Тренчи' },
+  { id: 'VESTS', label: 'Жилеты' },
   { id: 'SHIRTS', label: 'Блузы и рубашки' },
+  { id: 'TSHIRTS', label: 'Футболки' },
+  { id: 'HOODIES', label: 'Худи и свитшоты' },
+  { id: 'KNITWEAR', label: 'Трикотаж' },
+  { id: 'TURTLENECKS', label: 'Водолазки' },
   { id: 'SKIRTS', label: 'Юбки' },
   { id: 'TROUSERS', label: 'Брюки' },
+  { id: 'CARGO_PANTS', label: 'Карго' },
+  { id: 'JOGGERS', label: 'Джоггеры' },
+  { id: 'SHORTS', label: 'Шорты' },
+  { id: 'LEGGINGS', label: 'Легинсы' },
   { id: 'DENIM', label: 'Джинсы' },
-  { id: 'BLAZERS', label: 'Жакеты' },
-  { id: 'OUTERWEAR', label: 'Верхняя одежда' },
 ];
 
 const CLOTHING_TABS_MALE: Array<{ id: ClothingType; label: string }> = [
@@ -79,11 +111,27 @@ const CLOTHING_TABS_MALE: Array<{ id: ClothingType; label: string }> = [
   { id: 'TSHIRTS', label: 'Футболки' },
   { id: 'POLO', label: 'Поло' },
   { id: 'SHIRTS', label: 'Рубашки' },
+  { id: 'FORMAL_SHIRTS', label: 'Классические рубашки' },
+  { id: 'OVERSHIRTS', label: 'Куртки-рубашки' },
   { id: 'HOODIES', label: 'Худи и свитшоты' },
-  { id: 'KNITWEAR', label: 'Свитеры' },
+  { id: 'KNITWEAR', label: 'Трикотаж' },
+  { id: 'CARDIGANS', label: 'Кардиганы' },
+  { id: 'TURTLENECKS', label: 'Водолазки' },
+  { id: 'BLAZERS', label: 'Пиджаки' },
+  { id: 'COATS', label: 'Пальто' },
+  { id: 'PUFFER_JACKETS', label: 'Пуховики' },
+  { id: 'BOMBERS', label: 'Бомберы' },
+  { id: 'PARKAS', label: 'Парки' },
+  { id: 'TRENCHES', label: 'Плащи и тренчи' },
+  { id: 'LEATHER_JACKETS', label: 'Кожаные куртки' },
+  { id: 'VESTS', label: 'Жилеты' },
   { id: 'TROUSERS', label: 'Брюки' },
+  { id: 'CARGO_PANTS', label: 'Карго' },
+  { id: 'CHINOS', label: 'Чиносы' },
+  { id: 'FORMAL_TROUSERS', label: 'Классические брюки' },
+  { id: 'JOGGERS', label: 'Джоггеры' },
+  { id: 'SHORTS', label: 'Шорты' },
   { id: 'DENIM', label: 'Джинсы' },
-  { id: 'OUTERWEAR', label: 'Верхняя одежда' },
   { id: 'SUITS', label: 'Костюмы' },
 ];
 
@@ -203,7 +251,31 @@ const Catalog = () => {
       return { displayCategory: '', clothingType: '', shoeType: '' };
     }
 
-    if (/карго|брюк|брюч|trouser|pants|slacks|чинос|chino/.test(q)) {
+    if (/карго|cargo/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'CARGO_PANTS', shoeType: '' };
+    }
+
+    if (/чинос|chino/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'CHINOS', shoeType: '' };
+    }
+
+    if (/джоггер|jogger/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'JOGGERS', shoeType: '' };
+    }
+
+    if (/шорт|shorts/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'SHORTS', shoeType: '' };
+    }
+
+    if (/леггин|лосин|legging/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'LEGGINGS', shoeType: '' };
+    }
+
+    if (/классическ.*брюк|костюмн.*брюк|formal trouser|suit pants|slacks/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'FORMAL_TROUSERS', shoeType: '' };
+    }
+
+    if (/брюк|брюч|trouser|pants|slacks/.test(q)) {
       return { displayCategory: 'CLOTHING', clothingType: 'TROUSERS', shoeType: '' };
     }
 
@@ -223,8 +295,56 @@ const Catalog = () => {
       return { displayCategory: 'CLOTHING', clothingType: 'BLAZERS', shoeType: '' };
     }
 
-    if (/куртк|пальто|плащ|пуховик|бомбер|парка|ветровк|жилет|outerwear|jacket|coat|parka|vest/.test(q)) {
+    if (/пальто|coat/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'COATS', shoeType: '' };
+    }
+
+    if (/пуховик|пухов|дутик|puffer|down jacket/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'PUFFER_JACKETS', shoeType: '' };
+    }
+
+    if (/бомбер|bomber/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'BOMBERS', shoeType: '' };
+    }
+
+    if (/парка|parka/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'PARKAS', shoeType: '' };
+    }
+
+    if (/тренч|плащ|trench/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'TRENCHES', shoeType: '' };
+    }
+
+    if (/кожан.*куртк|leather jacket/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'LEATHER_JACKETS', shoeType: '' };
+    }
+
+    if (/джинсов.*куртк|denim jacket/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'DENIM_JACKETS', shoeType: '' };
+    }
+
+    if (/жилет|vest|gilet/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'VESTS', shoeType: '' };
+    }
+
+    if (/куртк|ветровк|outerwear|jacket/.test(q)) {
       return { displayCategory: 'CLOTHING', clothingType: 'OUTERWEAR', shoeType: '' };
+    }
+
+    if (/куртка[-\s]?рубаш|рубашка[-\s]?куртк|overshirt/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'OVERSHIRTS', shoeType: '' };
+    }
+
+    if (/льнян.*рубаш|linen shirt/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'LINEN_SHIRTS', shoeType: '' };
+    }
+
+    if (/джинсов.*рубаш|denim shirt/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'DENIM_SHIRTS', shoeType: '' };
+    }
+
+    if (/классическ.*рубаш|formal shirt|dress shirt/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'FORMAL_SHIRTS', shoeType: '' };
     }
 
     if (/рубаш|сорочк|блуз|shirt|blouse/.test(q)) {
@@ -243,7 +363,19 @@ const Catalog = () => {
       return { displayCategory: 'CLOTHING', clothingType: 'HOODIES', shoeType: '' };
     }
 
-    if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(q)) {
+    if (/кардиган|cardigan/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'CARDIGANS', shoeType: '' };
+    }
+
+    if (/водолазк|turtleneck/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'TURTLENECKS', shoeType: '' };
+    }
+
+    if (/свитер|джемпер|sweater/.test(q)) {
+      return { displayCategory: 'CLOTHING', clothingType: 'SWEATERS', shoeType: '' };
+    }
+
+    if (/knit/.test(q)) {
       return { displayCategory: 'CLOTHING', clothingType: 'KNITWEAR', shoeType: '' };
     }
 
@@ -322,16 +454,32 @@ const Catalog = () => {
     if (category === 'SHOES') return user?.sizeShoes || '';
 
     if (category === 'CLOTHING') {
-      const bottomTypes: ClothingType[] = ['SKIRTS', 'TROUSERS', 'DENIM'];
+      const bottomTypes: ClothingType[] = ['SKIRTS', 'TROUSERS', 'CARGO_PANTS', 'CHINOS', 'FORMAL_TROUSERS', 'JOGGERS', 'SHORTS', 'LEGGINGS', 'DENIM'];
       const topTypes: ClothingType[] = [
         'TOPS',
         'TSHIRTS',
         'POLO',
         'SHIRTS',
+        'FORMAL_SHIRTS',
+        'CASUAL_SHIRTS',
+        'OVERSHIRTS',
+        'LINEN_SHIRTS',
+        'DENIM_SHIRTS',
         'HOODIES',
         'KNITWEAR',
+        'SWEATERS',
+        'CARDIGANS',
+        'TURTLENECKS',
         'BLAZERS',
         'OUTERWEAR',
+        'COATS',
+        'PUFFER_JACKETS',
+        'BOMBERS',
+        'PARKAS',
+        'TRENCHES',
+        'LEATHER_JACKETS',
+        'DENIM_JACKETS',
+        'VESTS',
         'SUITS',
       ];
 

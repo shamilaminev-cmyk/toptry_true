@@ -105,6 +105,46 @@ const Wardrobe = () => {
     return '';
   };
 
+
+  const inferWardrobeClothingTypeFromItem = (item: WardrobeItem): string => {
+    const hay = [
+      item.title,
+      item.color,
+      item.material,
+      ...(Array.isArray(item.tags) ? item.tags : []),
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+
+    if (/карго|cargo/.test(hay)) return 'CARGO_PANTS';
+    if (/чинос|chino/.test(hay)) return 'CHINOS';
+    if (/джоггер|jogger/.test(hay)) return 'JOGGERS';
+    if (/шорт|shorts/.test(hay)) return 'SHORTS';
+    if (/леггин|лосин|legging/.test(hay)) return 'LEGGINGS';
+    if (/классическ.*брюк|костюмн.*брюк|formal trouser|slacks/.test(hay)) return 'FORMAL_TROUSERS';
+
+    if (/пальто|coat/.test(hay)) return 'COATS';
+    if (/пухов|дутик|puffer|down jacket/.test(hay)) return 'PUFFER_JACKETS';
+    if (/бомбер|bomber/.test(hay)) return 'BOMBERS';
+    if (/парка|parka/.test(hay)) return 'PARKAS';
+    if (/тренч|плащ|trench/.test(hay)) return 'TRENCHES';
+    if (/кожан|leather/.test(hay)) return 'LEATHER_JACKETS';
+    if (/джинсов.*куртк|denim jacket/.test(hay)) return 'DENIM_JACKETS';
+    if (/жилет|vest|gilet/.test(hay)) return 'VESTS';
+
+    if (/куртка[-\s]?рубаш|рубашка[-\s]?куртк|overshirt/.test(hay)) return 'OVERSHIRTS';
+    if (/льнян.*рубаш|linen shirt/.test(hay)) return 'LINEN_SHIRTS';
+    if (/джинсов.*рубаш|denim shirt/.test(hay)) return 'DENIM_SHIRTS';
+    if (/классическ.*рубаш|formal shirt|dress shirt/.test(hay)) return 'FORMAL_SHIRTS';
+    if (/кардиган|cardigan/.test(hay)) return 'CARDIGANS';
+    if (/водолазк|turtleneck/.test(hay)) return 'TURTLENECKS';
+    if (/свитер|джемпер|sweater/.test(hay)) return 'SWEATERS';
+
+    return '';
+  };
+
   const buildSimilarCatalogHref = (item: WardrobeItem) => {
     const params = new URLSearchParams();
 
@@ -114,11 +154,11 @@ const Wardrobe = () => {
     switch (item.category) {
       case Category.TOPS:
         params.set('displayCategory', 'CLOTHING');
-        params.set('clothingType', 'TOPS');
+        params.set('clothingType', inferWardrobeClothingTypeFromItem(item) || 'TOPS');
         break;
       case Category.BOTTOMS:
         params.set('displayCategory', 'CLOTHING');
-        params.set('clothingType', 'TROUSERS');
+        params.set('clothingType', inferWardrobeClothingTypeFromItem(item) || 'TROUSERS');
         break;
       case Category.DRESSES:
         params.set('displayCategory', 'CLOTHING');
@@ -126,7 +166,7 @@ const Wardrobe = () => {
         break;
       case Category.OUTERWEAR:
         params.set('displayCategory', 'CLOTHING');
-        params.set('clothingType', 'OUTERWEAR');
+        params.set('clothingType', inferWardrobeClothingTypeFromItem(item) || 'OUTERWEAR');
         break;
       case Category.SHOES:
         params.set('displayCategory', 'SHOES');
