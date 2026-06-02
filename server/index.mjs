@@ -1433,6 +1433,30 @@ async function applyReferralRewardForVerifiedUser({ userId, phone, referralCode,
   });
 }
 
+
+async function requireTopTryAdmin(req, res, next) {
+  try {
+    if (!req.auth?.userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const entitlement = await prisma.userEntitlement.findUnique({
+      where: { userId: req.auth.userId },
+      select: { isAdmin: true, plan: true },
+    });
+
+    if (!entitlement?.isAdmin) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    req.adminEntitlement = entitlement;
+    return next();
+  } catch (e) {
+    console.error("[toptry] requireTopTryAdmin error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+}
+
 app.get("/api/usage/me", requireAuth, async (req, res) => {
   try {
     const summary = await getLookGenerationUsageSummary(req.auth.userId);
@@ -1500,6 +1524,305 @@ app.get("/api/referrals/me", requireAuth, async (req, res) => {
     });
   } catch (e) {
     console.error("[toptry] /api/referrals/me error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
+app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const dayStart = startOfUtcDay(now);
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthStart = startOfUtcMonth(now);
+
+    const n = (value) => Number(value || 0);
+
+    const [
+      usersTotal,
+      usersToday,
+      users7d,
+      usersWithAvatar,
+      usersWithSizes,
+      usageToday,
+      usage7d,
+      usageAvgToday,
+      activeTotal,
+      inactiveTotal,
+      catalogByMerchant,
+      catalogByMerchantGender,
+      catalogByMerchantGroup,
+      catalogMissingImage,
+      catalogMissingPrice,
+      maleShoesRisk,
+      clickoutsToday,
+      clickouts7d,
+      clickoutsByMerchant7d,
+      clickoutsByPlacement7d,
+      clickoutFallback7d,
+      publicLooks,
+      likesTotal,
+      commentsTotal,
+      looksToday,
+      pipelineRuns,
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { createdAt: { gte: dayStart } } }),
+      prisma.user.count({ where: { createdAt: { gte: weekStart } } }),
+      prisma.user.count({ where: { avatarUrl: { not: null } } }),
+      prisma.user.count({
+        where: {
+          OR: [
+            { sizeTop: { not: null } },
+            { sizeBottom: { not: null } },
+            { sizeShoes: { not: null } },
+          ],
+        },
+      }),
+
+      prisma.usageEvent.groupBy({
+        by: ["status"],
+        where: { type: TOPTRY_USAGE_EVENT_TYPE_LOOK_GENERATION, createdAt: { gte: dayStart } },
+        _count: { _all: true },
+      }),
+      prisma.usageEvent.groupBy({
+        by: ["status"],
+        where: { type: TOPTRY_USAGE_EVENT_TYPE_LOOK_GENERATION, createdAt: { gte: weekStart } },
+        _count: { _all: true },
+      }),
+      prisma.usageEvent.aggregate({
+        where: {
+          type: TOPTRY_USAGE_EVENT_TYPE_LOOK_GENERATION,
+          status: "SUCCEEDED",
+          createdAt: { gte: dayStart },
+        },
+        _avg: { durationMs: true },
+      }),
+
+      prisma.catalogProduct.count({ where: { isActive: true } }),
+      prisma.catalogProduct.count({ where: { isActive: false } }),
+      prisma.catalogProduct.groupBy({
+        by: ["merchant"],
+        where: { isActive: true },
+        _count: { _all: true },
+        orderBy: { _count: { merchant: "desc" } },
+      }),
+      prisma.catalogProduct.groupBy({
+        by: ["merchant", "gender"],
+        where: { isActive: true },
+        _count: { _all: true },
+      }),
+      prisma.catalogProduct.groupBy({
+        by: ["merchant", "taxonomyGroup"],
+        where: { isActive: true },
+        _count: { _all: true },
+      }),
+      prisma.catalogProduct.count({
+        where: {
+          isActive: true,
+          OR: [{ imageUrl: null }, { imageUrl: "" }],
+        },
+      }),
+      prisma.catalogProduct.count({
+        where: {
+          isActive: true,
+          OR: [{ price: null }, { price: { lte: 0 } }],
+        },
+      }),
+      prisma.catalogProduct.groupBy({
+        by: ["merchant"],
+        where: {
+          isActive: false,
+          gender: "MALE",
+          taxonomyGroup: "SHOES",
+        },
+        _count: { _all: true },
+      }),
+
+      prisma.clickout.count({ where: { createdAt: { gte: dayStart } } }),
+      prisma.clickout.count({ where: { createdAt: { gte: weekStart } } }),
+      prisma.$queryRaw`
+        select coalesce(meta->>'merchant', '') as merchant, count(*)::int as cnt
+        from "Clickout"
+        where "createdAt" >= ${weekStart}
+        group by 1
+        order by cnt desc
+        limit 20
+      `,
+      prisma.$queryRaw`
+        select coalesce(meta->>'placement', '') as placement, count(*)::int as cnt
+        from "Clickout"
+        where "createdAt" >= ${weekStart}
+        group by 1
+        order by cnt desc
+        limit 20
+      `,
+      prisma.$queryRaw`
+        select count(*)::int as cnt
+        from "Clickout"
+        where "createdAt" >= ${weekStart}
+          and coalesce(meta->>'redirectedToFallbackCatalog', '') = 'true'
+      `,
+
+      prisma.look.count({ where: { isPublic: true } }),
+      prisma.like.count(),
+      prisma.comment.count(),
+      prisma.look.count({ where: { createdAt: { gte: dayStart } } }),
+
+      prisma.catalogPipelineRun.findMany({
+        orderBy: { startedAt: "desc" },
+        take: 10,
+        select: {
+          id: true,
+          kind: true,
+          status: true,
+          startedAt: true,
+          finishedAt: true,
+          durationMs: true,
+          meta: true,
+          error: true,
+        },
+      }).catch(() => []),
+    ]);
+
+    const mapGroup = (rows, keys) =>
+      (rows || []).map((row) => {
+        const item = {};
+        for (const key of keys) item[key] = row[key] || "";
+        item.count = n(row?._count?._all ?? row?.cnt);
+        return item;
+      });
+
+    const byMerchant = mapGroup(catalogByMerchant, ["merchant"]);
+    const byMerchantGender = mapGroup(catalogByMerchantGender, ["merchant", "gender"]);
+    const byMerchantGroup = mapGroup(catalogByMerchantGroup, ["merchant", "taxonomyGroup"]);
+
+    const activeMaleShoesByMerchant = await prisma.catalogProduct.groupBy({
+      by: ["merchant"],
+      where: {
+        isActive: true,
+        gender: "MALE",
+        taxonomyGroup: "SHOES",
+      },
+      _count: { _all: true },
+    });
+
+    const activeMaleShoesMap = new Map(
+      activeMaleShoesByMerchant.map((row) => [row.merchant, n(row._count?._all)])
+    );
+
+    const alerts = [];
+
+    for (const row of byMerchant) {
+      if (row.count <= 0) {
+        alerts.push({
+          level: "danger",
+          title: `${row.merchant}: нет активных товаров`,
+          detail: "Продавец присутствует в каталоге, но active count равен 0.",
+        });
+      }
+    }
+
+    for (const row of maleShoesRisk || []) {
+      const merchant = row.merchant || "";
+      const inactiveMaleShoes = n(row._count?._all);
+      const activeMaleShoes = activeMaleShoesMap.get(merchant) || 0;
+
+      if (inactiveMaleShoes > 0 && activeMaleShoes === 0) {
+        alerts.push({
+          level: "danger",
+          title: `${merchant}: мужская обувь выключена`,
+          detail: `active MALE SHOES = 0, inactive MALE SHOES = ${inactiveMaleShoes}.`,
+        });
+      }
+    }
+
+    if (catalogMissingImage > 0) {
+      alerts.push({
+        level: "warning",
+        title: "Есть активные товары без изображения",
+        detail: `${catalogMissingImage} active products без imageUrl.`,
+      });
+    }
+
+    if (catalogMissingPrice > 0) {
+      alerts.push({
+        level: "warning",
+        title: "Есть активные товары без цены",
+        detail: `${catalogMissingPrice} active products без цены или с price <= 0.`,
+      });
+    }
+
+    const usageTodayMap = Object.fromEntries((usageToday || []).map((row) => [row.status || "", n(row._count?._all)]));
+    const failedToday = usageTodayMap.FAILED || 0;
+    const succeededToday = usageTodayMap.SUCCEEDED || 0;
+    const totalFinishedToday = failedToday + succeededToday;
+
+    if (totalFinishedToday >= 5 && failedToday / totalFinishedToday > 0.2) {
+      alerts.push({
+        level: "danger",
+        title: "Высокая доля ошибок генерации",
+        detail: `FAILED ${failedToday} из ${totalFinishedToday} завершённых генераций сегодня.`,
+      });
+    }
+
+    const fallbackClicks7d = n((clickoutFallback7d || [])[0]?.cnt);
+    if (clickouts7d >= 10 && fallbackClicks7d / clickouts7d > 0.25) {
+      alerts.push({
+        level: "warning",
+        title: "Много fallback-переходов вместо продавца",
+        detail: `${fallbackClicks7d} из ${clickouts7d} clickouts за 7 дней ушли в fallback-каталог.`,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      generatedAt: now.toISOString(),
+      users: {
+        total: usersTotal,
+        newToday: usersToday,
+        new7d: users7d,
+        withAvatar: usersWithAvatar,
+        withProfileSizes: usersWithSizes,
+      },
+      usage: {
+        today: mapGroup(usageToday, ["status"]),
+        sevenDays: mapGroup(usage7d, ["status"]),
+        avgDurationMsToday: Math.round(n(usageAvgToday?._avg?.durationMs)),
+      },
+      catalog: {
+        activeTotal,
+        inactiveTotal,
+        byMerchant,
+        byMerchantGender,
+        byMerchantGroup,
+        missingImage: catalogMissingImage,
+        missingPrice: catalogMissingPrice,
+      },
+      clickouts: {
+        today: clickoutsToday,
+        sevenDays: clickouts7d,
+        fallbackSevenDays: fallbackClicks7d,
+        byMerchantSevenDays: (clickoutsByMerchant7d || []).map((r) => ({ merchant: r.merchant || "unknown", count: n(r.cnt) })),
+        byPlacementSevenDays: (clickoutsByPlacement7d || []).map((r) => ({ placement: r.placement || "unknown", count: n(r.cnt) })),
+      },
+      social: {
+        publicLooks,
+        likesTotal,
+        commentsTotal,
+        looksToday,
+      },
+      pipeline: {
+        recentRuns: (pipelineRuns || []).map((r) => ({
+          ...r,
+          startedAt: r.startedAt?.toISOString?.() || r.startedAt,
+          finishedAt: r.finishedAt?.toISOString?.() || r.finishedAt,
+        })),
+      },
+      alerts,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/dashboard/summary error", e);
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
