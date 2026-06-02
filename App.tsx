@@ -104,20 +104,25 @@ const Header = () => {
 };
 
 const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
+  const isAdminPage = location.pathname === '/admin';
+
   return (
-    <div className="min-h-screen pb-24 md:pb-28 md:pt-0">
+    <div className={`min-h-screen md:pt-0 ${isAdminPage ? 'pb-0' : 'pb-24 md:pb-28'}`}>
       <Header />
       <main className="max-w-screen-xl mx-auto">{children}</main>
 
-      {/* Mobile Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 md:bottom-4">
-        <div className="mx-auto w-full bg-white border-t border-zinc-100 px-4 py-2 flex items-center justify-between h-20 md:max-w-md md:rounded-3xl md:border md:border-zinc-200 md:shadow-xl">
-        <NavItem to="/" icon={ICONS.Home} label="Главная" />
-        <NavItem to="/catalog" icon={ICONS.Catalog} label="Каталог" />
-        <NavItem to="/create-look" icon={ICONS.Plus} label="Создать" highlight />
-        <NavItem to="/wardrobe" icon={ICONS.Wardrobe} label="Шкаф" />
-        <NavItem to="/looks" icon={ICONS.Looks} label="Лента" />        </div>
-      </nav>
+      {!isAdminPage && (
+        <nav className="fixed bottom-0 left-0 right-0 z-50 md:bottom-4">
+          <div className="mx-auto w-full bg-white border-t border-zinc-100 px-4 py-2 flex items-center justify-between h-20 md:max-w-md md:rounded-3xl md:border md:border-zinc-200 md:shadow-xl">
+            <NavItem to="/" icon={ICONS.Home} label="Главная" />
+            <NavItem to="/catalog" icon={ICONS.Catalog} label="Каталог" />
+            <NavItem to="/create-look" icon={ICONS.Plus} label="Создать" highlight />
+            <NavItem to="/wardrobe" icon={ICONS.Wardrobe} label="Шкаф" />
+            <NavItem to="/looks" icon={ICONS.Looks} label="Лента" />
+          </div>
+        </nav>
+      )}
     </div>
   );
 };
