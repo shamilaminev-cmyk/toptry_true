@@ -223,6 +223,9 @@ const Looks = () => {
   const [feedLooks, setFeedLooks] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [likedPulseIds, setLikedPulseIds] = React.useState<Record<string, boolean>>({});
+  const [publishBusyIds, setPublishBusyIds] = React.useState<Record<string, boolean>>({});
+  const [publishedOverrides, setPublishedOverrides] = React.useState<Record<string, boolean>>({});
+  const [socialNotice, setSocialNotice] = React.useState('');
 
   React.useEffect(() => {
     if (tab !== 'feed') return;
@@ -253,7 +256,51 @@ const Looks = () => {
 
   const visibleLooks = tab === 'mine' ? looks : feedLooks;
 
+  const requireAuthForSocial = (message: string) => {
+    if (user?.id) return true;
+    setSocialNotice(message);
+    window.setTimeout(() => setSocialNotice(''), 3500);
+    return false;
+  };
+
+  const handlePublishFromList = async (look: any) => {
+    if (!look?.id || !requireAuthForSocial('Войдите, чтобы публиковать образы и участвовать в ленте.')) return;
+
+    const lookId = String(look.id);
+    const currentIsPublic = Boolean(publishedOverrides[lookId] ?? look.isPublic);
+    const endpoint = currentIsPublic ? 'unpublish' : 'publish';
+
+    setPublishBusyIds((prev) => ({ ...prev, [lookId]: true }));
+
+    try {
+      const resp = await fetch(`/api/looks/${encodeURIComponent(lookId)}/${endpoint}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        setSocialNotice(data?.error || 'Не удалось обновить публикацию');
+        return;
+      }
+
+      const nextIsPublic = Boolean(data?.look?.isPublic ?? !currentIsPublic);
+      setPublishedOverrides((prev) => ({ ...prev, [lookId]: nextIsPublic }));
+
+      if (tab === 'feed' && !nextIsPublic) {
+        setFeedLooks((prev) => prev.filter((l) => String(l.id) !== lookId));
+      }
+
+      setSocialNotice(nextIsPublic ? 'Образ опубликован в ленте' : 'Образ скрыт из ленты');
+      window.setTimeout(() => setSocialNotice(''), 2500);
+    } finally {
+      setPublishBusyIds((prev) => ({ ...prev, [lookId]: false }));
+    }
+  };
+
   const handleLikeFromFeed = async (lookId: string) => {
+    if (!requireAuthForSocial('Войдите, чтобы ставить лайки и комментировать образы.')) return;
+
     setLikedPulseIds((prev) => ({ ...prev, [lookId]: true }));
     window.setTimeout(() => {
       setLikedPulseIds((prev) => ({ ...prev, [lookId]: false }));
@@ -329,11 +376,29 @@ const Looks = () => {
         }
       `}</style>
       <div className="p-4 sticky top-0 bg-white z-40 border-b border-zinc-100 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-bold uppercase tracking-tighter">
             {tab === 'feed' ? 'Лента образов' : 'Мои образы'}
           </h1>
+
+          <Link
+            to="/create-look"
+            className="hidden sm:inline-flex h-10 px-4 items-center rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
+          >
+            Создать
+          </Link>
         </div>
+
+        {socialNotice && (
+          <div className="rounded-2xl bg-zinc-50 border border-zinc-100 px-4 py-3 text-xs text-zinc-600">
+            {socialNotice}
+            {!user?.id && (
+              <Link to="/auth" className="ml-2 font-bold underline underline-offset-4">
+                Войти
+              </Link>
+            )}
+          </div>
+        )}
 
         <div className="flex gap-2">
           <button
@@ -393,6 +458,7 @@ const Looks = () => {
             const totalPrice =
               Number(look.priceBuyNowRUB || 0) ||
               sourceItems.reduce((sum: number, item: any) => sum + (Number(item?.price || 0) || 0), 0);
+            const effectiveIsPublic = Boolean(publishedOverrides[String(look.id)] ?? look.isPublic);
 
             return (
               <article
@@ -455,6 +521,11 @@ const Looks = () => {
                         <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
                           {look.authorName || 'Пользователь TopTry'}
                         </span>
+                        {effectiveIsPublic && (
+                          <span className="text-[8px] bg-zinc-900 text-white px-2 py-1 rounded-full font-black uppercase tracking-widest">
+                            В ленте
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -473,6 +544,46 @@ const Looks = () => {
                       </button>
                     </div>
                   </div>
+
+                  {tab === 'mine' && (
+                    <section className="rounded-3xl border border-zinc-100 bg-zinc-50 p-4 space-y-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
+                          Публикация
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                          {effectiveIsPublic
+                            ? 'Образ виден в общей ленте.'
+                            : 'Опубликуйте образ, чтобы друзья могли поставить лайк и оставить комментарий.'}
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePublishFromList(look)}
+                          disabled={!!publishBusyIds[String(look.id)]}
+                          className={`h-10 px-4 rounded-full text-[10px] font-black uppercase tracking-[0.18em] border transition-all ${
+                            effectiveIsPublic
+                              ? 'bg-white border-zinc-200 text-zinc-500'
+                              : 'bg-zinc-900 border-zinc-900 text-white'
+                          } ${publishBusyIds[String(look.id)] ? 'opacity-60 pointer-events-none' : ''}`}
+                        >
+                          {effectiveIsPublic ? 'Скрыть из ленты' : 'Опубликовать'}
+                        </button>
+
+                        {effectiveIsPublic && (
+                          <button
+                            type="button"
+                            onClick={() => setTab('feed')}
+                            className="h-10 px-4 rounded-full bg-white border border-zinc-200 text-zinc-700 text-[10px] font-black uppercase tracking-[0.18em]"
+                          >
+                            Смотреть в ленте
+                          </button>
+                        )}
+                      </div>
+                    </section>
+                  )}
 
                   {sourceItems.length > 0 && (
                     <section className="hidden md:block space-y-4">
@@ -534,7 +645,7 @@ const Looks = () => {
                   <div className="hidden md:flex items-center justify-between gap-4 bg-zinc-900 text-white rounded-3xl p-4">
                     <div>
                       <p className="text-[10px] uppercase tracking-[0.25em] text-white/50 font-bold">
-                        Купить всё
+                        Товары образа
                       </p>
                       <p className="text-lg font-black">{formatPriceRUB(totalPrice)}</p>
                     </div>
