@@ -3643,14 +3643,15 @@ function normalizeCatalogGender(raw) {
 }
 
 function getCatalogRowGenderSignal(row, title = "", brand = "") {
+  // Use pickFirst instead of direct row.field access: CSV headers may contain BOM,
+  // spaces, case differences, or alternative source names.
   return [
-    row?.categoryId,
-    row?.market_category,
-    row?.typePrefix,
-    row?.param,
-    row?.gender,
-    row?.sex,
-    row?.url,
+    pickFirst(row, ["categoryId", "category_id", "category", "category_name", "google_product_category"]),
+    pickFirst(row, ["market_category", "marketCategory"]),
+    pickFirst(row, ["typePrefix", "type_prefix"]),
+    pickFirst(row, ["param", "params", "parameters"]),
+    pickFirst(row, ["gender", "sex", "Пол"]),
+    pickFirst(row, ["url", "product_url", "link", "deeplink", "affiliate_url"]),
     title,
     brand,
   ].filter(Boolean).join(" ");
