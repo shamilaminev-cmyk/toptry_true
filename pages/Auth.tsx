@@ -1,16 +1,36 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAppState } from '../store';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
+
+const TOPTRY_REFERRAL_CODE_KEY = 'toptry.referralCode';
 
 const Auth = () => {
   const { actions } = useAppState();
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const referralCode = useMemo(() => {
+    const params = new URLSearchParams(location.search || '');
+    const raw = params.get('ref') || params.get('referralCode') || '';
+    return raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32);
+  }, [location.search]);
+
+  useEffect(() => {
+    if (referralCode) {
+      window.sessionStorage.setItem(TOPTRY_REFERRAL_CODE_KEY, referralCode);
+    }
+  }, [referralCode]);
+
+  const storedReferralCode = () => {
+    const s = window.sessionStorage.getItem(TOPTRY_REFERRAL_CODE_KEY) || '';
+    return s.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32);
+  };
 
   const submit = async () => {
     setError(null);
@@ -20,7 +40,7 @@ const Auth = () => {
         await actions.startPhoneAuth(phone.trim());
         setStep('code');
       } else {
-        await actions.verifyPhoneAuth(phone.trim(), code.trim());
+        await actions.verifyPhoneAuth(phone.trim(), code.trim(), storedReferralCode());
         navigate('/');
       }
     } catch (e: any) {
@@ -66,6 +86,12 @@ const Auth = () => {
               : `Код отправлен на ${phone || 'ваш номер'}`}
           </div>
         </div>
+
+        {referralCode && (
+          <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-700">
+            Вы пришли по приглашению. После регистрации вам начислится 1 дополнительная генерация.
+          </div>
+        )}
 
         {error && (
           <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-700">

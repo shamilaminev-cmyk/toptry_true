@@ -22,6 +22,7 @@ const CreateLook = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [genStep, setGenStep] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [limitModal, setLimitModal] = useState<any | null>(null);
   const qualityMode: 'quality' = 'quality';
   const selfie = user?.selfieUrl || user?.avatarUrl;
   const selectedItems = wardrobe.filter((i) => selectedIds.has(i.id));
@@ -116,7 +117,15 @@ const CreateLook = () => {
         return;
       }
 
-      alert(err?.message || aiError || "Не удалось сгенерировать образ. Проверьте соединение и настройки сервера.");
+      if (err?.code === 'LOOK_GENERATION_LIMIT_REACHED') {
+        setLimitModal({
+          message: err?.message || 'Лимит генераций на сегодня исчерпан',
+          usage: err?.usage || null,
+        });
+      } else {
+        alert(err?.message || aiError || "Не удалось сгенерировать образ. Проверьте соединение и настройки сервера.");
+      }
+
       setIsGenerating(false);
       setGenStep(0);
       setProgress(0);
@@ -216,6 +225,59 @@ const CreateLook = () => {
             >
               Стилизовать ({selectedIds.size})
             </button>
+          </div>
+        </div>
+      )}
+
+      {limitModal && (
+        <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-[32px] bg-white p-6 shadow-2xl border border-zinc-100 space-y-5">
+            <div className="space-y-2">
+              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
+                Лимит генераций
+              </div>
+              <h2 className="text-xl font-black uppercase tracking-tight">
+                Лимит исчерпан
+              </h2>
+              <p className="text-sm text-zinc-500 leading-relaxed">
+                {limitModal.message || 'Лимит генераций на сегодня исчерпан. Завтра вам снова будут доступны бесплатные генерации.'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4 space-y-2">
+              <p className="text-xs font-bold text-zinc-700">
+                Хотите продолжить сейчас?
+              </p>
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                Пригласите друга в TopTry — получите 3 дополнительные генерации после его регистрации.
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                Пакеты генераций скоро появятся.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setLimitModal(null);
+                  navigate('/profile');
+                }}
+                className="w-full h-12 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.2em]"
+              >
+                Пригласить друга
+              </button>
+              <button
+                type="button"
+                onClick={() => setLimitModal(null)}
+                className="w-full h-12 rounded-full bg-zinc-100 text-zinc-600 text-[10px] font-black uppercase tracking-[0.2em]"
+              >
+                Закрыть
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -5,6 +5,15 @@ import { useAppState } from '../store';
 import { ICONS } from '../constants';
 import { SubscriptionTier } from '../types';
 
+type ReferralInfo = {
+  code: string;
+  link: string;
+  inviterRewardCredits: number;
+  invitedRewardCredits: number;
+  invitedCount: number;
+  creditsRemaining: number;
+};
+
 const Profile = () => {
   const { user, actions } = useAppState();
   const navigate = useNavigate();
@@ -15,6 +24,8 @@ const Profile = () => {
   const [sizeTop, setSizeTop] = useState(user?.sizeTop || '');
   const [sizeBottom, setSizeBottom] = useState(user?.sizeBottom || '');
   const [sizeShoes, setSizeShoes] = useState(user?.sizeShoes || '');
+  const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
+  const [referralCopied, setReferralCopied] = useState(false);
   useEffect(() => {
     if (!avatarOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -49,6 +60,50 @@ const Profile = () => {
     setSizeBottom(user?.sizeBottom || '');
     setSizeShoes(user?.sizeShoes || '');
   }, [user?.sizeTop, user?.sizeBottom, user?.sizeShoes]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    const loadReferral = async () => {
+      try {
+        const res = await fetch('/api/referrals/me', {
+          credentials: 'include',
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data?.error || 'Не удалось загрузить приглашения');
+        }
+
+        if (!cancelled) {
+          setReferralInfo(data?.referral || null);
+        }
+      } catch (e) {
+        console.warn('[profile referrals] failed', e);
+      }
+    };
+
+    loadReferral();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const copyReferralLink = async () => {
+    const link = referralInfo?.link;
+    if (!link) return;
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setReferralCopied(true);
+      window.setTimeout(() => setReferralCopied(false), 1800);
+    } catch {
+      window.prompt('Скопируйте ссылку', link);
+    }
+  };
 
 
   if (!user) {
@@ -302,6 +357,51 @@ const Profile = () => {
           >
             Сохранить размеры
           </button>
+        </div>
+
+        <div className="bg-white border border-zinc-100 rounded-[28px] p-5 shadow-sm space-y-4">
+          <div className="space-y-1">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
+              Приглашения
+            </div>
+            <h2 className="text-lg font-black uppercase tracking-tight">
+              Пригласите друга
+            </h2>
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Друг получит {referralInfo?.invitedRewardCredits || 1} дополнительную генерацию после регистрации, а вы получите {referralInfo?.inviterRewardCredits || 3}.
+            </p>
+          </div>
+
+          {referralInfo ? (
+            <div className="space-y-3">
+              <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-3 text-[11px] text-zinc-600 break-all">
+                {referralInfo.link}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-3">
+                  <div className="text-lg font-black">{referralInfo.invitedCount}</div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">друзей</div>
+                </div>
+                <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-3">
+                  <div className="text-lg font-black">{referralInfo.creditsRemaining}</div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">бонусных генераций</div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={copyReferralLink}
+                className="w-full h-12 rounded-full bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-[0.18em]"
+              >
+                {referralCopied ? 'Ссылка скопирована' : 'Скопировать ссылку'}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4 text-xs text-zinc-400">
+              Загружаем вашу ссылку-приглашение...
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">

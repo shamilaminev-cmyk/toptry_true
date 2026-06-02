@@ -19,7 +19,7 @@ interface AppState {
     login: (emailOrUsername: string, password: string) => Promise<void>;
     register: (email: string, username: string, password: string) => Promise<void>;
     startPhoneAuth: (phone: string) => Promise<void>;
-    verifyPhoneAuth: (phone: string, code: string) => Promise<any>;
+    verifyPhoneAuth: (phone: string, code: string, referralCode?: string) => Promise<any>;
     updateProfileSizes: (sizeTop: string, sizeBottom: string, sizeShoes: string) => Promise<void>;
     refreshMe: () => Promise<User | null>;
     logout: () => Promise<void>;
@@ -355,10 +355,11 @@ return () => clearTimeout(t);
   return j;
 },
 
-    verifyPhoneAuth: async (phone: string, code: string) => {
+    verifyPhoneAuth: async (phone: string, code: string, referralCode?: string) => {
       let resp: Response;
       try {
         const body = new URLSearchParams({ phone, code });
+        if (referralCode) body.set('referralCode', referralCode);
         resp = await fetch('/api/auth/phone/verify', {
           method: 'POST',
           credentials: 'include',
@@ -800,6 +801,15 @@ register: async (email: string, username: string, password: string) => {
           if (resp.status === 401) {
             throw new Error('AUTH_REQUIRED');
           }
+
+          if (resp.status === 429 && data?.code === 'LOOK_GENERATION_LIMIT_REACHED') {
+            const limitErr: any = new Error(data?.error || 'Лимит генераций исчерпан');
+            limitErr.code = data.code;
+            limitErr.limitType = data?.limitType || null;
+            limitErr.usage = data?.usage || null;
+            throw limitErr;
+          }
+
           throw new Error(data?.error || raw || `AI server error (${resp.status})`);
         }
 
