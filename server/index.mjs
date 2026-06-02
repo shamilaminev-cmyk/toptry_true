@@ -1554,6 +1554,10 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
       catalogByMerchantGroup,
       catalogMissingImage,
       catalogMissingPrice,
+      catalogCreatedToday,
+      catalogUpdatedToday,
+      catalogDeactivatedToday,
+      catalogMerchantHealth,
       maleShoesRisk,
       clickoutsToday,
       clickouts7d,
@@ -1629,6 +1633,25 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
           OR: [{ price: null }, { price: { lte: 0 } }],
         },
       }),
+      prisma.catalogProduct.count({ where: { createdAt: { gte: dayStart } } }),
+      prisma.catalogProduct.count({ where: { isActive: true, updatedAt: { gte: dayStart } } }),
+      prisma.catalogProduct.count({ where: { isActive: false, updatedAt: { gte: dayStart } } }),
+      prisma.$queryRaw`
+        select
+          merchant,
+          count(*) filter (where "isActive" = true)::int as "activeTotal",
+          count(*) filter (where "isActive" = false)::int as "inactiveTotal",
+          count(*) filter (where "createdAt" >= ${dayStart})::int as "createdToday",
+          count(*) filter (where "isActive" = true and "updatedAt" >= ${dayStart})::int as "activeUpdatedToday",
+          count(*) filter (where "isActive" = false and "updatedAt" >= ${dayStart})::int as "inactiveUpdatedToday",
+          count(*) filter (where "isActive" = true and gender = 'MALE' and "taxonomyGroup" = 'SHOES')::int as "activeMaleShoes",
+          count(*) filter (where "isActive" = false and gender = 'MALE' and "taxonomyGroup" = 'SHOES')::int as "inactiveMaleShoes",
+          count(*) filter (where "isActive" = true and gender = 'FEMALE' and "taxonomyGroup" = 'SHOES')::int as "activeFemaleShoes",
+          max("updatedAt") as "lastUpdatedAt"
+        from "CatalogProduct"
+        group by merchant
+        order by "activeTotal" desc
+      `,
       prisma.catalogProduct.groupBy({
         by: ["merchant"],
         where: {
@@ -1737,6 +1760,30 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
       }
     }
 
+    for (const row of catalogMerchantHealth || []) {
+      const merchant = row.merchant || "";
+      const activeTotalByMerchant = n(row.activeTotal);
+      const inactiveUpdatedToday = n(row.inactiveUpdatedToday);
+      const activeMaleShoes = n(row.activeMaleShoes);
+      const inactiveMaleShoes = n(row.inactiveMaleShoes);
+
+      if (activeTotalByMerchant > 0 && inactiveUpdatedToday > Math.max(1000, activeTotalByMerchant * 2)) {
+        alerts.push({
+          level: "warning",
+          title: `${merchant}: много деактиваций сегодня`,
+          detail: `inactive updated today = ${inactiveUpdatedToday}, active total = ${activeTotalByMerchant}. Проверь импорт/сегмент фида.`,
+        });
+      }
+
+      if (inactiveMaleShoes > 0 && activeMaleShoes === 0) {
+        alerts.push({
+          level: "danger",
+          title: `${merchant}: мужская обувь выключена`,
+          detail: `active MALE SHOES = 0, inactive MALE SHOES = ${inactiveMaleShoes}.`,
+        });
+      }
+    }
+
     if (catalogMissingImage > 0) {
       alerts.push({
         level: "warning",
@@ -1793,9 +1840,24 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
       catalog: {
         activeTotal,
         inactiveTotal,
+        createdToday: catalogCreatedToday,
+        activeUpdatedToday: catalogUpdatedToday,
+        inactiveUpdatedToday: catalogDeactivatedToday,
         byMerchant,
         byMerchantGender,
         byMerchantGroup,
+        merchantHealth: (catalogMerchantHealth || []).map((r) => ({
+          merchant: r.merchant || "",
+          activeTotal: n(r.activeTotal),
+          inactiveTotal: n(r.inactiveTotal),
+          createdToday: n(r.createdToday),
+          activeUpdatedToday: n(r.activeUpdatedToday),
+          inactiveUpdatedToday: n(r.inactiveUpdatedToday),
+          activeMaleShoes: n(r.activeMaleShoes),
+          inactiveMaleShoes: n(r.inactiveMaleShoes),
+          activeFemaleShoes: n(r.activeFemaleShoes),
+          lastUpdatedAt: r.lastUpdatedAt?.toISOString?.() || r.lastUpdatedAt || null,
+        })),
         missingImage: catalogMissingImage,
         missingPrice: catalogMissingPrice,
       },

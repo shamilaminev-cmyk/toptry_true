@@ -144,6 +144,8 @@ const Admin: React.FC = () => {
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Пользователи" value={data?.users?.total} hint={`+${fmt(data?.users?.new7d)} за 7 дней`} />
         <StatCard label="Активные товары" value={data?.catalog?.activeTotal} hint={`${fmt(data?.catalog?.inactiveTotal)} inactive`} />
+        <StatCard label="Создано товаров сегодня" value={data?.catalog?.createdToday} hint="новые строки каталога" />
+        <StatCard label="Активировано/обновлено сегодня" value={data?.catalog?.activeUpdatedToday} hint={`${fmt(data?.catalog?.inactiveUpdatedToday)} inactive updated`} />
         <StatCard label="Генерации сегодня" value={(data?.usage?.today || []).reduce((s: number, r: any) => s + Number(r.count || 0), 0)} hint={`avg ${fmt(data?.usage?.avgDurationMsToday)} ms`} />
         <StatCard label="Clickouts 7д" value={data?.clickouts?.sevenDays} hint={`${fmt(data?.clickouts?.fallbackSevenDays)} fallback`} />
         <StatCard label="Публичные образы" value={data?.social?.publicLooks} hint={`${fmt(data?.social?.looksToday)} образов сегодня`} />
@@ -153,6 +155,7 @@ const Admin: React.FC = () => {
       </section>
 
       <div className="grid lg:grid-cols-2 gap-4">
+        <DataTable title="Продавцы: health" rows={data?.catalog?.merchantHealth || []} columns={['merchant', 'activeTotal', 'inactiveTotal', 'createdToday', 'activeUpdatedToday', 'inactiveUpdatedToday', 'activeMaleShoes', 'inactiveMaleShoes', 'activeFemaleShoes']} />
         <DataTable title="Продавцы: active" rows={data?.catalog?.byMerchant || []} columns={['merchant', 'count']} />
         <DataTable title="Продавцы / пол" rows={data?.catalog?.byMerchantGender || []} columns={['merchant', 'gender', 'count']} />
         <DataTable title="Продавцы / группа" rows={data?.catalog?.byMerchantGroup || []} columns={['merchant', 'taxonomyGroup', 'count']} />
