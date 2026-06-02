@@ -3662,13 +3662,21 @@ function detectCatalogFeedGenderCoverage(rows) {
   let female = 0;
   let unisex = 0;
 
+  const maleSegmentRe =
+    /пол\s*:\s*мужск|мужская\s+обув|мужская\s+одежд|мужские\s+|мужской\s+|\/male\/|%2fmale%2f|\bmale\b|\bmen\b|\bman\b/i;
+  const femaleSegmentRe =
+    /пол\s*:\s*женск|женская\s+обув|женская\s+одежд|женские\s+|женский\s+|\/female\/|%2ffemale%2f|\bfemale\b|\bwomen\b|\bwoman\b/i;
+
   for (const row of Array.isArray(rows) ? rows : []) {
     const title = pickFirst(row, ["name", "title", "product_name", "model"]);
     const brand = pickFirst(row, ["brand", "vendor", "manufacturer"]);
-    const gender = normalizeCatalogGender(getCatalogRowGenderSignal(row, title, brand));
+    const signal = getCatalogRowGenderSignal(row, title, brand).toLowerCase();
 
-    if (gender === "MALE") male++;
-    else if (gender === "FEMALE") female++;
+    const hasMale = maleSegmentRe.test(signal);
+    const hasFemale = femaleSegmentRe.test(signal);
+
+    if (hasMale && !hasFemale) male++;
+    else if (hasFemale && !hasMale) female++;
     else unisex++;
   }
 
