@@ -3996,6 +3996,9 @@ function getCatalogClothingTypePredicates(clothingType) {
       titleContains("TOPS", "куртка-рубаш"),
       titleContains("TOPS", "рубашка-курт"),
       titleContains("TOPS", "overshirt"),
+      titleContains("JACKETS", "куртка-рубаш"),
+      titleContains("JACKETS", "рубашка-курт"),
+      titleContains("JACKETS", "overshirt"),
     ] : []),
     ...(ct === "LINEN_SHIRTS" ? [
       titleContains("TOPS", "льнян"),
@@ -4569,7 +4572,8 @@ function inferCatalogTaxonomy(product) {
     if (category === "DRESS") {
       taxonomySubgroup = "DRESSES";
     } else if (category === "JACKETS") {
-      if (/(жакет|пиджак|blazer)/.test(sourceText)) taxonomySubgroup = "BLAZERS";
+      if (/(куртк|jacket).{0,24}(рубаш|сорочк|shirt)|(рубаш|сорочк|shirt).{0,24}(куртк|jacket)|overshirt/.test(sourceText)) taxonomySubgroup = "OVERSHIRTS";
+      else if (/(жакет|пиджак|blazer)/.test(sourceText)) taxonomySubgroup = "BLAZERS";
       else if (/пальто|coat/.test(sourceText)) taxonomySubgroup = "COATS";
       else if (/пухов|дутик|down jacket|puffer/.test(sourceText)) taxonomySubgroup = "PUFFER_JACKETS";
       else if (/бомбер|bomber/.test(sourceText)) taxonomySubgroup = "BOMBERS";
@@ -5723,6 +5727,15 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
   } else if (/свитер|джемпер|sweater/i.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "SWEATERS";
+    item.isTryOnRelevant = true;
+  }
+
+
+  // Priority correction: "куртка-рубашка" / overshirt is a meaningful garment type.
+  // It should not be hidden inside DENIM_JACKETS or generic OUTERWEAR.
+  if (/(куртк|jacket).{0,24}(рубашк|сорочк|shirt)|(рубашк|сорочк|shirt).{0,24}(куртк|jacket)|overshirt/i.test(title)) {
+    item.taxonomyGroup = "CLOTHING";
+    item.taxonomySubgroup = "OVERSHIRTS";
     item.isTryOnRelevant = true;
   }
 
