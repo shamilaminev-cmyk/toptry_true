@@ -1320,7 +1320,7 @@ const Catalog = () => {
                         onClick={() => navigate(`/product/${encodeURIComponent(p.id)}`)}
                         className="min-w-0 flex-1 text-left"
                       >
-                        <h3 className="text-[11px] font-bold uppercase tracking-tight truncate text-zinc-700 hover:text-zinc-950">
+                        <h3 className="text-[11px] font-bold uppercase tracking-tight truncate text-zinc-700 hover:text-zinc-950 min-h-[34px]">
                           {p.title}
                         </h3>
                       </button>
@@ -1334,13 +1334,13 @@ const Catalog = () => {
                           </p>
                         )}
                       </div>
-                      <span className="text-[8px] font-bold uppercase text-zinc-400 px-2 py-1 bg-zinc-50 rounded-md border border-zinc-100 shrink-0">
+                      <span className="text-[8px] font-bold uppercase text-zinc-400 px-2 py-1 bg-zinc-50 rounded-md border border-zinc-100 shrink-0 min-h-[34px]">
                         {(p.storeName || p.brand || "Store")}
                       </span>
                     </div>
                     <button
                       onClick={() => navigate(`/product/${encodeURIComponent(p.id)}`)}
-                      className="w-full mt-3 py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm"
+                      className="w-full mt-3 py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm mt-auto min-h-[34px]"
                     >
                       Подробнее
                     </button>
