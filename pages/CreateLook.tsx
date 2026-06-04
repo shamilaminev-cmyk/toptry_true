@@ -135,19 +135,26 @@ const CreateLook = () => {
 
     try {
       const lookId = await actions.createLook(selectedItems, qualityMode);
+      console.log("[CreateLook] generation finished", { lookId });
+
       clearInterval(interval);
       clearInterval(progressInterval);
       setGenStep(STAGES.length - 1);
       setProgress(100);
-      setTimeout(() => {
-        setIsGenerating(false);
-        setGenStep(0);
-        setProgress(0);
-        if (lookId) {
-          navigate(`/look/${lookId}`);
-        } else {
+
+      window.setTimeout(() => {
+        if (!lookId) {
+          setIsGenerating(false);
+          setGenStep(0);
+          setProgress(0);
           alert("Сервер не вернул идентификатор образа.");
+          return;
         }
+
+        // Hard navigation is intentional here.
+        // It clears any stuck overlay/state after a long generation request
+        // and guarantees that the newly created look opens.
+        window.location.assign(`${window.location.origin}/#/look/${lookId}`);
       }, 350);
     } catch (err: any) {
       clearInterval(interval);
