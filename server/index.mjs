@@ -181,6 +181,12 @@ function isExternalCatalogImageUrlForProxy(url) {
       "www.thecultt.com",
       "remington.fashion",
       "www.remington.fashion",
+      "snowqueen.ru",
+      "www.snowqueen.ru",
+      "static.snowqueen.ru",
+      "cdn.snowqueen.ru",
+      "img.snowqueen.ru",
+      "media.snowqueen.ru",
       "finn-flare.ru",
       "www.finn-flare.ru",
       "static.finn-flare.ru",
@@ -4531,7 +4537,7 @@ function buildCatalogDbWhere({
   sizeShoes,
   sizeLoose,
 }) {
-  const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington", "finnflare"];
+  const allowedMerchants = ["sportcourt", "sportmaster", "rendezvous", "thecultt", "remington", "finnflare", "snowqueen"];
 
   const and = [{ isActive: true }];
 
@@ -4868,6 +4874,12 @@ async function isUsableCatalogImageUrl(url) {
   "www.thecultt.com",
   "remington.fashion",
   "www.remington.fashion",
+  "snowqueen.ru",
+  "www.snowqueen.ru",
+  "static.snowqueen.ru",
+  "cdn.snowqueen.ru",
+  "img.snowqueen.ru",
+  "media.snowqueen.ru",
   "finn-flare.ru",
   "www.finn-flare.ru",
   "static.finn-flare.ru",
@@ -5083,7 +5095,7 @@ const catalogImportJobs = new Map();
 
 function startCatalogImportJob(merchant) {
   const m = String(merchant || "").trim().toLowerCase();
-  const allowed = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt", "finnflare"]);
+  const allowed = new Set(["sportcourt", "sportmaster", "remington", "rendezvous", "thecultt", "finnflare", "snowqueen"]);
 
   if (!allowed.has(m)) {
     return { ok: false, status: 400, error: "Unknown merchant" };
@@ -7673,6 +7685,146 @@ function mergeCatalogSizeArrays(a = {}, b = {}) {
   };
 }
 
+
+app.post("/api/admin/catalog/import/snowqueen", async (_req, res) => {
+  try {
+    const FEED_URL = process.env.ADMITAD_SNOWQUEEN_FEED_URL || "";
+    if (!FEED_URL) {
+      return res.status(500).json({ error: "ADMITAD_SNOWQUEEN_FEED_URL is not set" });
+    }
+
+    const resp = await fetch(FEED_URL);
+    if (!resp.ok) {
+      return res.status(502).json({ error: `Feed fetch failed: ${resp.status}` });
+    }
+
+    const csv = await resp.text();
+    const rows = parseCsv(csv);
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const seen = new Set();
+    const importDiag = createCatalogImportDiagnostics();
+
+    await prisma.catalogProduct.updateMany({
+      where: { merchant: "snowqueen" },
+      data: { isActive: false },
+    });
+
+    for (const r of rows) {
+      const title = pickFirst(r, ["name", "title", "product_name", "model"]);
+      const brand = pickFirst(r, ["brand", "vendor", "manufacturer"]) || "Снежная Королева";
+      const imageUrl = pickFirst(r, ["image", "imageurl", "picture", "img"]);
+      const productUrl = pickFirst(r, ["url", "product_url", "link"]);
+      const affiliateUrl = pickFirst(r, ["deeplink", "affiliate_url", "url", "product_url", "link"]);
+      const price = toPrice(pickFirst(r, ["price", "current_price", "price_value"]));
+      const oldPrice = toPrice(pickFirst(r, ["oldprice", "old_price", "price_old"]));
+
+      const rawCategory = [
+        pickFirst(r, ["categoryId"]),
+        pickFirst(r, ["market_category"]),
+        pickFirst(r, ["typePrefix"]),
+        pickFirst(r, ["param"]),
+        title,
+        brand,
+      ].join(" ").toLowerCase();
+
+      if (!title || !imageUrl || !affiliateUrl || price === null || price <= 0) {
+        importDiag.skip("missingRequired", r);
+        skipped++;
+        continue;
+      }
+
+      if (!isTryOnRelevantCatalogItem(rawCategory)) {
+        importDiag.skip("notTryOnRelevant", r);
+        skipped++;
+        continue;
+      }
+
+      const externalId = buildCatalogExternalId(r);
+      if (seen.has(externalId)) {
+        importDiag.skip("duplicate", r);
+        skipped++;
+        continue;
+      }
+      seen.add(externalId);
+
+      const genderSignal = getCatalogRowGenderSignal(r, title, brand);
+      const gender = normalizeCatalogGender(genderSignal);
+      const category = normalizeCatalogCategory(rawCategory);
+      const catalogSizes = buildCatalogSizes(r, category, rawCategory);
+      const taxonomy = inferCatalogTaxonomy({
+        title,
+        brand,
+        category,
+        gender,
+        rawPayload: r,
+      });
+
+      const data = {
+        id: `cat-snowqueen-${externalId}`,
+        merchant: "snowqueen",
+        externalId,
+        title,
+        brand: brand || null,
+        category,
+        gender,
+        ...catalogSizes,
+        price,
+        oldPrice,
+        currency: normalizeCatalogCurrency(pickFirst(r, ["currency", "currencyId"]) || "RUB"),
+        imageUrl,
+        productUrl: productUrl || affiliateUrl,
+        affiliateUrl,
+        isActive: true,
+        rawPayload: { ...r, source: "admitad_snowqueen" },
+        ...taxonomy,
+      };
+
+      const existing = await prisma.catalogProduct.findUnique({
+        where: {
+          merchant_externalId: {
+            merchant: "snowqueen",
+            externalId,
+          },
+        },
+      });
+
+      if (existing) {
+        await prisma.catalogProduct.update({
+          where: { id: existing.id },
+          data,
+        });
+        updated++;
+      } else {
+        await prisma.catalogProduct.create({ data });
+        created++;
+      }
+    }
+
+    const deactivatedBlocked = await deactivateBlockedCatalogProducts("snowqueen");
+
+    return res.json({
+      ok: true,
+      merchant: "snowqueen",
+      total: rows.length,
+      created,
+      updated,
+      skipped,
+      restoredSafe: 0,
+      deactivatedBlocked: deactivatedBlocked.count || 0,
+      active: created + updated - (deactivatedBlocked.count || 0),
+      skippedByReason: importDiag.byReason,
+      skippedSamples: importDiag.samples,
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/catalog/import/snowqueen error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
 app.post("/api/admin/catalog/import/finnflare", async (_req, res) => {
   try {
     const FEED_URL = process.env.ADMITAD_FINNFLARE_FEED_URL || "";
@@ -8033,6 +8185,12 @@ app.get("/api/catalog/image", async (req, res) => {
       "www.thecultt.com",
       "remington.fashion",
       "www.remington.fashion",
+      "snowqueen.ru",
+      "www.snowqueen.ru",
+      "static.snowqueen.ru",
+      "cdn.snowqueen.ru",
+      "img.snowqueen.ru",
+      "media.snowqueen.ru",
       "finn-flare.ru",
       "www.finn-flare.ru",
       "static.finn-flare.ru",
@@ -8147,6 +8305,18 @@ app.get("/api/catalog/image", async (req, res) => {
           "www.thecultt.com",
           "remington.fashion",
           "www.remington.fashion",
+          "snowqueen.ru",
+          "www.snowqueen.ru",
+          "static.snowqueen.ru",
+          "cdn.snowqueen.ru",
+          "img.snowqueen.ru",
+          "media.snowqueen.ru",
+      "snowqueen.ru",
+      "www.snowqueen.ru",
+      "static.snowqueen.ru",
+      "cdn.snowqueen.ru",
+      "img.snowqueen.ru",
+      "media.snowqueen.ru",
           "finn-flare.ru",
           "www.finn-flare.ru",
           "static.finn-flare.ru",
@@ -8393,6 +8563,12 @@ app.get("/api/catalog/image", async (req, res) => {
       "www.thecultt.com",
       "remington.fashion",
       "www.remington.fashion",
+      "snowqueen.ru",
+      "www.snowqueen.ru",
+      "static.snowqueen.ru",
+      "cdn.snowqueen.ru",
+      "img.snowqueen.ru",
+      "media.snowqueen.ru",
       "finn-flare.ru",
       "www.finn-flare.ru",
       "static.finn-flare.ru",
@@ -8507,6 +8683,18 @@ app.get("/api/catalog/image", async (req, res) => {
           "www.thecultt.com",
           "remington.fashion",
           "www.remington.fashion",
+          "snowqueen.ru",
+          "www.snowqueen.ru",
+          "static.snowqueen.ru",
+          "cdn.snowqueen.ru",
+          "img.snowqueen.ru",
+          "media.snowqueen.ru",
+      "snowqueen.ru",
+      "www.snowqueen.ru",
+      "static.snowqueen.ru",
+      "cdn.snowqueen.ru",
+      "img.snowqueen.ru",
+      "media.snowqueen.ru",
         ]);
 
         if (allowedHosts.has(parsed.hostname)) {
@@ -9733,6 +9921,7 @@ const CATALOG_PIPELINE_MERCHANTS = [
   "sportcourt",
   "sportmaster",
   "finnflare",
+  "snowqueen",
 ];
 
 const CATALOG_PIPELINE_REPORT_DIR =
