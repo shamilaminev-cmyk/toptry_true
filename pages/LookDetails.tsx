@@ -471,6 +471,7 @@ const LookDetails = () => {
           </div>
           <div className="flex gap-4 flex-wrap justify-end">
             {isOwnLook && (
+              <div className="flex items-center gap-2">
               <button
                 onClick={handlePublishToggle}
                 disabled={publishBusy}
@@ -482,6 +483,14 @@ const LookDetails = () => {
               >
                 {look.isPublic ? 'Скрыть' : 'Опубликовать'}
               </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteLook}
+                  className="px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border border-zinc-200 text-zinc-400 hover:text-zinc-900 hover:border-zinc-400"
+                >
+                  Удалить
+                </button>
+              </div>
             )}
             <button onClick={() => actions.reactToLook(look.id, 'like')} className="flex items-center gap-1.5 font-bold">
               <ICONS.Heart className="w-6 h-6" /> {look.likes}
