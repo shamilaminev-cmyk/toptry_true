@@ -33,6 +33,7 @@ interface AppState {
     likeLook: (id: string) => void;
     reactToLook: (id: string, reaction: 'like' | 'want_try' | 'would_buy') => Promise<void>;
     saveLook: (id: string) => Promise<void>;
+    deleteLook: (id: string) => Promise<void>;
   };
 }
 
@@ -921,6 +922,21 @@ register: async (email: string, username: string, password: string) => {
       } catch {
         // ignore
       }
+    },
+
+    deleteLook: async (id: string) => {
+      const resp = await fetch(`/api/looks/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось удалить образ');
+      }
+
+      setLooks((prev) => prev.filter((l) => String(l.id) !== String(id)));
     },
   }), [user, looks, wardrobe, homeLayout]);
 

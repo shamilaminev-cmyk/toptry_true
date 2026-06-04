@@ -13,6 +13,34 @@ const STAGES = [
   "Финализируем результат..."
 ];
 
+function sourceItemToWardrobeItem(item: any): WardrobeItem {
+  const id = String(item?.id || `look-item-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const image = Array.isArray(item?.images) && item.images[0]
+    ? item.images[0]
+    : item?.imageUrl || item?.cutoutUrl || item?.originalUrl || '';
+
+  return {
+    id,
+    title: String(item?.title || 'Вещь из образа'),
+    price: Number(item?.price || 0),
+    currency: item?.currency || 'RUB',
+    gender: item?.gender || 'UNISEX',
+    category: item?.category || 'Верх',
+    sizes: Array.isArray(item?.sizes) ? item.sizes : ['ONE'],
+    images: image ? [image] : [],
+    storeId: item?.storeId || item?.merchant || 'look-source',
+    storeName: item?.storeName || item?.merchant || undefined,
+    brand: item?.brand || undefined,
+    productUrl: item?.productUrl || undefined,
+    affiliateUrl: item?.affiliateUrl || undefined,
+    availability: true,
+    isCatalog: item?.isCatalog !== false,
+    userId: item?.userId,
+    addedAt: item?.addedAt || new Date().toISOString(),
+    sourceType: item?.sourceType || 'catalog',
+  } as WardrobeItem;
+}
+
 const CreateLook = () => {
   const { wardrobe, user, actions, aiError } = useAppState();
   const navigate = useNavigate();
@@ -33,7 +61,25 @@ const CreateLook = () => {
 
   useEffect(() => {
     const state = (location.state || {}) as any;
+    const preselectedItems = Array.isArray(state?.preselectedItems) ? state.preselectedItems.slice(0, 5) : [];
     const preselectedItemId = state?.preselectedItemId;
+
+    if (preselectedItems.length) {
+      const normalized = preselectedItems.map(sourceItemToWardrobeItem).filter((i: any) => i.images?.[0]);
+
+      normalized.forEach((item) => {
+        actions.upsertWardrobeItem(item);
+      });
+
+      setSelectedIds(new Set(normalized.map((i) => i.id)));
+
+      if (normalized[0]?.category) {
+        setActiveCategory(normalized[0].category as any);
+      }
+
+      navigate(location.pathname, { replace: true, state: {} });
+      return;
+    }
 
     if (!preselectedItemId) return;
     if (!wardrobe.some((i) => i.id === preselectedItemId)) return;
@@ -51,7 +97,7 @@ const CreateLook = () => {
     }
 
     navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state, location.pathname, navigate, wardrobe]);
+  }, [location.state, location.pathname, navigate, wardrobe, actions]);
 
   const toggleItem = (item: WardrobeItem) => {
     const next = new Set(selectedIds);

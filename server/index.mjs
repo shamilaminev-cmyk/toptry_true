@@ -3223,6 +3223,33 @@ app.post("/api/looks/:id/unpublish", requireAuth, async (req, res) => {
   }
 });
 
+
+app.delete("/api/looks/:id", requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const userId = req.auth.userId;
+
+    const existing = await prisma.look.findFirst({
+      where: { id, userId },
+      select: { id: true, userId: true, resultImageKey: true },
+    });
+
+    if (!existing) return res.status(404).json({ error: "Look not found" });
+
+    await prisma.$transaction([
+      prisma.comment.deleteMany({ where: { lookId: id } }),
+      prisma.like.deleteMany({ where: { lookId: id } }),
+      prisma.look.delete({ where: { id } }),
+    ]);
+
+    // Keep UsageEvent and media files for analytics/debugging in MVP.
+    return res.json({ ok: true, id });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id delete error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
 app.post("/api/looks/:id/like", requireAuth, async (req, res) => {
   try {
     const lookId = String(req.params.id || "");

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams, Link, useLocation } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppState } from '../store';
 import { ICONS, CURRENCY } from '../constants';
 import { withApiOrigin } from '../utils/withApiOrigin';
@@ -198,6 +198,7 @@ function similarCatalogRoute(item: any) {
 const LookDetails = () => {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const { looks: localLooks, products, actions, user } = useAppState();
   const [isTryingOn, setIsTryingOn] = useState(false);
   const [showResult, setShowResult] = useState(false);
@@ -272,11 +273,17 @@ const LookDetails = () => {
   const isOwnLook = !!localLooks.find((l) => String(l.id) === String(look?.id));
 
   const handleTryOn = () => {
-    setIsTryingOn(true);
-    setTimeout(() => {
-      setIsTryingOn(false);
-      setShowResult(true);
-    }, 2000);
+    if (!look?.sourceItems?.length) {
+      showToast('В этом образе нет товаров для примерки');
+      return;
+    }
+
+    navigate('/create-look', {
+      state: {
+        preselectedItems: (look.sourceItems || []).slice(0, 5),
+        fromLookId: look.id,
+      },
+    });
   };
 
   const submitComment = async () => {
@@ -332,6 +339,21 @@ const LookDetails = () => {
       showToast(endpoint === "publish" ? 'Образ опубликован' : 'Образ скрыт из ленты');
     } finally {
       setPublishBusy(false);
+    }
+  };
+
+  const handleDeleteLook = async () => {
+    if (!look?.id) return;
+
+    const ok = window.confirm('Удалить образ? Это действие нельзя отменить.');
+    if (!ok) return;
+
+    try {
+      await actions.deleteLook(look.id);
+      showToast('Образ удалён');
+      navigate('/looks');
+    } catch (e: any) {
+      showToast(e?.message || 'Не удалось удалить образ');
     }
   };
 
@@ -537,7 +559,7 @@ const LookDetails = () => {
             <div className="pt-4">
               <div className="bg-zinc-900 text-white p-4 rounded-2xl flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest opacity-70">Купить всё</p>
+                  <p className="text-[10px] uppercase tracking-widest opacity-70">Товары образа</p>
                   <p className="text-lg font-bold">
                     {look.priceBuyNowRUB || 0} {CURRENCY}
                   </p>

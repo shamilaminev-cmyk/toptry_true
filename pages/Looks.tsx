@@ -333,6 +333,36 @@ const Looks = () => {
     navigate(`/look/${lookId}?comments=1`);
   };
 
+  const handleTryOnThisLook = (look: any) => {
+    const sourceItems = Array.isArray(look?.sourceItems) ? look.sourceItems : [];
+    if (!sourceItems.length) {
+      navigate(`/look/${look.id}`);
+      return;
+    }
+
+    navigate('/create-look', {
+      state: {
+        preselectedItems: sourceItems.slice(0, 5),
+        fromLookId: look.id,
+      },
+    });
+  };
+
+  const handleDeleteLook = async (look: any) => {
+    const lookId = String(look?.id || '');
+    if (!lookId) return;
+
+    const ok = window.confirm('Удалить образ? Это действие нельзя отменить.');
+    if (!ok) return;
+
+    try {
+      await actions.deleteLook(lookId);
+      setFeedLooks((prev) => prev.filter((l) => String(l.id) !== lookId));
+    } catch (e: any) {
+      alert(e?.message || 'Не удалось удалить образ');
+    }
+  };
+
   return (
     <div className="pb-12">
       <style id="toptry-feed-desktop-css">{`
@@ -506,7 +536,7 @@ const Looks = () => {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h2 className="text-xl md:text-3xl font-black uppercase tracking-tight leading-none">
-                        {look.title || 'Сгенерированный образ'}
+                        {sourceItems.length ? `Образ из ${sourceItems.length} вещей` : (look.title || 'Образ')}
                       </h2>
                       <div className="flex items-center gap-2 mt-3">
                         {(look.authorAvatar || user?.avatarUrl || user?.selfieUrl) ? (
@@ -583,6 +613,24 @@ const Looks = () => {
                         )}
                       </div>
                     </section>
+                  )}
+
+                  {sourceItems.length > 0 && (
+                    <div className="hidden md:flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleTryOnThisLook(look)}
+                        className="flex-1 bg-zinc-900 text-white px-5 py-3 rounded-full text-xs font-black uppercase tracking-widest"
+                      >
+                        Примерить на себе
+                      </button>
+                      <Link
+                        to={`/look/${look.id}`}
+                        className="bg-white border border-zinc-200 text-zinc-900 px-5 py-3 rounded-full text-xs font-black uppercase tracking-widest"
+                      >
+                        Детали
+                      </Link>
+                    </div>
                   )}
 
                   {sourceItems.length > 0 && (
