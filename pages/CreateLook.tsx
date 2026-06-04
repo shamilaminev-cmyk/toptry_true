@@ -54,6 +54,7 @@ const CreateLook = () => {
   const qualityMode: 'quality' = 'quality';
   const selfie = user?.selfieUrl || user?.avatarUrl;
   const selectedItems = wardrobe.filter((i) => selectedIds.has(i.id));
+  const processedPreselectRef = useRef<string>('');
 
   const filteredItems = activeCategory === 'all' 
     ? wardrobe 
@@ -64,8 +65,20 @@ const CreateLook = () => {
     const preselectedItems = Array.isArray(state?.preselectedItems) ? state.preselectedItems.slice(0, 5) : [];
     const preselectedItemId = state?.preselectedItemId;
 
+    const stateKey = preselectedItems.length
+      ? `items:${preselectedItems.map((i: any) => String(i?.id || i?.title || i?.imageUrl || '')).join('|')}`
+      : preselectedItemId
+        ? `item:${preselectedItemId}`
+        : '';
+
+    if (!stateKey) return;
+    if (processedPreselectRef.current === stateKey) return;
+    processedPreselectRef.current = stateKey;
+
     if (preselectedItems.length) {
-      const normalized = preselectedItems.map(sourceItemToWardrobeItem).filter((i: any) => i.images?.[0]);
+      const normalized = preselectedItems
+        .map(sourceItemToWardrobeItem)
+        .filter((i: any) => i.images?.[0]);
 
       normalized.forEach((item) => {
         actions.upsertWardrobeItem(item);
@@ -77,7 +90,6 @@ const CreateLook = () => {
         setActiveCategory(normalized[0].category as any);
       }
 
-      navigate(location.pathname, { replace: true, state: {} });
       return;
     }
 
@@ -95,9 +107,7 @@ const CreateLook = () => {
     if (state?.preselectedCategory) {
       setActiveCategory(state.preselectedCategory);
     }
-
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state, location.pathname, navigate, wardrobe, actions]);
+  }, [location.state, wardrobe, actions]);
 
   const toggleItem = (item: WardrobeItem) => {
     const next = new Set(selectedIds);
