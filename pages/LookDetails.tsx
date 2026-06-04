@@ -351,7 +351,7 @@ const LookDetails = () => {
     try {
       await actions.deleteLook(look.id);
       showToast('Образ удалён');
-      navigate('/looks');
+      navigate('/looks?tab=mine');
     } catch (e: any) {
       showToast(e?.message || 'Не удалось удалить образ');
     }

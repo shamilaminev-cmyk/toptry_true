@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppState } from '../store';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ICONS } from '../constants';
 import { withApiOrigin } from '../utils/withApiOrigin';
 
@@ -219,13 +219,20 @@ function similarCatalogRoute(item: any) {
 const Looks = () => {
   const { looks, actions, user } = useAppState();
   const navigate = useNavigate();
-  const [tab, setTab] = React.useState<'feed' | 'mine'>('feed');
+  const location = useLocation();
+  const initialTab = new URLSearchParams(location.search).get('tab') === 'mine' ? 'mine' : 'feed';
+  const [tab, setTab] = React.useState<'feed' | 'mine'>(initialTab);
   const [feedLooks, setFeedLooks] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [likedPulseIds, setLikedPulseIds] = React.useState<Record<string, boolean>>({});
   const [publishBusyIds, setPublishBusyIds] = React.useState<Record<string, boolean>>({});
   const [publishedOverrides, setPublishedOverrides] = React.useState<Record<string, boolean>>({});
   const [socialNotice, setSocialNotice] = React.useState('');
+
+  React.useEffect(() => {
+    const requestedTab = new URLSearchParams(location.search).get('tab') === 'mine' ? 'mine' : 'feed';
+    setTab(requestedTab);
+  }, [location.search]);
 
   React.useEffect(() => {
     if (tab !== 'feed') return;
@@ -358,6 +365,10 @@ const Looks = () => {
     try {
       await actions.deleteLook(lookId);
       setFeedLooks((prev) => prev.filter((l) => String(l.id) !== lookId));
+      setTab('mine');
+      navigate('/looks?tab=mine', { replace: true });
+      setSocialNotice('Образ удалён');
+      window.setTimeout(() => setSocialNotice(''), 2500);
     } catch (e: any) {
       alert(e?.message || 'Не удалось удалить образ');
     }
@@ -432,7 +443,10 @@ const Looks = () => {
 
         <div className="flex gap-2">
           <button
-            onClick={() => setTab('feed')}
+            onClick={() => {
+              setTab('feed');
+              navigate('/looks', { replace: true });
+            }}
             className={`px-5 h-10 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${
               tab === 'feed'
                 ? 'bg-zinc-900 text-white border-zinc-900'
@@ -442,7 +456,10 @@ const Looks = () => {
             Лента
           </button>
           <button
-            onClick={() => setTab('mine')}
+            onClick={() => {
+              setTab('mine');
+              navigate('/looks?tab=mine', { replace: true });
+            }}
             className={`px-5 h-10 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${
               tab === 'mine'
                 ? 'bg-zinc-900 text-white border-zinc-900'
@@ -605,12 +622,23 @@ const Looks = () => {
                         {effectiveIsPublic && (
                           <button
                             type="button"
-                            onClick={() => setTab('feed')}
+                            onClick={() => {
+                              setTab('feed');
+                              navigate('/looks', { replace: true });
+                            }}
                             className="h-10 px-4 rounded-full bg-white border border-zinc-200 text-zinc-700 text-[10px] font-black uppercase tracking-[0.18em]"
                           >
                             Смотреть в ленте
                           </button>
                         )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLook(look)}
+                          className="h-10 px-4 rounded-full bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900 hover:border-zinc-400 text-[10px] font-black uppercase tracking-[0.18em] transition-colors"
+                        >
+                          Удалить
+                        </button>
                       </div>
                     </section>
                   )}
