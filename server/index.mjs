@@ -8843,7 +8843,13 @@ function mapCatalogProductForApi(p, sizeOverride = {}) {
             ? "The Cultt"
             : p.merchant === "remington"
               ? "Remington"
-              : "Sportcourt",
+              : p.merchant === "finnflare"
+                ? "FINN FLARE"
+                : p.merchant === "snowqueen"
+                  ? "Снежная Королева"
+                  : p.merchant === "sportcourt"
+                    ? "Sportcourt"
+                    : p.merchant || "Магазин",
     availability: p.isActive,
     isCatalog: true,
     brand: p.brand || undefined,
@@ -9638,7 +9644,11 @@ app.get("/api/catalog/products", async (req, res) => {
                   ? "Remington"
                   : p.merchant === "finnflare"
                     ? "FINN FLARE"
-                    : "Sportcourt",
+                    : p.merchant === "snowqueen"
+                      ? "Снежная Королева"
+                      : p.merchant === "sportcourt"
+                        ? "Sportcourt"
+                        : p.merchant || "Магазин",
         availability: p.isActive,
         isCatalog: true,
         brand: p.brand || undefined,
