@@ -94,8 +94,6 @@ export interface Look {
   isPublic: boolean;
   likes: number;
   comments: number;
-  wantTryCount?: number;
-  wouldBuyCount?: number;
   saves?: number;
   createdAt: Date;
   authorName?: string;
@@ -106,7 +104,6 @@ export interface Look {
   priceBuyNowRUB?: number;
   buyLinks?: string[];
 
-  viewerReaction?: 'like' | 'want_try' | 'would_buy' | null;
   viewerSaved?: boolean;
 }
 

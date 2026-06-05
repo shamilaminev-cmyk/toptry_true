@@ -3379,9 +3379,9 @@ app.delete("/api/looks/:id/like", requireAuth, async (req, res) => {
 
 app.post("/api/looks/:id/react", requireAuth, async (req, res) => {
   try {
-    const reaction = String(req.body?.reaction || "").trim();
+    const reaction = String(req.body?.reaction || "like").trim();
     if (reaction !== "like") {
-      return res.json({ ok: true, likes: 0, wantTryCount: 0, wouldBuyCount: 0 });
+      return res.status(400).json({ error: "Unsupported reaction" });
     }
 
     const lookId = String(req.params.id || "");
@@ -3410,8 +3410,12 @@ app.post("/api/looks/:id/react", requireAuth, async (req, res) => {
       ]);
     }
 
-    const fresh = await prisma.look.findUnique({ where: { id: lookId }, select: { likesCount: true } });
-    return res.json({ ok: true, likes: fresh?.likesCount || 0, wantTryCount: 0, wouldBuyCount: 0 });
+    const fresh = await prisma.look.findUnique({
+      where: { id: lookId },
+      select: { likesCount: true },
+    });
+
+    return res.json({ ok: true, liked: true, likes: fresh?.likesCount || 0 });
   } catch (err) {
     console.error("[toptry] /api/looks/:id/react error", err);
     return res.status(500).json({ error: err?.message || "Unknown server error" });

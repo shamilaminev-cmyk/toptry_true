@@ -31,7 +31,7 @@ interface AppState {
     createLook: (items: WardrobeItem[]) => Promise<string | undefined>;
     setSelfie: (url: string) => void;
     likeLook: (id: string) => void;
-    reactToLook: (id: string, reaction: 'like' | 'want_try' | 'would_buy') => Promise<void>;
+    reactToLook: (id: string, reaction?: 'like') => Promise<void>;
     saveLook: (id: string) => Promise<void>;
     deleteLook: (id: string) => Promise<void>;
   };
@@ -870,16 +870,16 @@ register: async (email: string, username: string, password: string) => {
       }
     },
 
-    reactToLook: async (id: string, reaction: 'like' | 'want_try' | 'would_buy') => {
+    reactToLook: async (id: string, reaction: 'like' = 'like') => {
+      if (reaction !== 'like') return;
+
       try {
-        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/react`, {
+        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/like`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reaction }),
         });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(data?.error || 'Reaction failed');
+        if (!resp.ok) throw new Error(data?.error || 'Like failed');
 
         setLooks((prev) =>
           prev.map((l) =>
@@ -887,9 +887,7 @@ register: async (email: string, username: string, password: string) => {
               ? {
                   ...l,
                   likes: data?.likes ?? l.likes,
-                  wantTryCount: data?.wantTryCount ?? l.wantTryCount ?? 0,
-                  wouldBuyCount: data?.wouldBuyCount ?? l.wouldBuyCount ?? 0,
-                  viewerReaction: reaction,
+                  viewerLiked: true,
                 }
               : l
           )
