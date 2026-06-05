@@ -741,16 +741,18 @@ const Looks = () => {
 
                   {sourceItems.length > 0 && (
                     <div className="hidden md:flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => handleTryOnThisLook(look)}
-                        className="flex-1 bg-zinc-900 text-white px-5 py-3 rounded-full text-xs font-black uppercase tracking-widest"
-                      >
-                        Примерить на себе
-                      </button>
+                      {tab !== 'mine' && (
+                        <button
+                          type="button"
+                          onClick={() => handleTryOnThisLook(look)}
+                          className="flex-1 bg-zinc-900 text-white px-5 py-3 rounded-full text-xs font-black uppercase tracking-widest"
+                        >
+                          Примерить на себе
+                        </button>
+                      )}
                       <Link
                         to={`/look/${look.id}`}
-                        className="bg-white border border-zinc-200 text-zinc-900 px-5 py-3 rounded-full text-xs font-black uppercase tracking-widest"
+                        className={`${tab === 'mine' ? 'flex-1 text-center' : ''} bg-white border border-zinc-200 text-zinc-900 px-5 py-3 rounded-full text-xs font-black uppercase tracking-widest`}
                       >
                         Детали
                       </Link>
