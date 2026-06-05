@@ -59,30 +59,30 @@ const Home: React.FC = () => {
           <img
             src="/hero-toptry-v4.webp"
             alt=""
-            className="absolute inset-0 h-full w-full object-cover object-[62%_center] opacity-95"
+            className="absolute inset-0 h-full w-full object-cover object-[58%_center] opacity-100"
           />
 
-          <div className="absolute inset-0 bg-black/5" />
+          <div className="absolute inset-0 bg-black/[0.02]" />
           <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/10 to-transparent" />
 
-          <div className="relative z-10 flex min-h-[560px] md:min-h-[540px] lg:min-h-[500px] items-end lg:items-center p-4 md:p-8 lg:p-10">
-            <div className="w-full max-w-[540px] rounded-[28px] md:rounded-[32px] border border-white/70 bg-white/75 p-5 md:p-7 lg:p-8 shadow-[0_24px_90px_rgba(15,23,42,0.18)] backdrop-blur-xl">
+          <div className="relative z-10 flex min-h-[560px] md:min-h-[540px] lg:min-h-[500px] items-end lg:items-center p-4 md:p-8 lg:p-9">
+            <div className="w-full max-w-[470px] rounded-[26px] md:rounded-[30px] border border-white/65 bg-white/68 p-5 md:p-6 lg:p-7 shadow-[0_22px_80px_rgba(15,23,42,0.16)] backdrop-blur-xl">
               <p className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500">
                 Виртуальная примерочная
               </p>
 
-              <h1 className="max-w-[500px] text-[35px] leading-[0.98] tracking-[-0.05em] text-zinc-950 sm:text-5xl md:text-6xl lg:text-[58px] font-black">
+              <h1 className="max-w-[430px] text-[34px] leading-[0.98] tracking-[-0.05em] text-zinc-950 sm:text-5xl md:text-[54px] lg:text-[54px] font-black">
                 Посмотри на себя.
                 <br />
                 Потом решай.
               </h1>
 
-              <p className="mt-4 max-w-[455px] text-[15px] md:text-[16px] leading-7 md:leading-8 text-zinc-600">
+              <p className="mt-4 max-w-[405px] text-[15px] md:text-[16px] leading-7 text-zinc-600">
                 Примеряйте вещи на своём аватаре, сравнивайте варианты
                 и заказывайте только то, в чём уверены.
               </p>
 
-              <div className="mt-5 flex flex-col sm:flex-row gap-3">
+              <div className="mt-5 flex flex-col sm:flex-row gap-2.5">
                 <Link
                   to={user ? '/create-look' : '/auth'}
                   className="bg-zinc-950 text-white rounded-full px-7 py-4 text-sm font-black text-center transition hover:opacity-90"
