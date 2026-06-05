@@ -517,7 +517,7 @@ const LookDetails = () => {
               <ICONS.Heart className="w-6 h-6" /> {look.likes || 0}
             </button>
             <button onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="flex items-center gap-1.5 font-bold">
-              <CommentIcon className="w-6 h-6" /> {look.comments || 0}
+              <span className="text-lg leading-none">💬</span> {look.comments || 0}
             </button>
             <button
               type="button"
