@@ -426,17 +426,6 @@ const LookDetails = () => {
           </div>
         )}
 
-        {!showResult && !isTryingOn && !isOwnLook && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <button
-              onClick={handleTryOn}
-              className="bg-white/90 backdrop-blur-md px-10 py-4 rounded-full font-bold uppercase tracking-widest text-sm shadow-2xl hover:scale-105 transition-transform"
-            >
-              Примерить этот образ
-            </button>
-          </div>
-        )}
-
         <Link to="/" className="absolute top-4 left-4 bg-white/50 backdrop-blur p-2 rounded-full">
           <svg className="w-6 h-6 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -506,6 +495,21 @@ const LookDetails = () => {
             </button>
           </div>
         </div>
+
+        {Array.isArray(look.sourceItems) && look.sourceItems.length > 0 && (
+          <section className="rounded-3xl border border-zinc-100 bg-zinc-50 p-4">
+            <button
+              type="button"
+              onClick={handleTryOn}
+              className="w-full bg-zinc-900 text-white px-5 py-4 rounded-full text-xs font-black uppercase tracking-[0.18em] hover:bg-zinc-800 transition-colors"
+            >
+              Примерить на себе
+            </button>
+            <p className="mt-3 text-xs text-zinc-400 leading-relaxed">
+              Соберите новый образ из этих товаров и посмотрите, как он будет выглядеть на вашем аватаре.
+            </p>
+          </section>
+        )}
 
         {(look.userDescription || look.aiDescription) && (
           <section className="space-y-2">
