@@ -208,6 +208,8 @@ const LookDetails = () => {
   const [commentText, setCommentText] = useState('');
   const [commentBusy, setCommentBusy] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
+  const [viewerSaved, setViewerSaved] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
   const commentsRef = useRef<HTMLElement | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -227,6 +229,7 @@ const LookDetails = () => {
         if (resp.ok) {
           const data = await resp.json().catch(() => ({}));
           setLook(data?.look || null);
+          setViewerSaved(Boolean(data?.look?.viewerSaved));
         } else {
           const fallback = localLooks.find((l) => l.id === id);
           setLook(fallback || null);
@@ -357,6 +360,35 @@ const LookDetails = () => {
     }
   };
 
+  const handleSaveLook = async () => {
+    if (!user?.id || !look?.id) {
+      showToast('Войдите, чтобы сохранять образы');
+      return;
+    }
+
+    const method = viewerSaved ? 'DELETE' : 'POST';
+    setSaveBusy(true);
+
+    try {
+      const resp = await fetch(`/api/looks/${encodeURIComponent(String(look.id))}/save`, {
+        method,
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        showToast(data?.error || 'Не удалось обновить сохранение');
+        return;
+      }
+
+      setViewerSaved(Boolean(data?.saved));
+      setLook((prev: any) => prev ? { ...prev, saves: data?.saves ?? prev.saves, viewerSaved: Boolean(data?.saved) } : prev);
+      showToast(data?.saved ? 'Образ сохранён' : 'Образ убран из сохранённых');
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
   const handleShare = async () => {
     const url = window.location.href;
     const title = look?.title || 'Образ TopTry';
@@ -482,15 +514,17 @@ const LookDetails = () => {
               </div>
             )}
             <button onClick={() => actions.reactToLook(look.id, 'like')} className="flex items-center gap-1.5 font-bold">
-              <ICONS.Heart className="w-6 h-6" /> {look.likes}
+              <ICONS.Heart className="w-6 h-6" /> {look.likes || 0}
             </button>
-            <button onClick={() => actions.reactToLook(look.id, 'want_try')} className="flex items-center gap-1.5 font-bold">
-              <span className="text-lg leading-none">🔥</span> {look.wantTryCount || 0}
+            <button onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="flex items-center gap-1.5 font-bold">
+              <CommentIcon className="w-6 h-6" /> {look.comments || 0}
             </button>
-            <button onClick={() => actions.reactToLook(look.id, 'would_buy')} className="flex items-center gap-1.5 font-bold">
-              <span className="text-lg leading-none">🛍️</span> {look.wouldBuyCount || 0}
-            </button>
-            <button onClick={() => actions.saveLook(look.id)} className="flex items-center gap-1.5 font-bold">
+            <button
+              type="button"
+              onClick={handleSaveLook}
+              disabled={saveBusy}
+              className={`flex items-center gap-1.5 font-bold ${viewerSaved ? 'text-zinc-900' : 'text-zinc-400'} ${saveBusy ? 'opacity-60 pointer-events-none' : ''}`}
+            >
               <span className="text-lg leading-none">🔖</span> {look.saves || 0}
             </button>
           </div>

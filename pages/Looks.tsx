@@ -220,37 +220,55 @@ const Looks = () => {
   const { looks, actions, user } = useAppState();
   const navigate = useNavigate();
   const location = useLocation();
-  const initialTab = new URLSearchParams(location.search).get('tab') === 'mine' ? 'mine' : 'feed';
-  const [tab, setTab] = React.useState<'feed' | 'mine'>(initialTab);
+  const tabParam = new URLSearchParams(location.search).get('tab');
+  const initialTab = tabParam === 'mine' ? 'mine' : tabParam === 'saved' ? 'saved' : 'feed';
+  const [tab, setTab] = React.useState<'feed' | 'mine' | 'saved'>(initialTab as 'feed' | 'mine' | 'saved');
   const [feedLooks, setFeedLooks] = React.useState<any[]>([]);
+  const [savedLooks, setSavedLooks] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [likedPulseIds, setLikedPulseIds] = React.useState<Record<string, boolean>>({});
   const [publishBusyIds, setPublishBusyIds] = React.useState<Record<string, boolean>>({});
   const [publishedOverrides, setPublishedOverrides] = React.useState<Record<string, boolean>>({});
+  const [savedOverrides, setSavedOverrides] = React.useState<Record<string, boolean>>({});
+  const [saveBusyIds, setSaveBusyIds] = React.useState<Record<string, boolean>>({});
   const [socialNotice, setSocialNotice] = React.useState('');
 
   React.useEffect(() => {
-    const requestedTab = new URLSearchParams(location.search).get('tab') === 'mine' ? 'mine' : 'feed';
+    const requestedParam = new URLSearchParams(location.search).get('tab');
+    const requestedTab = requestedParam === 'mine' ? 'mine' : requestedParam === 'saved' ? 'saved' : 'feed';
     setTab(requestedTab);
   }, [location.search]);
 
   React.useEffect(() => {
-    if (tab !== 'feed') return;
+    if (tab !== 'feed' && tab !== 'saved') return;
 
     let cancelled = false;
 
     (async () => {
       setLoading(true);
       try {
-        const resp = await fetch('/api/looks/public?limit=50', { credentials: 'include' });
+        const endpoint = tab === 'saved' ? '/api/looks/saved?limit=50' : '/api/looks/public?limit=50';
+        const resp = await fetch(endpoint, { credentials: 'include' });
         const data = await resp.json().catch(() => ({}));
 
         if (cancelled) return;
 
+        if (!resp.ok) {
+          if (tab === 'saved') setSavedLooks([]);
+          else setFeedLooks([]);
+          return;
+        }
+
         const raw = Array.isArray(data?.looks) ? data.looks : Array.isArray(data) ? data : [];
-        setFeedLooks(raw.map((l: any) => ({ ...l, createdAt: l?.createdAt ? new Date(l.createdAt) : new Date() })));
+        const mapped = raw.map((l: any) => ({ ...l, createdAt: l?.createdAt ? new Date(l.createdAt) : new Date() }));
+
+        if (tab === 'saved') setSavedLooks(mapped);
+        else setFeedLooks(mapped);
       } catch {
-        if (!cancelled) setFeedLooks([]);
+        if (!cancelled) {
+          if (tab === 'saved') setSavedLooks([]);
+          else setFeedLooks([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -261,7 +279,7 @@ const Looks = () => {
     };
   }, [tab, user?.id]);
 
-  const visibleLooks = tab === 'mine' ? looks : feedLooks;
+  const visibleLooks = tab === 'mine' ? looks : tab === 'saved' ? savedLooks : feedLooks;
 
   const requireAuthForSocial = (message: string) => {
     if (user?.id) return true;
@@ -338,6 +356,47 @@ const Looks = () => {
 
   const openComments = (lookId: string) => {
     navigate(`/look/${lookId}?comments=1`);
+  };
+
+  const handleSaveLook = async (look: any) => {
+    if (!requireAuthForSocial('Войдите, чтобы сохранять образы.')) return;
+
+    const lookId = String(look?.id || '');
+    if (!lookId) return;
+
+    const currentSaved = Boolean(savedOverrides[lookId] ?? look.viewerSaved);
+    const method = currentSaved ? 'DELETE' : 'POST';
+
+    setSaveBusyIds((prev) => ({ ...prev, [lookId]: true }));
+
+    try {
+      const resp = await fetch(`/api/looks/${encodeURIComponent(lookId)}/save`, {
+        method,
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        setSocialNotice(data?.error || 'Не удалось обновить сохранение');
+        return;
+      }
+
+      const nextSaved = Boolean(data?.saved);
+      setSavedOverrides((prev) => ({ ...prev, [lookId]: nextSaved }));
+
+      setFeedLooks((prev) => prev.map((l) => String(l.id) === lookId ? { ...l, viewerSaved: nextSaved, saves: data?.saves ?? l.saves } : l));
+      setSavedLooks((prev) => {
+        if (nextSaved) {
+          return prev.map((l) => String(l.id) === lookId ? { ...l, viewerSaved: true, saves: data?.saves ?? l.saves } : l);
+        }
+        return prev.filter((l) => String(l.id) !== lookId);
+      });
+
+      setSocialNotice(nextSaved ? 'Образ сохранён' : 'Образ убран из сохранённых');
+      window.setTimeout(() => setSocialNotice(''), 2500);
+    } finally {
+      setSaveBusyIds((prev) => ({ ...prev, [lookId]: false }));
+    }
   };
 
   const handleTryOnThisLook = (look: any) => {
@@ -419,7 +478,7 @@ const Looks = () => {
       <div className="p-4 sticky top-0 bg-white z-40 border-b border-zinc-100 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-bold uppercase tracking-tighter">
-            {tab === 'feed' ? 'Лента образов' : 'Мои образы'}
+            {tab === 'feed' ? 'Лента образов' : tab === 'saved' ? 'Сохранённые' : 'Мои образы'}
           </h1>
 
           <Link
@@ -468,6 +527,19 @@ const Looks = () => {
           >
             Мои
           </button>
+          <button
+            onClick={() => {
+              setTab('saved');
+              navigate('/looks?tab=saved', { replace: true });
+            }}
+            className={`px-5 h-10 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${
+              tab === 'saved'
+                ? 'bg-zinc-900 text-white border-zinc-900'
+                : 'bg-white text-zinc-500 border-zinc-200'
+            }`}
+          >
+            Сохранённые
+          </button>
         </div>
       </div>
 
@@ -481,12 +553,14 @@ const Looks = () => {
         <div className="px-4 py-16 text-center">
           <div className="bg-zinc-50 border border-zinc-100 rounded-[32px] p-8 space-y-4">
             <h3 className="text-lg font-bold uppercase tracking-widest">
-              {tab === 'feed' ? 'Пока нет публичных образов' : 'У вас пока нет образов'}
+              {tab === 'feed' ? 'Пока нет публичных образов' : tab === 'saved' ? 'Пока нет сохранённых образов' : 'У вас пока нет образов'}
             </h3>
             <p className="text-xs text-zinc-400 leading-relaxed uppercase tracking-wider">
               {tab === 'feed'
                 ? 'Сгенерируйте и опубликуйте первые образы, чтобы наполнить ленту.'
-                : 'Создайте первый образ и он появится здесь.'}
+                : tab === 'saved'
+                  ? 'Сохраняйте понравившиеся образы из ленты, чтобы вернуться к ним позже.'
+                  : 'Создайте первый образ и он появится здесь.'}
             </p>
             <Link
               to="/create-look"
@@ -546,6 +620,19 @@ const Looks = () => {
                     >
                       <CommentIcon className="w-4 h-4" />
                     </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSaveLook(look);
+                      }}
+                      disabled={!!saveBusyIds[String(look.id)]}
+                      className={`bg-white/85 backdrop-blur-sm p-2 rounded-full shadow-lg transition-all duration-300 hover:scale-110 ${
+                        Boolean(savedOverrides[String(look.id)] ?? look.viewerSaved) ? 'bg-zinc-900 text-white' : ''
+                      } ${saveBusyIds[String(look.id)] ? 'opacity-60 pointer-events-none' : ''}`}
+                      aria-label="Сохранить образ"
+                    >
+                      <span className="block text-sm leading-none">🔖</span>
+                    </button>
                   </div>
                 </Link>
 
@@ -588,6 +675,15 @@ const Looks = () => {
                         className="flex items-center gap-1.5 transition-transform hover:scale-110"
                       >
                         <CommentIcon className="w-5 h-5" /> {look.comments || 0}
+                      </button>
+                      <button
+                        onClick={() => handleSaveLook(look)}
+                        disabled={!!saveBusyIds[String(look.id)]}
+                        className={`flex items-center gap-1.5 transition-transform hover:scale-110 ${
+                          Boolean(savedOverrides[String(look.id)] ?? look.viewerSaved) ? 'text-zinc-900' : 'text-zinc-400'
+                        } ${saveBusyIds[String(look.id)] ? 'opacity-60 pointer-events-none' : ''}`}
+                      >
+                        <span className="text-base leading-none">🔖</span> {look.saves || 0}
                       </button>
                     </div>
                   </div>
