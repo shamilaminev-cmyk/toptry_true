@@ -289,14 +289,9 @@ const LookDetails = () => {
     });
   };
 
-  const submitComment = async (presetText?: string) => {
-    if (!user?.id) {
-      showToast('Войдите, чтобы комментировать');
-      return;
-    }
-
-    const text = String(presetText ?? commentText).trim();
-    if (!text) return;
+  const submitComment = async () => {
+    if (!user?.id) return;
+    if (!commentText.trim()) return;
 
     setCommentBusy(true);
     try {
@@ -304,30 +299,17 @@ const LookDetails = () => {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: commentText.trim() }),
       });
-      const data = await resp.json().catch(() => ({}));
-
-      if (!resp.ok) {
-        showToast(data?.error || 'Не удалось отправить комментарий');
-        return;
-      }
+      if (!resp.ok) return;
 
       setCommentText('');
 
-      if (data?.comment) {
-        const nextComment = { ...data.comment, createdAt: new Date(data.comment.createdAt) };
-        setComments((prev) => [...prev, nextComment]);
-        setLook((prev: any) => prev ? { ...prev, comments: (prev.comments || 0) + 1 } : prev);
-        return;
-      }
-
       const refreshed = await fetch(`/api/looks/${encodeURIComponent(String(id))}/comments`);
       if (refreshed.ok) {
-        const refreshedData = await refreshed.json().catch(() => ({}));
-        const raw = Array.isArray(refreshedData?.comments) ? refreshedData.comments : [];
+        const data = await refreshed.json().catch(() => ({}));
+        const raw = Array.isArray(data?.comments) ? data.comments : [];
         setComments(raw.map((c: any) => ({ ...c, createdAt: new Date(c.createdAt) })));
-        setLook((prev: any) => prev ? { ...prev, comments: raw.length } : prev);
       }
     } finally {
       setCommentBusy(false);
@@ -644,18 +626,6 @@ const LookDetails = () => {
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="rounded-3xl border border-zinc-100 bg-zinc-50 p-5 text-center space-y-3">
-              <p className="text-sm text-zinc-500">
-                Войдите, чтобы оставить комментарий или быстро отреагировать на образ.
-              </p>
-              <Link
-                to="/auth"
-                className="inline-flex h-10 px-5 items-center justify-center rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
-              >
-                Войти
-              </Link>
-            </div>
           )}
         </section>
 
@@ -678,7 +648,7 @@ const LookDetails = () => {
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Комментарии</h2>
 
           {comments.length === 0 ? (
-            <p className="text-sm text-zinc-400">Пока нет комментариев. Будьте первым, кто оставит мнение об образе.</p>
+            <p className="text-sm text-zinc-400">Пока нет комментариев.</p>
           ) : (
             <div className="space-y-3">
               {comments.map((c) => (
@@ -701,14 +671,13 @@ const LookDetails = () => {
             </div>
           )}
 
-          {user?.id ? (
+          {user?.id && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {quickComments.map((preset) => (
                   <button
                     key={preset}
-                    onClick={() => submitComment(preset)}
-                    disabled={commentBusy}
+                    onClick={() => setCommentText(preset)}
                     className="px-3 py-2 rounded-full border border-zinc-200 text-[10px] font-bold uppercase tracking-widest hover:border-zinc-900"
                   >
                     {preset}
@@ -725,7 +694,7 @@ const LookDetails = () => {
                   className="flex-1 border border-zinc-200 rounded-full px-5 py-3 text-sm focus:outline-none focus:border-zinc-900"
                 />
                 <button
-                  onClick={() => submitComment()}
+                  onClick={submitComment}
                   disabled={commentBusy}
                   className={`bg-zinc-900 text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest ${
                     commentBusy ? 'opacity-60 pointer-events-none' : ''
