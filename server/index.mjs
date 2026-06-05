@@ -4676,7 +4676,13 @@ function inferCatalogBagSubgroupFromText(value) {
     return "BAGS_TRAVEL";
   }
 
-  if (/кросс[\s-]?боди|cross[\s-]?body|crossbody/.test(text)) {
+  if (
+    /кросс[\s-]?боди|cross[\s-]?body|crossbody/.test(text) ||
+    /\bcrossb\b/.test(text) ||
+    /\bcross\b/.test(text) ||
+    /[_\-\s](ew|ns|ml|jm)[_\-\s]*cross/.test(text) ||
+    /cross[_\-\s]*(ew|ns|ml|jm)/.test(text)
+  ) {
     return "BAGS_CROSSBODY";
   }
 
@@ -4788,6 +4794,10 @@ function getCatalogBagTypePredicates(bagType) {
       titleContains("кросс боди"),
       titleContains("crossbody"),
       titleContains("cross body"),
+      titleContains("crossb"),
+      titleContains(" cross"),
+      titleContains("_cross"),
+      titleContains("-cross"),
     ] : []),
 
     ...(bt === "BAGS_TOTE" ? [
@@ -6174,7 +6184,7 @@ function buildCatalogAiReviewPrompt(products) {
 - Обычная одежда, обувь и сумки: isTryOnRelevant=true.
 - Сумки: taxonomyGroup=BAGS. Используй taxonomySubgroup:
   BAGS_SHOULDER — сумка через плечо / shoulder / hobo / baguette / сумка-полумесяц / плечевой или регулируемый ремень.
-  BAGS_CROSSBODY — кросс-боди / crossbody.
+  BAGS_CROSSBODY — кросс-боди / crossbody / model names with Cross, Crossb, EW Cross, NS Cross.
   BAGS_TOTE — тоут / tote.
   BAGS_SHOPPER — шоппер / shopper / вместительная сумка с длинными или удлиненными ручками.
   BAGS_BACKPACK — рюкзак / backpack.
