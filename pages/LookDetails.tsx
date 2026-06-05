@@ -523,7 +523,7 @@ const LookDetails = () => {
         )}
 
         <section className="space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Вещи в образе</h2>
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Товары образа</h2>
           <div className="space-y-3">
             {lookProducts.map((p, idx) => (
               <div

@@ -664,7 +664,7 @@ const Looks = () => {
                   {sourceItems.length > 0 && (
                     <section className="hidden md:block space-y-4">
                       <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-400">
-                        Вещи в образе
+                        Товары образа
                       </h3>
                       <div className="space-y-3">
                         {sourceItems.slice(0, 3).map((item: any, idx: number) => {
