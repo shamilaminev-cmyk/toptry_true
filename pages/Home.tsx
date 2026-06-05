@@ -55,10 +55,19 @@ const Home: React.FC = () => {
   return (
     <div className="pb-56">
       <section className="px-4 pt-2 md:pt-5 md:px-8 md:max-w-7xl md:mx-auto">
-        <div className="relative overflow-hidden rounded-[28px] md:rounded-[32px] border border-zinc-200 bg-[#f5f5f5]">
-          <div className="grid lg:grid-cols-[470px_minmax(0,1fr)] items-center">
-            <div className="relative z-10 p-5 md:p-8 lg:p-9">
-              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-400">
+        <div className="relative overflow-hidden rounded-[28px] md:rounded-[34px] border border-zinc-200 bg-zinc-950 min-h-[560px] md:min-h-[540px] lg:min-h-[500px]">
+          <img
+            src="/hero-toptry-v4.webp"
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover object-[62%_center] opacity-95"
+          />
+
+          <div className="absolute inset-0 bg-black/5" />
+          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/10 to-transparent" />
+
+          <div className="relative z-10 flex min-h-[560px] md:min-h-[540px] lg:min-h-[500px] items-end lg:items-center p-4 md:p-8 lg:p-10">
+            <div className="w-full max-w-[540px] rounded-[28px] md:rounded-[32px] border border-white/70 bg-white/75 p-5 md:p-7 lg:p-8 shadow-[0_24px_90px_rgba(15,23,42,0.18)] backdrop-blur-xl">
+              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500">
                 Виртуальная примерочная
               </p>
 
@@ -83,21 +92,11 @@ const Home: React.FC = () => {
 
                 <Link
                   to="/catalog"
-                  className="bg-white text-zinc-950 border border-zinc-200 rounded-full px-7 py-4 text-sm font-black text-center transition hover:bg-zinc-100"
+                  className="bg-white/85 text-zinc-950 border border-zinc-200 rounded-full px-7 py-4 text-sm font-black text-center transition hover:bg-white"
                 >
                   Открыть каталог
                 </Link>
               </div>
-
-            </div>
-
-            <div className="relative min-h-[135px] sm:min-h-[260px] md:min-h-[370px] lg:min-h-[480px]">
-              <img
-                src="/hero-toptry-v4.webp"
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover object-[55%_center]"
-              />
-              <div className="hidden lg:block absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-[#f5f5f5] to-transparent" />
             </div>
           </div>
         </div>
