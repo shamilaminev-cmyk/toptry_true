@@ -66,6 +66,20 @@ type ShoeType =
   | 'SANDALS'
   | 'SHOES_CLASSIC';
 
+type BagType =
+  | ''
+  | 'BAGS_SHOULDER'
+  | 'BAGS_CROSSBODY'
+  | 'BAGS_TOTE'
+  | 'BAGS_SHOPPER'
+  | 'BAGS_BACKPACK'
+  | 'BAGS_CLUTCH'
+  | 'BAGS_BELT'
+  | 'BAGS_MINI'
+  | 'BAGS_TRAVEL'
+  | 'BAGS_WALLET_ACCESSORY'
+  | 'BAGS_OTHER';
+
 const GENDER_TABS: Array<{ id: '' | Gender; label: string }> = [
   { id: '', label: 'Все' },
   { id: Gender.FEMALE, label: 'Женщинам' },
@@ -200,6 +214,22 @@ const getShoeTabs = (gender: '' | Gender): Array<{ id: ShoeType; label: string }
 };
 
 
+const BAG_TABS: Array<{ id: BagType; label: string }> = [
+  { id: '', label: 'Все' },
+  { id: 'BAGS_SHOULDER', label: 'Через плечо' },
+  { id: 'BAGS_CROSSBODY', label: 'Кросс-боди' },
+  { id: 'BAGS_TOTE', label: 'Тоуты' },
+  { id: 'BAGS_SHOPPER', label: 'Шопперы' },
+  { id: 'BAGS_BACKPACK', label: 'Рюкзаки' },
+  { id: 'BAGS_CLUTCH', label: 'Клатчи' },
+  { id: 'BAGS_BELT', label: 'Поясные' },
+  { id: 'BAGS_MINI', label: 'Мини-сумки' },
+  { id: 'BAGS_TRAVEL', label: 'Дорожные' },
+  { id: 'BAGS_WALLET_ACCESSORY', label: 'Аксессуары' },
+  { id: 'BAGS_OTHER', label: 'Другое' },
+];
+
+
 const IMG_FALLBACK = "";
 const PAGE_SIZE = 24;
 const CATALOG_FILTERS_STORAGE_KEY = 'toptry.catalog.filters.v1';
@@ -242,6 +272,7 @@ const Catalog = () => {
   const [displayCategory, setDisplayCategory] = useState<'' | DisplayCategory>('');
   const [clothingType, setClothingType] = useState<ClothingType>('');
   const [shoeType, setShoeType] = useState<ShoeType>('');
+  const [bagType, setBagType] = useState<BagType>('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [discountOnly, setDiscountOnly] = useState(false);
@@ -255,6 +286,7 @@ const Catalog = () => {
   const [draftClothingType, setDraftClothingType] = useState<ClothingType>('');
   const [draftClothingGroup, setDraftClothingGroup] = useState<ClothingGroup>('');
   const [draftShoeType, setDraftShoeType] = useState<ShoeType>('');
+  const [draftBagType, setDraftBagType] = useState<BagType>('');
   const [draftDiscountOnly, setDraftDiscountOnly] = useState(false);
   const [draftBrand, setDraftBrand] = useState('');
   const [draftPriceMin, setDraftPriceMin] = useState('');
@@ -591,6 +623,7 @@ const Catalog = () => {
       sizeLoose?: boolean;
       clothingType?: string;
       shoeType?: string;
+      bagType?: string;
       colorFamily?: string;
       unavailable?: boolean;
     } = null;
@@ -627,6 +660,9 @@ const Catalog = () => {
     const shoeTypeParam = String(
       hasHashFilters ? (hashParams.get('shoeType') || '') : (saved?.shoeType || '')
     ).toUpperCase() as ShoeType;
+    const bagTypeParam = String(
+      hasHashFilters ? (hashParams.get('bagType') || '') : (saved?.bagType || '')
+    ).toUpperCase() as BagType;
     const sizeLooseParam = sizeParam === 'MY' && (hasHashFilters ? hashParams.get('sizeLoose') === '1' : Boolean(saved?.sizeLoose));
     const colorFamilyParam = hasHashFilters ? (hashParams.get('colorFamily') || '') : (saved?.colorFamily || '');
     const unavailableParam = hasHashFilters ? hashParams.get('unavailable') === '1' : Boolean(saved?.unavailable);
@@ -659,6 +695,8 @@ const Catalog = () => {
     setDraftClothingGroup(getClothingGroupForType(clothingTypeParam));
     setShoeType(shoeTypeParam);
     setDraftShoeType(shoeTypeParam);
+    setBagType(bagTypeParam);
+    setDraftBagType(bagTypeParam);
 
     if (genderParam && GENDER_TABS.some((x) => x.id === genderParam)) {
       setGender(genderParam as Gender);
@@ -709,12 +747,9 @@ const Catalog = () => {
         const params = new URLSearchParams();
         if (gender) params.set('gender', gender);
         if (displayCategory) params.set('displayCategory', displayCategory);
-    if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
-    if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
+        if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
         if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
-        if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
-    if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
-        if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
+        if (displayCategory === 'BAGS' && bagType) params.set('bagType', bagType);
         if (debouncedSearch) params.set('q', debouncedSearch);
         if (discountOnly) params.set('discountOnly', '1');
         if (colorFamily) params.set('colorFamily', colorFamily);
@@ -747,7 +782,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, colorFamily]);
+  }, [gender, displayCategory, clothingType, shoeType, bagType, debouncedSearch, discountOnly, brand, colorFamily]);
 
   const fetchCatalog = async (nextOffset: number, append: boolean) => {
     const params = new URLSearchParams();
@@ -758,6 +793,7 @@ const Catalog = () => {
     if (displayCategory) params.set('displayCategory', displayCategory);
     if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
     if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
+    if (displayCategory === 'BAGS' && bagType) params.set('bagType', bagType);
     if (debouncedSearch) params.set('q', debouncedSearch);
     if (discountOnly) params.set('discountOnly', '1');
     if (brand) params.set('brand', brand);
@@ -804,8 +840,9 @@ const Catalog = () => {
 
         if (gender) params.set('gender', gender);
         if (displayCategory) params.set('displayCategory', displayCategory);
-    if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
-    if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
+        if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
+        if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
+        if (displayCategory === 'BAGS' && bagType) params.set('bagType', bagType);
         if (debouncedSearch) params.set('q', debouncedSearch);
         if (discountOnly) params.set('discountOnly', '1');
     if (brand) params.set('brand', brand);
@@ -848,7 +885,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]);
+  }, [gender, displayCategory, clothingType, shoeType, bagType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]);
 
   useEffect(() => {
     try {
@@ -858,6 +895,7 @@ const Catalog = () => {
         displayCategory,
         clothingType: displayCategory === 'CLOTHING' ? clothingType : '',
         shoeType: displayCategory === 'SHOES' ? shoeType : '',
+        bagType: displayCategory === 'BAGS' ? bagType : '',
         discountOnly,
         brand,
         priceMin,
@@ -870,7 +908,7 @@ const Catalog = () => {
       };
       window.sessionStorage.setItem(CATALOG_FILTERS_STORAGE_KEY, JSON.stringify(payload));
     } catch {}
-  }, [debouncedSearch, gender, displayCategory, clothingType, shoeType, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]);
+  }, [debouncedSearch, gender, displayCategory, clothingType, shoeType, bagType, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -880,6 +918,7 @@ const Catalog = () => {
     if (displayCategory) params.set('displayCategory', displayCategory);
     if (displayCategory === 'CLOTHING' && clothingType) params.set('clothingType', clothingType);
     if (displayCategory === 'SHOES' && shoeType) params.set('shoeType', shoeType);
+    if (displayCategory === 'BAGS' && bagType) params.set('bagType', bagType);
     if (discountOnly) params.set('discountOnly', '1');
     if (brand) params.set('brand', brand);
     if (priceMin) params.set('priceMin', priceMin);
@@ -939,6 +978,8 @@ const Catalog = () => {
     setDraftClothingType('');
     setShoeType('');
     setDraftShoeType('');
+    setBagType('');
+    setDraftBagType('');
     setSearch('');
     setDebouncedSearch('');
     setDiscountOnly(false);
@@ -970,6 +1011,7 @@ const Catalog = () => {
     setDraftClothingType('');
     setDraftClothingGroup('');
     setDraftShoeType('');
+    setDraftBagType('');
     setDraftDiscountOnly(false);
     setDraftBrand('');
     setDraftPriceMin('');
@@ -994,6 +1036,7 @@ const Catalog = () => {
         if (draftDisplayCategory) params.set('displayCategory', draftDisplayCategory)
         if (draftDisplayCategory === 'CLOTHING' && draftClothingType) params.set('clothingType', draftClothingType)
         if (draftDisplayCategory === 'SHOES' && draftShoeType) params.set('shoeType', draftShoeType)
+        if (draftDisplayCategory === 'BAGS' && draftBagType) params.set('bagType', draftBagType)
         if (draftBrand) params.set('brand', draftBrand)
         if (draftDiscountOnly) params.set('discountOnly', '1')
         if (draftPriceMin) params.set('priceMin', draftPriceMin)
@@ -1032,6 +1075,7 @@ const Catalog = () => {
     draftDisplayCategory,
     draftClothingType,
     draftShoeType,
+    draftBagType,
     draftBrand,
     draftDiscountOnly,
     draftPriceMin,
@@ -1047,6 +1091,7 @@ const Catalog = () => {
     setDisplayCategory(draftDisplayCategory);
     setClothingType(draftDisplayCategory === 'CLOTHING' ? draftClothingType : '');
     setShoeType(draftDisplayCategory === 'SHOES' ? draftShoeType : '');
+    setBagType(draftDisplayCategory === 'BAGS' ? draftBagType : '');
     setDiscountOnly(draftDiscountOnly);
     setBrand(draftBrand);
     setPriceMin(draftPriceMin);
@@ -1074,13 +1119,13 @@ const Catalog = () => {
   const filteredCountLabel = useMemo(() => total, [total]);
   const activeFiltersCount = useMemo(
     () =>
-      [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', displayCategory === 'SHOES' ? shoeType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, colorFamily ? colorFamily : '', unavailableMode ? 'similar' : '', size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
-    [gender, displayCategory, clothingType, shoeType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]
+      [gender, displayCategory, displayCategory === 'CLOTHING' ? clothingType : '', displayCategory === 'SHOES' ? shoeType : '', displayCategory === 'BAGS' ? bagType : '', debouncedSearch, discountOnly ? '1' : '', brand, priceMin, priceMax, sort, size, colorFamily ? colorFamily : '', unavailableMode ? 'similar' : '', size === 'MY' && sizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+    [gender, displayCategory, clothingType, shoeType, bagType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]
   );
   const draftActiveFiltersCount = useMemo(
     () =>
-      [draftGender, draftDisplayCategory, draftDisplayCategory === 'CLOTHING' ? draftClothingType : '', draftDisplayCategory === 'SHOES' ? draftShoeType : '', debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftColorFamily, draftSize, draftSize === 'MY' && draftSizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
-    [draftGender, draftDisplayCategory, draftClothingType, draftShoeType, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftColorFamily, draftSize, draftSizeLoose]
+      [draftGender, draftDisplayCategory, draftDisplayCategory === 'CLOTHING' ? draftClothingType : '', draftDisplayCategory === 'SHOES' ? draftShoeType : '', draftDisplayCategory === 'BAGS' ? draftBagType : '', debouncedSearch, draftDiscountOnly ? '1' : '', draftBrand, draftPriceMin, draftPriceMax, draftColorFamily, draftSize, draftSize === 'MY' && draftSizeLoose ? 'sizeLoose' : ''].filter(Boolean).length,
+    [draftGender, draftDisplayCategory, draftClothingType, draftShoeType, draftBagType, debouncedSearch, draftDiscountOnly, draftBrand, draftPriceMin, draftPriceMax, draftColorFamily, draftSize, draftSizeLoose]
   );
   const applyButtonLabel = useMemo(() => {
     if (loading) return 'Загружаем...';
@@ -1127,6 +1172,7 @@ const Catalog = () => {
               setDraftClothingType(clothingType);
               setDraftClothingGroup(getClothingGroupForType(clothingType));
               setDraftShoeType(shoeType);
+              setDraftBagType(bagType);
               setFiltersOpen(true);
             }}
             className="h-12 px-5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white border-zinc-300 text-zinc-900 flex items-center justify-between"
@@ -1165,7 +1211,7 @@ const Catalog = () => {
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           Найдено: {filteredCountLabel}
         </p>
-        {(gender || displayCategory || clothingType || shoeType || search || discountOnly || brand || priceMin || priceMax || sort || size || colorFamily || unavailableMode || (size === 'MY' && sizeLoose)) && (
+        {(gender || displayCategory || clothingType || shoeType || bagType || search || discountOnly || brand || priceMin || priceMax || sort || size || colorFamily || unavailableMode || (size === 'MY' && sizeLoose)) && (
           <button
             onClick={clearFilters}
             className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 underline underline-offset-4"
@@ -1215,6 +1261,7 @@ const Catalog = () => {
                         setDraftClothingGroup('');
                       }
                       if (nextCategory !== 'SHOES') setDraftShoeType('');
+                      if (nextCategory !== 'BAGS') setDraftBagType('');
 
                       setDraftSize((current) => {
                         if (!current || current === 'MY') return current;

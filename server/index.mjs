@@ -4594,6 +4594,7 @@ function getCatalogDisplayCategoryPredicates(displayCategory) {
   }
   if (dc === "BAGS") {
     return [
+      { taxonomyGroup: "BAGS" },
       { title: { contains: "сум", mode: "insensitive" } },
       { title: { contains: "bag", mode: "insensitive" } },
       { title: { contains: "рюкзак", mode: "insensitive" } },
@@ -4602,6 +4603,8 @@ function getCatalogDisplayCategoryPredicates(displayCategory) {
       { title: { contains: "clutch", mode: "insensitive" } },
       { title: { contains: "wallet", mode: "insensitive" } },
       { title: { contains: "кошелек", mode: "insensitive" } },
+      { title: { contains: "портмоне", mode: "insensitive" } },
+      { title: { contains: "кардхолдер", mode: "insensitive" } },
     ];
   }
 
@@ -4647,6 +4650,129 @@ function normalizeCatalogColorFamily(value) {
 }
 
 
+
+function getCatalogBagTypePredicates(bagType) {
+  const bt = String(bagType || "").trim().toUpperCase();
+  if (!bt) return null;
+
+  const taxonomyGroups = {
+    BAGS: [
+      "BAGS_SHOULDER",
+      "BAGS_CROSSBODY",
+      "BAGS_TOTE",
+      "BAGS_SHOPPER",
+      "BAGS_BACKPACK",
+      "BAGS_CLUTCH",
+      "BAGS_BELT",
+      "BAGS_MINI",
+      "BAGS_TRAVEL",
+      "BAGS_WALLET_ACCESSORY",
+      "BAGS_OTHER",
+      "BAGS",
+    ],
+    BAGS_SHOULDER: ["BAGS_SHOULDER"],
+    BAGS_CROSSBODY: ["BAGS_CROSSBODY"],
+    BAGS_TOTE: ["BAGS_TOTE"],
+    BAGS_SHOPPER: ["BAGS_SHOPPER"],
+    BAGS_BACKPACK: ["BAGS_BACKPACK"],
+    BAGS_CLUTCH: ["BAGS_CLUTCH"],
+    BAGS_BELT: ["BAGS_BELT"],
+    BAGS_MINI: ["BAGS_MINI"],
+    BAGS_TRAVEL: ["BAGS_TRAVEL"],
+    BAGS_WALLET_ACCESSORY: ["BAGS_WALLET_ACCESSORY"],
+    BAGS_OTHER: ["BAGS_OTHER", "BAGS"],
+  };
+
+  const taxonomy = taxonomyGroups[bt];
+  if (!taxonomy?.length) return null;
+
+  const emptyTaxonomy = { OR: [{ taxonomySubgroup: null }, { taxonomySubgroup: "" }, { taxonomySubgroup: "BAGS" }] };
+  const titleContains = (needle) => ({
+    taxonomyGroup: "BAGS",
+    ...emptyTaxonomy,
+    title: { contains: needle, mode: "insensitive" },
+  });
+
+  return [
+    { taxonomyGroup: "BAGS", taxonomySubgroup: { in: taxonomy } },
+
+    ...(bt === "BAGS_SHOULDER" ? [
+      titleContains("через плеч"),
+      titleContains("на плеч"),
+      titleContains("shoulder"),
+      titleContains("хобо"),
+      titleContains("hobo"),
+      titleContains("багет"),
+      titleContains("baguette"),
+    ] : []),
+
+    ...(bt === "BAGS_CROSSBODY" ? [
+      titleContains("кросс-боди"),
+      titleContains("кросс боди"),
+      titleContains("crossbody"),
+      titleContains("cross body"),
+    ] : []),
+
+    ...(bt === "BAGS_TOTE" ? [
+      titleContains("тоут"),
+      titleContains("tote"),
+    ] : []),
+
+    ...(bt === "BAGS_SHOPPER" ? [
+      titleContains("шоппер"),
+      titleContains("shopper"),
+    ] : []),
+
+    ...(bt === "BAGS_BACKPACK" ? [
+      titleContains("рюкзак"),
+      titleContains("backpack"),
+    ] : []),
+
+    ...(bt === "BAGS_CLUTCH" ? [
+      titleContains("клатч"),
+      titleContains("clutch"),
+      titleContains("вечер"),
+      titleContains("evening"),
+    ] : []),
+
+    ...(bt === "BAGS_BELT" ? [
+      titleContains("поясн"),
+      titleContains("на пояс"),
+      titleContains("belt bag"),
+      titleContains("waist"),
+      titleContains("бананка"),
+    ] : []),
+
+    ...(bt === "BAGS_MINI" ? [
+      titleContains("мини"),
+      titleContains("mini"),
+      titleContains("small bag"),
+    ] : []),
+
+    ...(bt === "BAGS_TRAVEL" ? [
+      titleContains("дорож"),
+      titleContains("travel"),
+      titleContains("weekender"),
+      titleContains("duffel"),
+      titleContains("саквояж"),
+      titleContains("чемодан"),
+    ] : []),
+
+    ...(bt === "BAGS_WALLET_ACCESSORY" ? [
+      titleContains("кошел"),
+      titleContains("портмоне"),
+      titleContains("wallet"),
+      titleContains("кардхолдер"),
+      titleContains("cardholder"),
+      titleContains("визитниц"),
+      titleContains("ключниц"),
+      titleContains("косметич"),
+      titleContains("органайзер"),
+      titleContains("обложк"),
+    ] : []),
+  ];
+}
+
 function buildCatalogDbWhere({
   merchant,
   gender,
@@ -4660,6 +4786,7 @@ function buildCatalogDbWhere({
   priceMax,
   clothingType,
   shoeType,
+  bagType,
   size,
   sizeTop,
   sizeBottom,
@@ -5164,9 +5291,20 @@ function inferCatalogTaxonomy(product) {
       else taxonomySubgroup = "TOPS";
     }
   } else if (category === "ACCESSORIES") {
-    if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошелек|wallet/.test(sourceText)) {
+    if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошел|wallet|портмоне|кардхолдер|cardholder|шоппер|shopper|тоут|tote/.test(sourceText)) {
       taxonomyGroup = "BAGS";
-      taxonomySubgroup = "BAGS";
+
+      if (/кошел|wallet|портмоне|кардхолдер|cardholder|визитниц|ключниц|косметич|органайзер|обложк/.test(sourceText)) taxonomySubgroup = "BAGS_WALLET_ACCESSORY";
+      else if (/рюкзак|backpack/.test(sourceText)) taxonomySubgroup = "BAGS_BACKPACK";
+      else if (/поясн|на\s+пояс|belt bag|waist|бананка/.test(sourceText)) taxonomySubgroup = "BAGS_BELT";
+      else if (/клатч|clutch|вечер|evening/.test(sourceText)) taxonomySubgroup = "BAGS_CLUTCH";
+      else if (/мини|mini|small bag/.test(sourceText)) taxonomySubgroup = "BAGS_MINI";
+      else if (/дорож|travel|weekender|duffel|саквояж|чемодан/.test(sourceText)) taxonomySubgroup = "BAGS_TRAVEL";
+      else if (/кросс[\s-]?боди|cross[\s-]?body|crossbody/.test(sourceText)) taxonomySubgroup = "BAGS_CROSSBODY";
+      else if (/тоут|tote/.test(sourceText)) taxonomySubgroup = "BAGS_TOTE";
+      else if (/шоппер|shopper/.test(sourceText)) taxonomySubgroup = "BAGS_SHOPPER";
+      else if (/через\s+плеч|на\s+плеч|shoulder|хобо|hobo|багет|baguette/.test(sourceText)) taxonomySubgroup = "BAGS_SHOULDER";
+      else taxonomySubgroup = "BAGS_OTHER";
     } else {
       taxonomyGroup = "ACCESSORIES";
       taxonomySubgroup = "ACCESSORIES";
@@ -5945,7 +6083,7 @@ function buildCatalogAiReviewPrompt(products) {
       "id": "string",
       "isTryOnRelevant": true,
       "taxonomyGroup": "CLOTHING|SHOES|BAGS|ACCESSORIES|OTHER",
-      "taxonomySubgroup": "OUTERWEAR|COATS|PUFFER_JACKETS|BOMBERS|PARKAS|TRENCHES|LEATHER_JACKETS|DENIM_JACKETS|VESTS|BLAZERS|KNITWEAR|SWEATERS|CARDIGANS|TURTLENECKS|HOODIES|TSHIRTS|SHIRTS|FORMAL_SHIRTS|CASUAL_SHIRTS|OVERSHIRTS|LINEN_SHIRTS|DENIM_SHIRTS|POLO|TROUSERS|CARGO_PANTS|CHINOS|FORMAL_TROUSERS|JOGGERS|SHORTS|LEGGINGS|DENIM|SKIRTS|DRESSES|SNEAKERS|BOOTS|TALL_BOOTS|LOAFERS|SANDALS|BALLET|SHOES_CLASSIC|BAGS|HEADWEAR|GLOVES|SCARVES|BELTS|SOCKS|ACCESSORIES|null",
+      "taxonomySubgroup": "OUTERWEAR|COATS|PUFFER_JACKETS|BOMBERS|PARKAS|TRENCHES|LEATHER_JACKETS|DENIM_JACKETS|VESTS|BLAZERS|KNITWEAR|SWEATERS|CARDIGANS|TURTLENECKS|HOODIES|TSHIRTS|SHIRTS|FORMAL_SHIRTS|CASUAL_SHIRTS|OVERSHIRTS|LINEN_SHIRTS|DENIM_SHIRTS|POLO|TROUSERS|CARGO_PANTS|CHINOS|FORMAL_TROUSERS|JOGGERS|SHORTS|LEGGINGS|DENIM|SKIRTS|DRESSES|SNEAKERS|BOOTS|TALL_BOOTS|LOAFERS|SANDALS|BALLET|SHOES_CLASSIC|BAGS|BAGS_SHOULDER|BAGS_CROSSBODY|BAGS_TOTE|BAGS_SHOPPER|BAGS_BACKPACK|BAGS_CLUTCH|BAGS_BELT|BAGS_MINI|BAGS_TRAVEL|BAGS_WALLET_ACCESSORY|BAGS_OTHER|HEADWEAR|GLOVES|SCARVES|BELTS|SOCKS|ACCESSORIES|null",
       "gender": "male|female|unisex|kids|unknown",
       "colorFamily": "black|white|grey|beige|brown|blue|green|red|pink|purple|yellow|orange|multi|unknown",
       "seasonTags": ["summer|demi|winter|all-season"],
@@ -5962,6 +6100,18 @@ function buildCatalogAiReviewPrompt(products) {
 - Насосы, мячи, коврики, эспандеры, утяжелители, фитболы, спортинвентарь: isTryOnRelevant=false, taxonomyGroup=OTHER.
 - Плавки, купальники, шорты плавательные, аквашузы, beach/swim/aqua: isTryOnRelevant=false, rejectReasons include SWIMWEAR.
 - Обычная одежда, обувь и сумки: isTryOnRelevant=true.
+- Сумки: taxonomyGroup=BAGS. Используй taxonomySubgroup:
+  BAGS_SHOULDER — сумка через плечо / shoulder / hobo / baguette.
+  BAGS_CROSSBODY — кросс-боди / crossbody.
+  BAGS_TOTE — тоут / tote.
+  BAGS_SHOPPER — шоппер / shopper.
+  BAGS_BACKPACK — рюкзак / backpack.
+  BAGS_CLUTCH — клатч / вечерняя сумка / clutch.
+  BAGS_BELT — поясная сумка / belt bag / waist bag / бананка.
+  BAGS_MINI — мини-сумка / mini bag.
+  BAGS_TRAVEL — дорожная сумка / travel / weekender / duffel / саквояж / чемодан.
+  BAGS_WALLET_ACCESSORY — кошелёк / портмоне / кардхолдер / косметичка / органайзер / обложка.
+  BAGS_OTHER — сумка есть, но тип неясен.
 - Головные уборы: шапка, кепка, панама, бейсболка, балаклава → taxonomyGroup=ACCESSORIES, taxonomySubgroup=HEADWEAR, isTryOnRelevant=true.
 - Варежки и перчатки → taxonomyGroup=ACCESSORIES, taxonomySubgroup=GLOVES, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
 - Шарфы → taxonomyGroup=ACCESSORIES, taxonomySubgroup=SCARVES, isTryOnRelevant=false, rejectReasons include TRYON_UNSUPPORTED_ACCESSORY.
@@ -6109,6 +6259,17 @@ const CATALOG_AI_ALLOWED_SUBGROUPS = new Set([
   "BALLET",
   "SHOES_CLASSIC",
   "BAGS",
+  "BAGS_SHOULDER",
+  "BAGS_CROSSBODY",
+  "BAGS_TOTE",
+  "BAGS_SHOPPER",
+  "BAGS_BACKPACK",
+  "BAGS_CLUTCH",
+  "BAGS_BELT",
+  "BAGS_MINI",
+  "BAGS_TRAVEL",
+  "BAGS_WALLET_ACCESSORY",
+  "BAGS_OTHER",
   "HEADWEAR",
   "GLOVES",
   "SCARVES",
@@ -6299,6 +6460,24 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
   if (genericBootsRe.test(title) && item.taxonomySubgroup !== "TALL_BOOTS") {
     item.taxonomyGroup = "SHOES";
     item.taxonomySubgroup = "BOOTS";
+    item.isTryOnRelevant = true;
+  }
+
+  if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошел|wallet|портмоне|кардхолдер|cardholder|шоппер|shopper|тоут|tote/i.test(title)) {
+    item.taxonomyGroup = "BAGS";
+
+    if (/кошел|wallet|портмоне|кардхолдер|cardholder|визитниц|ключниц|косметич|органайзер|обложк/i.test(title)) item.taxonomySubgroup = "BAGS_WALLET_ACCESSORY";
+    else if (/рюкзак|backpack/i.test(title)) item.taxonomySubgroup = "BAGS_BACKPACK";
+    else if (/поясн|на\s+пояс|belt bag|waist|бананка/i.test(title)) item.taxonomySubgroup = "BAGS_BELT";
+    else if (/клатч|clutch|вечер|evening/i.test(title)) item.taxonomySubgroup = "BAGS_CLUTCH";
+    else if (/мини|mini|small bag/i.test(title)) item.taxonomySubgroup = "BAGS_MINI";
+    else if (/дорож|travel|weekender|duffel|саквояж|чемодан/i.test(title)) item.taxonomySubgroup = "BAGS_TRAVEL";
+    else if (/кросс[\s-]?боди|cross[\s-]?body|crossbody/i.test(title)) item.taxonomySubgroup = "BAGS_CROSSBODY";
+    else if (/тоут|tote/i.test(title)) item.taxonomySubgroup = "BAGS_TOTE";
+    else if (/шоппер|shopper/i.test(title)) item.taxonomySubgroup = "BAGS_SHOPPER";
+    else if (/через\s+плеч|на\s+плеч|shoulder|хобо|hobo|багет|baguette/i.test(title)) item.taxonomySubgroup = "BAGS_SHOULDER";
+    else item.taxonomySubgroup = "BAGS_OTHER";
+
     item.isTryOnRelevant = true;
   }
 
@@ -8869,6 +9048,11 @@ app.get("/api/catalog/brands", async (req, res) => {
       typeof req.query.shoeType === "string" && req.query.shoeType.trim()
         ? req.query.shoeType.trim().toUpperCase()
         : "";
+    const bagType =
+      typeof req.query.bagType === "string" && req.query.bagType.trim()
+        ? req.query.bagType.trim().toUpperCase()
+        : "";
+
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
     const colorFamily =
@@ -8889,6 +9073,7 @@ app.get("/api/catalog/brands", async (req, res) => {
       priceMax: "",
       clothingType,
       shoeType,
+      bagType,
       size: "",
       sizeTop: "",
       sizeBottom: "",
@@ -9566,6 +9751,11 @@ app.get("/api/catalog/products", async (req, res) => {
       typeof req.query.shoeType === "string" && req.query.shoeType.trim()
         ? req.query.shoeType.trim().toUpperCase()
         : "";
+    const bagType =
+      typeof req.query.bagType === "string" && req.query.bagType.trim()
+        ? req.query.bagType.trim().toUpperCase()
+        : "";
+
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
     const brand =
@@ -9668,6 +9858,7 @@ app.get("/api/catalog/products", async (req, res) => {
       priceMax,
       clothingType,
       shoeType,
+      bagType,
       size: rawSize === "MY" ? "" : rawSize,
       sizeTop: effectiveMySizeTop,
       sizeBottom: effectiveMySizeBottom,
@@ -9854,7 +10045,7 @@ app.get("/api/catalog/products", async (req, res) => {
       offset === 0 &&
       total === 0 &&
       !!colorFamily &&
-      !!(displayCategory || category || clothingType || shoeType);
+      !!(displayCategory || category || clothingType || shoeType || bagType);
 
     if (isUnavailableSimilarFallback) {
       const fallbackWhere = buildCatalogDbWhere({
@@ -9870,6 +10061,7 @@ app.get("/api/catalog/products", async (req, res) => {
         priceMax,
         clothingType,
         shoeType,
+        bagType,
         size: rawSize === "MY" ? "" : rawSize,
         sizeTop: effectiveMySizeTop,
         sizeBottom: effectiveMySizeBottom,
