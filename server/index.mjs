@@ -4672,7 +4672,7 @@ function inferCatalogBagSubgroupFromText(value) {
     return "BAGS_CLUTCH";
   }
 
-  if (/дорож|travel|weekender|duffel|саквояж|чемодан/.test(text)) {
+  if (/дорож|travel|weekender|duffel|duffle|саквояж|чемодан|\b\d{2,3}\s*л\b/.test(text)) {
     return "BAGS_TRAVEL";
   }
 
@@ -4720,7 +4720,7 @@ function inferCatalogBagSubgroupFromText(value) {
   }
 
   // Портфель и сумка для ноутбука — не travel в строгом смысле, но для текущей таксономии ближе всего к отдельному функциональному типу.
-  if (/портфель|для\s+ноутбук|laptop|briefcase|document\s*bag/.test(text)) {
+  if (/портфель|для\s+ноутбук|ноутбук|laptop|briefcase|document\s*bag/.test(text)) {
     return "BAGS_TRAVEL";
   }
 
@@ -5373,7 +5373,7 @@ function inferCatalogTaxonomy(product) {
       else taxonomySubgroup = "TOPS";
     }
   } else if (category === "ACCESSORIES") {
-    if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошел|wallet|портмоне|кардхолдер|cardholder|шоппер|shopper|тоут|tote/.test(sourceText)) {
+    if (/сумк|\bbag\b|рюкзак|backpack|клатч|clutch|кошел|wallet|портмоне|кардхолдер|cardholder|шоппер|shopper|тоут|tote/.test(sourceText)) {
       taxonomyGroup = "BAGS";
 
       taxonomySubgroup = inferCatalogBagSubgroupFromText(sourceText);
@@ -6181,7 +6181,7 @@ function buildCatalogAiReviewPrompt(products) {
   BAGS_CLUTCH — клатч / вечерняя сумка / clutch.
   BAGS_BELT — поясная сумка / belt bag / waist bag / бананка.
   BAGS_MINI — мини-сумка / mini bag / компактная / небольшого размера / кисет.
-  BAGS_TRAVEL — дорожная сумка / travel / weekender / duffel / саквояж / чемодан.
+  BAGS_TRAVEL — дорожная сумка / travel / weekender / duffel / duffle / саквояж / чемодан / сумка для ноутбука / портфель.
   BAGS_WALLET_ACCESSORY — кошелёк / портмоне / кардхолдер / косметичка / органайзер / обложка.
   BAGS_OTHER — сумка есть, но тип неясен.
 - Головные уборы: шапка, кепка, панама, бейсболка, балаклава → taxonomyGroup=ACCESSORIES, taxonomySubgroup=HEADWEAR, isTryOnRelevant=true.
@@ -6535,7 +6535,7 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
     item.isTryOnRelevant = true;
   }
 
-  if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошел|wallet|портмоне|кардхолдер|cardholder|шоппер|shopper|тоут|tote/i.test(title)) {
+  if (/сумк|\bbag\b|рюкзак|backpack|клатч|clutch|кошел|wallet|портмоне|кардхолдер|cardholder|шоппер|shopper|тоут|tote/i.test(title)) {
     item.taxonomyGroup = "BAGS";
 
     const bagSourceText = [
