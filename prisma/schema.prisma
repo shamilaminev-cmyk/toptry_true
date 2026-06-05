@@ -25,6 +25,7 @@ model User {
   wardrobeItems WardrobeItem[]
   looks         Look[]
   likes         Like[]
+  savedLooks    SavedLook[]
   comments      Comment[]
   following     Follow[]       @relation("following")
   followers     Follow[]       @relation("followers")
@@ -72,11 +73,13 @@ model Look {
   priceBuyNowRUB  Int       @default(0)
   buyLinks        String[]
   likesCount      Int       @default(0)
+  savesCount      Int       @default(0)
   commentsCount   Int       @default(0)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   comments        Comment[]
   likes           Like[]
+  savedBy         SavedLook[]
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -89,6 +92,21 @@ model Like {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, lookId])
+  @@index([lookId])
+}
+
+
+model SavedLook {
+  id        String   @id
+  userId    String
+  lookId    String
+  createdAt DateTime @default(now())
+
+  look      Look     @relation(fields: [lookId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lookId])
+  @@index([userId])
   @@index([lookId])
 }
 

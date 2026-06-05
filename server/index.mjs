@@ -3061,12 +3061,22 @@ async function mapLookForApi(row, viewerUserId = "") {
     : null);
 
   let viewerLiked = false;
+  let viewerSaved = false;
+
   if (viewerUserId && row?.id) {
-    const like = await prisma.like.findUnique({
-      where: { userId_lookId: { userId: viewerUserId, lookId: row.id } },
-      select: { id: true },
-    }).catch(() => null);
+    const [like, saved] = await Promise.all([
+      prisma.like.findUnique({
+        where: { userId_lookId: { userId: viewerUserId, lookId: row.id } },
+        select: { id: true },
+      }).catch(() => null),
+      prisma.savedLook.findUnique({
+        where: { userId_lookId: { userId: viewerUserId, lookId: row.id } },
+        select: { id: true },
+      }).catch(() => null),
+    ]);
+
     viewerLiked = !!like;
+    viewerSaved = !!saved;
   }
 
   return {
@@ -3079,6 +3089,7 @@ async function mapLookForApi(row, viewerUserId = "") {
     resultImageUrl: row.resultImageKey ? `/media/${row.resultImageKey}` : "",
     isPublic: !!row.isPublic,
     likes: row.likesCount || 0,
+    saves: row.savesCount || 0,
     comments: row.commentsCount || 0,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt ? row.updatedAt.toISOString() : row.createdAt.toISOString(),
@@ -3089,6 +3100,7 @@ async function mapLookForApi(row, viewerUserId = "") {
     authorName: publicAuthorName(author),
     authorAvatar: author?.avatarUrl || "",
     viewerLiked,
+    viewerSaved,
   };
 }
 
@@ -3155,6 +3167,49 @@ app.get("/api/looks/my", requireAuth, async (req, res) => {
     return res.json({ looks });
   } catch (err) {
     console.error("[toptry] /api/looks/my error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+
+app.get("/api/looks/saved", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit || "50"), 10) || 50, 1), 100);
+    const offset = Math.max(parseInt(String(req.query.offset || "0"), 10) || 0, 0);
+
+    const [rows, total] = await Promise.all([
+      prisma.savedLook.findMany({
+        where: { userId },
+        include: {
+          look: {
+            include: {
+              user: { select: { id: true, username: true, avatarUrl: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.savedLook.count({ where: { userId } }),
+    ]);
+
+    const visibleRows = rows
+      .map((r) => r.look)
+      .filter((look) => look && (look.isPublic || look.userId === userId));
+
+    const looks = await Promise.all(visibleRows.map((look) => mapLookForApi(look, userId)));
+
+    return res.json({
+      looks,
+      total,
+      limit,
+      offset,
+      hasMore: offset + rows.length < total,
+    });
+  } catch (err) {
+    console.error("[toptry] /api/looks/saved error", err);
     return res.status(500).json({ error: err?.message || "Unknown server error" });
   }
 });
@@ -3245,6 +3300,7 @@ app.delete("/api/looks/:id", requireAuth, async (req, res) => {
     await prisma.$transaction([
       prisma.comment.deleteMany({ where: { lookId: id } }),
       prisma.like.deleteMany({ where: { lookId: id } }),
+      prisma.savedLook.deleteMany({ where: { lookId: id } }),
       prisma.look.delete({ where: { id } }),
     ]);
 
@@ -3362,8 +3418,77 @@ app.post("/api/looks/:id/react", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/looks/:id/save", requireAuth, async (_req, res) => {
-  return res.json({ ok: true, saves: 0 });
+app.post("/api/looks/:id/save", requireAuth, async (req, res) => {
+  try {
+    const lookId = String(req.params.id || "");
+    const userId = req.auth.userId;
+
+    const look = await getLookVisibleToViewer(lookId, userId);
+    if (!look) return res.status(404).json({ error: "Look not found" });
+
+    const existing = await prisma.savedLook.findUnique({
+      where: { userId_lookId: { userId, lookId } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      await prisma.$transaction([
+        prisma.savedLook.create({
+          data: {
+            id: `saved-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            userId,
+            lookId,
+          },
+        }),
+        prisma.look.update({
+          where: { id: lookId },
+          data: { savesCount: { increment: 1 } },
+        }),
+      ]);
+    }
+
+    const fresh = await prisma.look.findUnique({
+      where: { id: lookId },
+      select: { savesCount: true },
+    });
+
+    return res.json({ ok: true, saved: true, saves: fresh?.savesCount || 0 });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/save error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
+
+app.delete("/api/looks/:id/save", requireAuth, async (req, res) => {
+  try {
+    const lookId = String(req.params.id || "");
+    const userId = req.auth.userId;
+
+    const existing = await prisma.savedLook.findUnique({
+      where: { userId_lookId: { userId, lookId } },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await prisma.$transaction([
+        prisma.savedLook.delete({ where: { id: existing.id } }),
+        prisma.look.update({
+          where: { id: lookId },
+          data: { savesCount: { decrement: 1 } },
+        }),
+      ]);
+    }
+
+    const fresh = await prisma.look.findUnique({
+      where: { id: lookId },
+      select: { savesCount: true },
+    });
+
+    return res.json({ ok: true, saved: false, saves: Math.max(0, fresh?.savesCount || 0) });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/save delete error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
 });
 
 app.get("/api/looks/:id/comments", async (req, res) => {
