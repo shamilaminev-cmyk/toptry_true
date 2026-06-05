@@ -1453,6 +1453,32 @@ const Catalog = () => {
             )}
 
 
+            {draftDisplayCategory === 'BAGS' && (
+              <div className="space-y-3 rounded-[28px] bg-zinc-50/70 border border-zinc-100 p-3">
+                <div className="px-1 text-[9px] font-black uppercase tracking-[0.28em] text-zinc-400">
+                  Тип сумки
+                </div>
+                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                  {BAG_TABS.map((tab) => {
+                    const active = draftBagType === tab.id;
+                    return (
+                      <button
+                        key={String(tab.id || 'all-bags')}
+                        type="button"
+                        onClick={() => setDraftBagType(tab.id)}
+                        className={`flex-shrink-0 h-10 px-4 inline-flex items-center rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                          active ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-white border-zinc-200 text-zinc-500'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+
             <div className="space-y-2 rounded-[28px] bg-zinc-50/70 border border-zinc-100 p-3">
               <div className="px-1 text-[9px] font-black uppercase tracking-[0.28em] text-zinc-400">
                 Цвет
