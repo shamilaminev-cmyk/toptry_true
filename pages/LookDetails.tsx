@@ -212,10 +212,10 @@ const LookDetails = () => {
   const commentInputRef = useRef<HTMLInputElement | null>(null);
 
   const quickComments = [
-    'Очень удачно',
+    'Классный образ',
     'Хочу такой же',
-    'Лучше с другими брюками',
-    'Слишком спортивно',
+    'Хорошо смотрится',
+    'Интересное сочетание',
     'Где купить?',
   ];
 
