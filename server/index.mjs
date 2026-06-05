@@ -4596,7 +4596,6 @@ function getCatalogDisplayCategoryPredicates(displayCategory) {
     return [
       { taxonomyGroup: "BAGS" },
       { title: { contains: "сум", mode: "insensitive" } },
-      { title: { contains: "bag", mode: "insensitive" } },
       { title: { contains: "рюкзак", mode: "insensitive" } },
       { title: { contains: "backpack", mode: "insensitive" } },
       { title: { contains: "клатч", mode: "insensitive" } },
@@ -4820,6 +4819,11 @@ function buildCatalogDbWhere({
   const shoeTypePredicates = getCatalogShoeTypePredicates(shoeType);
   if (String(displayCategory || "").trim().toUpperCase() === "SHOES" && shoeTypePredicates?.length) {
     and.push({ OR: shoeTypePredicates });
+  }
+
+  const bagTypePredicates = getCatalogBagTypePredicates(bagType);
+  if (String(displayCategory || "").trim().toUpperCase() === "BAGS" && bagTypePredicates?.length) {
+    and.push({ OR: bagTypePredicates });
   }
 
   const brandNeedle = String(brand || "").trim();
