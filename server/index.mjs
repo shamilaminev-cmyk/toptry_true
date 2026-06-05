@@ -4650,6 +4650,84 @@ function normalizeCatalogColorFamily(value) {
 
 
 
+
+function inferCatalogBagSubgroupFromText(value) {
+  const text = String(value || "").toLowerCase();
+
+  if (!text) return "BAGS_OTHER";
+
+  if (/кошел|wallet|портмоне|кардхолдер|cardholder|визитниц|ключниц|косметич|органайзер|обложк/.test(text)) {
+    return "BAGS_WALLET_ACCESSORY";
+  }
+
+  if (/рюкзак|backpack/.test(text)) {
+    return "BAGS_BACKPACK";
+  }
+
+  if (/поясн|на\s+пояс|belt\s*bag|waist|бананка/.test(text)) {
+    return "BAGS_BELT";
+  }
+
+  if (/клатч|clutch|вечерн/.test(text)) {
+    return "BAGS_CLUTCH";
+  }
+
+  if (/дорож|travel|weekender|duffel|саквояж|чемодан/.test(text)) {
+    return "BAGS_TRAVEL";
+  }
+
+  if (/кросс[\s-]?боди|cross[\s-]?body|crossbody/.test(text)) {
+    return "BAGS_CROSSBODY";
+  }
+
+  if (/тоут|tote/.test(text)) {
+    return "BAGS_TOTE";
+  }
+
+  if (/шоппер|shopper/.test(text)) {
+    return "BAGS_SHOPPER";
+  }
+
+  // Небольшие сумки: важно проверять до общих shoulder-правил.
+  if (
+    /миниатюрн|мини[\s-]?сум|mini\s*bag|superamini|micro\s*bag|small\s*bag|сумка[\s-]?кисет|кисет|небольшого размера|компактн/.test(text)
+  ) {
+    return "BAGS_MINI";
+  }
+
+  // Shoulder / hobo / baguette / crescent / half-moon.
+  // Сюда же попадают многие Snowqueen-сумки с явным плечевым или регулируемым ремнём.
+  if (
+    /через\s+плеч|на\s+плеч|плечев(ым|ой|ого)?\s+рем|длинн(ым|ый|ого)?\s+плечев(ым|ой|ого)?\s+рем|съемн(ым|ый|ого)?\s+регулируем(ым|ый|ого)?\s+рем|съ[её]мн(ым|ый|ого)?\s+ремешк|регулируем(ым|ый|ого)?\s+ремешк|узк(им|ий|ого)?\s+ремешк|hobo|хобо|багет|baguette|полумесяц|crescent|half[\s-]?moon|demi[\s-]?lune/.test(text)
+  ) {
+    return "BAGS_SHOULDER";
+  }
+
+  // Вместительные сумки с длинными/удлиненными ручками чаще ближе к shopper.
+  if (
+    /вместительн/.test(text) &&
+    /(удлин[её]нн|длинн|двумя|две|прочн).{0,40}ручк/.test(text)
+  ) {
+    return "BAGS_SHOPPER";
+  }
+
+  // Сумки с двумя ручками / базовые классические вместительные формы — скорее tote, но только если есть явный признак ручек.
+  if (
+    /(двумя|две|удлин[её]нн|длинн|изящн).{0,40}ручк/.test(text) ||
+    /top\s*handle|handle\s*bag/.test(text)
+  ) {
+    return "BAGS_TOTE";
+  }
+
+  // Портфель и сумка для ноутбука — не travel в строгом смысле, но для текущей таксономии ближе всего к отдельному функциональному типу.
+  if (/портфель|для\s+ноутбук|laptop|briefcase|document\s*bag/.test(text)) {
+    return "BAGS_TRAVEL";
+  }
+
+  return "BAGS_OTHER";
+}
+
+
 function getCatalogBagTypePredicates(bagType) {
   const bt = String(bagType || "").trim().toUpperCase();
   if (!bt) return null;
@@ -5298,17 +5376,7 @@ function inferCatalogTaxonomy(product) {
     if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошел|wallet|портмоне|кардхолдер|cardholder|шоппер|shopper|тоут|tote/.test(sourceText)) {
       taxonomyGroup = "BAGS";
 
-      if (/кошел|wallet|портмоне|кардхолдер|cardholder|визитниц|ключниц|косметич|органайзер|обложк/.test(sourceText)) taxonomySubgroup = "BAGS_WALLET_ACCESSORY";
-      else if (/рюкзак|backpack/.test(sourceText)) taxonomySubgroup = "BAGS_BACKPACK";
-      else if (/поясн|на\s+пояс|belt bag|waist|бананка/.test(sourceText)) taxonomySubgroup = "BAGS_BELT";
-      else if (/клатч|clutch|вечер|evening/.test(sourceText)) taxonomySubgroup = "BAGS_CLUTCH";
-      else if (/мини|mini|small bag/.test(sourceText)) taxonomySubgroup = "BAGS_MINI";
-      else if (/дорож|travel|weekender|duffel|саквояж|чемодан/.test(sourceText)) taxonomySubgroup = "BAGS_TRAVEL";
-      else if (/кросс[\s-]?боди|cross[\s-]?body|crossbody/.test(sourceText)) taxonomySubgroup = "BAGS_CROSSBODY";
-      else if (/тоут|tote/.test(sourceText)) taxonomySubgroup = "BAGS_TOTE";
-      else if (/шоппер|shopper/.test(sourceText)) taxonomySubgroup = "BAGS_SHOPPER";
-      else if (/через\s+плеч|на\s+плеч|shoulder|хобо|hobo|багет|baguette/.test(sourceText)) taxonomySubgroup = "BAGS_SHOULDER";
-      else taxonomySubgroup = "BAGS_OTHER";
+      taxonomySubgroup = inferCatalogBagSubgroupFromText(sourceText);
     } else {
       taxonomyGroup = "ACCESSORIES";
       taxonomySubgroup = "ACCESSORIES";
@@ -6105,14 +6173,14 @@ function buildCatalogAiReviewPrompt(products) {
 - Плавки, купальники, шорты плавательные, аквашузы, beach/swim/aqua: isTryOnRelevant=false, rejectReasons include SWIMWEAR.
 - Обычная одежда, обувь и сумки: isTryOnRelevant=true.
 - Сумки: taxonomyGroup=BAGS. Используй taxonomySubgroup:
-  BAGS_SHOULDER — сумка через плечо / shoulder / hobo / baguette.
+  BAGS_SHOULDER — сумка через плечо / shoulder / hobo / baguette / сумка-полумесяц / плечевой или регулируемый ремень.
   BAGS_CROSSBODY — кросс-боди / crossbody.
   BAGS_TOTE — тоут / tote.
-  BAGS_SHOPPER — шоппер / shopper.
+  BAGS_SHOPPER — шоппер / shopper / вместительная сумка с длинными или удлиненными ручками.
   BAGS_BACKPACK — рюкзак / backpack.
   BAGS_CLUTCH — клатч / вечерняя сумка / clutch.
   BAGS_BELT — поясная сумка / belt bag / waist bag / бананка.
-  BAGS_MINI — мини-сумка / mini bag.
+  BAGS_MINI — мини-сумка / mini bag / компактная / небольшого размера / кисет.
   BAGS_TRAVEL — дорожная сумка / travel / weekender / duffel / саквояж / чемодан.
   BAGS_WALLET_ACCESSORY — кошелёк / портмоне / кардхолдер / косметичка / органайзер / обложка.
   BAGS_OTHER — сумка есть, но тип неясен.
@@ -6470,17 +6538,19 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
   if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошел|wallet|портмоне|кардхолдер|cardholder|шоппер|shopper|тоут|tote/i.test(title)) {
     item.taxonomyGroup = "BAGS";
 
-    if (/кошел|wallet|портмоне|кардхолдер|cardholder|визитниц|ключниц|косметич|органайзер|обложк/i.test(title)) item.taxonomySubgroup = "BAGS_WALLET_ACCESSORY";
-    else if (/рюкзак|backpack/i.test(title)) item.taxonomySubgroup = "BAGS_BACKPACK";
-    else if (/поясн|на\s+пояс|belt bag|waist|бананка/i.test(title)) item.taxonomySubgroup = "BAGS_BELT";
-    else if (/клатч|clutch|вечер|evening/i.test(title)) item.taxonomySubgroup = "BAGS_CLUTCH";
-    else if (/мини|mini|small bag/i.test(title)) item.taxonomySubgroup = "BAGS_MINI";
-    else if (/дорож|travel|weekender|duffel|саквояж|чемодан/i.test(title)) item.taxonomySubgroup = "BAGS_TRAVEL";
-    else if (/кросс[\s-]?боди|cross[\s-]?body|crossbody/i.test(title)) item.taxonomySubgroup = "BAGS_CROSSBODY";
-    else if (/тоут|tote/i.test(title)) item.taxonomySubgroup = "BAGS_TOTE";
-    else if (/шоппер|shopper/i.test(title)) item.taxonomySubgroup = "BAGS_SHOPPER";
-    else if (/через\s+плеч|на\s+плеч|shoulder|хобо|hobo|багет|baguette/i.test(title)) item.taxonomySubgroup = "BAGS_SHOULDER";
-    else item.taxonomySubgroup = "BAGS_OTHER";
+    const bagSourceText = [
+      title,
+      sourceProduct?.title,
+      sourceProduct?.description,
+      sourceProduct?.category,
+      sourceProduct?.rawPayload?.categoryId,
+      sourceProduct?.rawPayload?.typePrefix,
+      sourceProduct?.rawPayload?.model,
+      sourceProduct?.rawPayload?.param,
+      sourceProduct?.rawPayload?.description,
+    ].filter(Boolean).join(" ");
+
+    item.taxonomySubgroup = inferCatalogBagSubgroupFromText(bagSourceText);
 
     item.isTryOnRelevant = true;
   }
