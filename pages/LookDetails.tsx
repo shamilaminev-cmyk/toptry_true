@@ -548,7 +548,7 @@ const LookDetails = () => {
           </div>
         </div>
 
-        {Array.isArray(look.sourceItems) && look.sourceItems.length > 0 && (
+        {!isOwnLook && Array.isArray(look.sourceItems) && look.sourceItems.length > 0 && (
           <section className="rounded-3xl border border-zinc-100 bg-zinc-50 p-4">
             <button
               type="button"
