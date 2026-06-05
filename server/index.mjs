@@ -4679,9 +4679,10 @@ function inferCatalogBagSubgroupFromText(value) {
   if (
     /кросс[\s-]?боди|cross[\s-]?body|crossbody/.test(text) ||
     /\bcrossb\b/.test(text) ||
-    /\bcross\b/.test(text) ||
-    /[_\-\s](ew|ns|ml|jm)[_\-\s]*cross/.test(text) ||
-    /cross[_\-\s]*(ew|ns|ml|jm)/.test(text)
+    /[_\-\s](ew|ns|ml|jm)[_\-\s]*cross\b/.test(text) ||
+    /\bcross[_\-\s]*(ew|ns|ml|jm)\b/.test(text) ||
+    /[_-]cross\b/.test(text) ||
+    /\bcross[_-]/.test(text)
   ) {
     return "BAGS_CROSSBODY";
   }
@@ -4795,7 +4796,6 @@ function getCatalogBagTypePredicates(bagType) {
       titleContains("crossbody"),
       titleContains("cross body"),
       titleContains("crossb"),
-      titleContains(" cross"),
       titleContains("_cross"),
       titleContains("-cross"),
     ] : []),
