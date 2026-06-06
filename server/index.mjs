@@ -4938,9 +4938,18 @@ function buildCatalogDbWhere({
   if (merchant && allowedMerchants.includes(merchant)) {
     and.push({ merchant });
   }
-  if (gender) {
-    and.push({ gender });
+
+  const genderNeedleForCatalog = String(gender || "").trim().toUpperCase();
+  const displayCategoryNeedleForGender = String(displayCategory || "").trim().toUpperCase();
+
+  if (genderNeedleForCatalog) {
+    if (["BAGS", "ACCESSORIES"].includes(displayCategoryNeedleForGender)) {
+      and.push({ gender: { in: [genderNeedleForCatalog, "UNISEX"] } });
+    } else {
+      and.push({ gender: genderNeedleForCatalog });
+    }
   }
+
   if (category) {
     and.push({ category });
   }
