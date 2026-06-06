@@ -4568,116 +4568,27 @@ function getCatalogDisplayCategoryPredicates(displayCategory) {
   const dc = String(displayCategory || "").trim().toUpperCase();
   if (!dc) return null;
 
+  // Important:
+  // top-level catalog filters must use current taxonomyGroup, not legacy category.
+  // Legacy category=ACCESSORIES can contain bags, which breaks displayCategory=ACCESSORIES.
   if (dc === "CLOTHING") {
-    return [
-      { category: "TOPS" },
-      { category: "BOTTOMS" },
-      { category: "JACKETS" },
-      { category: "DRESS" },
-    ];
+    return [{ taxonomyGroup: "CLOTHING" }];
   }
 
-  if (dc === "TOPS") {
-    return [{ category: "TOPS" }];
-  }
-  if (dc === "BOTTOMS") {
-    return [{ category: "BOTTOMS" }];
-  }
-  if (dc === "OUTERWEAR") {
-    return [{ category: "JACKETS" }];
-  }
-  if (dc === "DRESSES") {
-    return [{ category: "DRESS" }];
-  }
   if (dc === "SHOES") {
-    return [{ category: "SHOES" }];
+    return [{ taxonomyGroup: "SHOES" }];
   }
-  if (dc === "ACCESSORIES") {
-    return [{ category: "ACCESSORIES" }];
-  }
+
   if (dc === "BAGS") {
-    return [
-      { taxonomyGroup: "BAGS" },
-      { title: { contains: "сум", mode: "insensitive" } },
-      { title: { contains: "рюкзак", mode: "insensitive" } },
-      { title: { contains: "backpack", mode: "insensitive" } },
-      { title: { contains: "клатч", mode: "insensitive" } },
-      { title: { contains: "clutch", mode: "insensitive" } },
-      { title: { contains: "wallet", mode: "insensitive" } },
-      { title: { contains: "кошелек", mode: "insensitive" } },
-      { title: { contains: "портмоне", mode: "insensitive" } },
-      { title: { contains: "кардхолдер", mode: "insensitive" } },
-    ];
+    return [{ taxonomyGroup: "BAGS" }];
   }
 
-  return null;
-}
-
-
-const CATALOG_COLOR_FAMILY_ALIASES = {
-  grey: "gray",
-  silver: "gray",
-  gold: "yellow",
-  khaki: "green",
-  null: "",
-  none: "",
-  other: "",
-  unknown: "",
-};
-
-const CATALOG_COLOR_FAMILIES = new Set([
-  "black",
-  "white",
-  "gray",
-  "beige",
-  "brown",
-  "blue",
-  "green",
-  "red",
-  "pink",
-  "purple",
-  "yellow",
-  "orange",
-  "multi",
-]);
-
-function normalizeCatalogColorFamily(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (!raw) return "";
-
-  const aliased = CATALOG_COLOR_FAMILY_ALIASES[raw] ?? raw;
-  if (!aliased) return "";
-
-  return CATALOG_COLOR_FAMILIES.has(aliased) ? aliased : "";
-}
-
-
-function inferCatalogColorFamilyFromText(value) {
-  const text = String(value || "").toLowerCase();
-
-  if (!text) return "";
-
-  // Multi / patterned should win before single colors when explicit.
-  if (/(мульти|разноцвет|многоцвет|принт|узор|полоск|клетк|леопард|камуфляж|multi|multicolor|print|pattern|striped|check|plaid|leopard|camo)/i.test(text)) {
-    return "multi";
+  if (dc === "ACCESSORIES") {
+    return [{ taxonomyGroup: "ACCESSORIES" }];
   }
 
-  if (/(черн|ч[её]рн|black|nero|noir)/i.test(text)) return "black";
-  if (/(бел|молочн|айвори|ivory|white|bianco|off[\s-]?white)/i.test(text)) return "white";
-  if (/(сер|графит|антрацит|silver|grey|gray|grigio|graphite|anthracite)/i.test(text)) return "gray";
-  if (/(беж|кремов|песочн|молочн|beige|cream|sand|taupe|nude)/i.test(text)) return "beige";
-  if (/(коричн|шоколад|коньяк|табач|camel|brown|cognac|chocolate|marrone)/i.test(text)) return "brown";
-  if (/(син|голуб|navy|blue|azure|denim|indigo)/i.test(text)) return "blue";
-  if (/(зел[её]н|хаки|олив|green|khaki|olive|verde)/i.test(text)) return "green";
-  if (/(красн|бордов|винн|бургунд|red|burgundy|wine|rosso)/i.test(text)) return "red";
-  if (/(розов|фукси|pink|fuchsia|rose)/i.test(text)) return "pink";
-  if (/(фиолет|сирен|лилов|purple|violet|lavender|lilla)/i.test(text)) return "purple";
-  if (/(желт|ж[её]лт|горчич|золот|gold|yellow|mustard|oro)/i.test(text)) return "yellow";
-  if (/(оранж|orange|arancio)/i.test(text)) return "orange";
-
-  return "";
+  return [{ taxonomyGroup: dc }];
 }
-
 
 
 function inferCatalogBagSubgroupFromText(value) {
