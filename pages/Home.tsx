@@ -57,7 +57,7 @@ const Home: React.FC = () => {
       <section className="px-4 pt-2 md:pt-5 md:px-8 md:max-w-7xl md:mx-auto">
         <div className="overflow-hidden rounded-[30px] md:rounded-[36px] border border-zinc-200 bg-[#f5f5f5] shadow-[0_20px_80px_rgba(15,23,42,0.06)]">
           <div className="lg:grid lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
-            <div className="relative h-[360px] sm:h-[440px] md:h-[520px] lg:order-2 lg:h-auto lg:min-h-[520px] bg-zinc-100">
+            <div className="relative h-[285px] sm:h-[360px] md:h-[520px] lg:order-2 lg:h-auto lg:min-h-[520px] bg-zinc-100">
               <img
                 src="/hero-toptry-v4.webp"
                 alt=""
@@ -66,12 +66,12 @@ const Home: React.FC = () => {
               <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/10 to-transparent lg:hidden" />
             </div>
 
-            <div className="lg:order-1 flex flex-col justify-center px-6 py-7 sm:p-8 lg:p-10 xl:p-12 bg-white lg:bg-[#f5f5f5]">
+            <div className="lg:order-1 flex flex-col justify-center px-6 py-5 sm:p-8 lg:p-10 xl:p-12 bg-white lg:bg-[#f5f5f5]">
               <p className="mb-4 text-[10px] font-black uppercase tracking-[0.26em] text-zinc-400">
                 Виртуальная примерочная
               </p>
 
-              <h1 className="max-w-[520px] text-[34px] leading-[0.98] tracking-[-0.055em] text-zinc-950 sm:text-5xl md:text-[56px] lg:text-[58px] font-black">
+              <h1 className="max-w-[520px] text-[30px] leading-[0.98] tracking-[-0.055em] text-zinc-950 sm:text-5xl md:text-[56px] lg:text-[58px] font-black">
                 Примеряйте вещи
                 <br />
                 из разных магазинов
@@ -79,11 +79,11 @@ const Home: React.FC = () => {
                 на своём аватаре
               </h1>
 
-              <p className="mt-5 max-w-[430px] text-[15px] md:text-[17px] leading-7 md:leading-8 text-zinc-600">
+              <p className="mt-4 max-w-[430px] text-[14px] md:text-[17px] leading-6 md:leading-8 text-zinc-600">
                 Соберите образ, сравните варианты и покупайте только то, что действительно подходит.
               </p>
 
-              <div className="mt-6 flex flex-col sm:flex-row gap-3">
+              <div className="mt-5 flex flex-col sm:flex-row gap-3">
                 <Link
                   to="/catalog"
                   className="bg-zinc-950 text-white rounded-full px-7 py-4 text-sm font-black text-center transition hover:opacity-90"
@@ -99,7 +99,7 @@ const Home: React.FC = () => {
                 </Link>
               </div>
 
-              <div className="mt-6 grid grid-cols-3 gap-2 max-w-[430px]">
+              <div className="mt-6 hidden sm:grid grid-cols-3 gap-2 max-w-[430px]">
                 <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
                   <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Каталог</p>
                   <p className="mt-1 text-xs font-bold text-zinc-700">разные продавцы</p>
