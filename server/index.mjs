@@ -5353,6 +5353,10 @@ function inferCatalogTaxonomy(product) {
 
   let taxonomyGroup = "OTHER";
   let taxonomySubgroup = "";
+  let styleTags = [];
+  let occasionTags = [];
+  let seasonTags = [];
+  let colorFamily = "";
 
   if (category === "SHOES") {
     taxonomyGroup = "SHOES";
