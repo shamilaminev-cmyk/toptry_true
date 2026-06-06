@@ -5317,7 +5317,7 @@ function inferCatalogTaxonomy(product) {
   let styleTags = [];
   let occasionTags = [];
   let seasonTags = [];
-  let colorFamily = inferCatalogColorFamilyFromText([
+  const colorSourceText = [
     product?.title,
     product?.brand,
     raw?.color,
@@ -5330,7 +5330,30 @@ function inferCatalogTaxonomy(product) {
     raw?.model,
     raw?.param,
     raw?.description,
-  ].filter(Boolean).join(" "));
+  ].filter(Boolean).join(" ");
+
+  let colorFamily =
+    typeof inferCatalogColorFamilyFromText === "function"
+      ? inferCatalogColorFamilyFromText(colorSourceText)
+      : (() => {
+          const text = String(colorSourceText || "").toLowerCase();
+
+          if (/(мульти|разноцвет|многоцвет|принт|узор|полоск|клетк|леопард|камуфляж|multi|multicolor|print|pattern|striped|check|plaid|leopard|camo)/i.test(text)) return "multi";
+          if (/(черн|ч[её]рн|black|nero|noir)/i.test(text)) return "black";
+          if (/(бел|молочн|айвори|ivory|white|bianco|off[\s-]?white)/i.test(text)) return "white";
+          if (/(сер|графит|антрацит|silver|grey|gray|grigio|graphite|anthracite)/i.test(text)) return "gray";
+          if (/(беж|кремов|песочн|beige|cream|sand|taupe|nude)/i.test(text)) return "beige";
+          if (/(коричн|шоколад|коньяк|табач|camel|brown|cognac|chocolate|marrone)/i.test(text)) return "brown";
+          if (/(син|голуб|navy|blue|azure|denim|indigo)/i.test(text)) return "blue";
+          if (/(зел[её]н|хаки|олив|green|khaki|olive|verde)/i.test(text)) return "green";
+          if (/(красн|бордов|винн|бургунд|red|burgundy|wine|rosso)/i.test(text)) return "red";
+          if (/(розов|фукси|pink|fuchsia|rose)/i.test(text)) return "pink";
+          if (/(фиолет|сирен|лилов|purple|violet|lavender|lilla)/i.test(text)) return "purple";
+          if (/(желт|ж[её]лт|горчич|золот|gold|yellow|mustard|oro)/i.test(text)) return "yellow";
+          if (/(оранж|orange|arancio)/i.test(text)) return "orange";
+
+          return "";
+        })();
 
   if (isCatalogNonFashionAccessoryText(`${sourceText} ${noisyText}`)) {
     return {
