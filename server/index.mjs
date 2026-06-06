@@ -4308,7 +4308,7 @@ function normalizeCatalogCategory(raw) {
     return "TOPS";
   }
 
-  if (/(шапк|кепк|бейсболк|панам|балаклав|картуз|cap|beanie|hat|bag|сумк|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|варежк|перчат|шарф|палантин|платок|косынк|рюкзак|кошелек|wallet|gloves|scarf|socks|носк|гольф)/i.test(s)) {
+  if (/(шапк|кепк|бейсболк|панам|балаклав|картуз|cap|beanie|hat|bag|сумк|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|варежк|перчат|шарф|палантин|платок|косынк|рюкзак|кошелек|wallet|gloves|scarf|socks|носк|гольфы)/i.test(s)) {
     return "ACCESSORIES";
   }
 
@@ -4342,7 +4342,7 @@ function normalizeCatalogDisplayCategory(raw) {
     return "TOPS";
   }
 
-  if (/(шапк|кепк|бейсболк|панам|балаклав|картуз|cap|beanie|hat|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|варежк|перчат|шарф|палантин|платок|косынк|gloves|scarf|socks|носк|гольф)/i.test(s)) {
+  if (/(шапк|кепк|бейсболк|панам|балаклав|картуз|cap|beanie|hat|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|варежк|перчат|шарф|палантин|платок|косынк|gloves|scarf|socks|носк|гольфы)/i.test(s)) {
     return "ACCESSORIES";
   }
 
@@ -5293,7 +5293,7 @@ function inferCatalogTaxonomy(product) {
     /(украшен(?:ие|ия)?\s+для\s+обув|jibbitz|шнурк|стельк|средств.*уход|значк|аксессуар\s+для\s+обув)/i;
 
   const explicitNonTryOnAccessoryRe =
-    /(носк|гольф)/i;
+    /(носк|гольфы)/i;
 
   const hasSourceShoePath =
     /(^|[\\/])обувь([\\/]|$)/i.test(sourceText) ||
