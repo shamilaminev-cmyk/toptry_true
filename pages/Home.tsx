@@ -83,17 +83,17 @@ const Home: React.FC = () => {
                 Соберите образ, сравните варианты и покупайте только то, что действительно подходит.
               </p>
 
-              <div className="mt-5 flex flex-col sm:flex-row gap-3">
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:flex sm:flex-row">
                 <Link
                   to="/catalog"
-                  className="bg-zinc-950 text-white rounded-full px-7 py-4 text-sm font-black text-center transition hover:opacity-90"
+                  className="bg-zinc-950 text-white rounded-full px-4 py-3.5 sm:px-7 sm:py-4 text-[13px] sm:text-sm font-black text-center transition hover:opacity-90"
                 >
                   Открыть каталог
                 </Link>
 
                 <Link
                   to={user ? '/create-look' : '/auth'}
-                  className="bg-white text-zinc-950 border border-zinc-200 rounded-full px-7 py-4 text-sm font-black text-center transition hover:bg-zinc-100"
+                  className="bg-white text-zinc-950 border border-zinc-200 rounded-full px-4 py-3.5 sm:px-7 sm:py-4 text-[13px] sm:text-sm font-black text-center transition hover:bg-zinc-100"
                 >
                   Создать образ
                 </Link>
