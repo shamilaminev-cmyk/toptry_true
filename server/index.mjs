@@ -4271,6 +4271,10 @@ async function deactivateCatalogProductsForFeedCoverage(merchant, coverage) {
 function normalizeCatalogCategory(raw) {
   const s = String(raw || "").toLowerCase();
 
+  if (isCatalogNonFashionAccessoryText(s)) {
+    return "OTHER";
+  }
+
   // "Куртка-рубашка" / overshirt is outerwear, even if it contains "рубашка".
   if (/(куртк|jacket).{0,20}(рубаш|сорочк|shirt)|(рубаш|сорочк|shirt).{0,20}(куртк|jacket)/i.test(s)) {
     return "JACKETS";
@@ -4590,6 +4594,14 @@ function getCatalogDisplayCategoryPredicates(displayCategory) {
   return [{ taxonomyGroup: dc }];
 }
 
+
+
+function isCatalogNonFashionAccessoryText(value) {
+  const text = String(value || "").toLowerCase();
+
+  // Not useful for TopTry fashion/VTON catalog.
+  return /зонт|umbrella|шнурк|shoelace|стельк|insole|средств[оа]\s+для\s+обув|уход\s+за\s+обув|губк[аи]\s+для\s+обув|щ[её]тк[аи]\s+для\s+обув|крем\s+для\s+обув|пропитк[аи]|дезодорант\s+для\s+обув|ложк[аи]\s+для\s+обув|аксессуар[ы]?\s+для\s+обув|shoe\s+care|shoe\s+accessor/.test(text);
+}
 
 function inferCatalogBagSubgroupFromText(value) {
   const text = String(value || "").toLowerCase();
@@ -5320,6 +5332,19 @@ function inferCatalogTaxonomy(product) {
     raw?.description,
   ].filter(Boolean).join(" "));
 
+  if (isCatalogNonFashionAccessoryText(`${sourceText} ${noisyText}`)) {
+    return {
+      taxonomyGroup: "OTHER",
+      taxonomySubgroup: "",
+      taxonomySource: "rules_v4_source_category_first",
+      taxonomyEnrichedAt: new Date(),
+      styleTags: [],
+      occasionTags: [],
+      seasonTags: [],
+      colorFamily,
+    };
+  }
+
   if (category === "SHOES") {
     taxonomyGroup = "SHOES";
 
@@ -5394,7 +5419,7 @@ function inferCatalogTaxonomy(product) {
         taxonomySubgroup = "GLOVES";
       } else if (/(ремень|пояс|belt)/.test(sourceText)) {
         taxonomySubgroup = "BELTS";
-      } else if (/(носк|гольф|socks?)/.test(sourceText)) {
+      } else if (/(носк|гольфы|socks?)/.test(sourceText)) {
         taxonomySubgroup = "SOCKS";
       } else {
         taxonomySubgroup = "ACCESSORIES";
