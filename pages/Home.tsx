@@ -55,47 +55,63 @@ const Home: React.FC = () => {
   return (
     <div className="pb-56">
       <section className="px-4 pt-2 md:pt-5 md:px-8 md:max-w-7xl md:mx-auto">
-        <div className="relative overflow-hidden rounded-[28px] md:rounded-[34px] border border-zinc-200 bg-zinc-950 min-h-[560px] md:min-h-[540px] lg:min-h-[500px]">
-          <img
-            src="/hero-toptry-v4.webp"
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover object-[58%_center] opacity-100"
-          />
+        <div className="overflow-hidden rounded-[30px] md:rounded-[36px] border border-zinc-200 bg-[#f5f5f5] shadow-[0_20px_80px_rgba(15,23,42,0.06)]">
+          <div className="lg:grid lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
+            <div className="relative h-[360px] sm:h-[440px] md:h-[520px] lg:order-2 lg:h-auto lg:min-h-[520px] bg-zinc-100">
+              <img
+                src="/hero-toptry-v4.webp"
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover object-[58%_center]"
+              />
+              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/10 to-transparent lg:hidden" />
+            </div>
 
-          <div className="absolute inset-0 bg-black/[0.02]" />
-          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/10 to-transparent" />
-
-          <div className="relative z-10 flex min-h-[560px] md:min-h-[540px] lg:min-h-[500px] items-end lg:items-center p-4 md:p-8 lg:p-9">
-            <div className="w-full max-w-[470px] rounded-[26px] md:rounded-[30px] border border-white/65 bg-white/68 p-5 md:p-6 lg:p-7 shadow-[0_22px_80px_rgba(15,23,42,0.16)] backdrop-blur-xl">
-              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-zinc-500">
+            <div className="lg:order-1 flex flex-col justify-center px-6 py-7 sm:p-8 lg:p-10 xl:p-12 bg-white lg:bg-[#f5f5f5]">
+              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.26em] text-zinc-400">
                 Виртуальная примерочная
               </p>
 
-              <h1 className="max-w-[430px] text-[34px] leading-[0.98] tracking-[-0.05em] text-zinc-950 sm:text-5xl md:text-[54px] lg:text-[54px] font-black">
-                Посмотри на себя.
+              <h1 className="max-w-[520px] text-[34px] leading-[0.98] tracking-[-0.055em] text-zinc-950 sm:text-5xl md:text-[56px] lg:text-[58px] font-black">
+                Примеряйте вещи
                 <br />
-                Потом решай.
+                из разных магазинов
+                <br />
+                на своём аватаре
               </h1>
 
-              <p className="mt-4 max-w-[405px] text-[15px] md:text-[16px] leading-7 text-zinc-600">
-                Примеряйте вещи на своём аватаре, сравнивайте варианты
-                и заказывайте только то, в чём уверены.
+              <p className="mt-5 max-w-[430px] text-[15px] md:text-[17px] leading-7 md:leading-8 text-zinc-600">
+                Соберите образ, сравните варианты и покупайте только то, что действительно подходит.
               </p>
 
-              <div className="mt-5 flex flex-col sm:flex-row gap-2.5">
-                <Link
-                  to={user ? '/create-look' : '/auth'}
-                  className="bg-zinc-950 text-white rounded-full px-7 py-4 text-sm font-black text-center transition hover:opacity-90"
-                >
-                  Создать образ
-                </Link>
-
+              <div className="mt-6 flex flex-col sm:flex-row gap-3">
                 <Link
                   to="/catalog"
-                  className="bg-white/85 text-zinc-950 border border-zinc-200 rounded-full px-7 py-4 text-sm font-black text-center transition hover:bg-white"
+                  className="bg-zinc-950 text-white rounded-full px-7 py-4 text-sm font-black text-center transition hover:opacity-90"
                 >
                   Открыть каталог
                 </Link>
+
+                <Link
+                  to={user ? '/create-look' : '/auth'}
+                  className="bg-white text-zinc-950 border border-zinc-200 rounded-full px-7 py-4 text-sm font-black text-center transition hover:bg-zinc-100"
+                >
+                  Создать образ
+                </Link>
+              </div>
+
+              <div className="mt-6 grid grid-cols-3 gap-2 max-w-[430px]">
+                <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Каталог</p>
+                  <p className="mt-1 text-xs font-bold text-zinc-700">разные продавцы</p>
+                </div>
+                <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Примерка</p>
+                  <p className="mt-1 text-xs font-bold text-zinc-700">на аватаре</p>
+                </div>
+                <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Выбор</p>
+                  <p className="mt-1 text-xs font-bold text-zinc-700">без сомнений</p>
+                </div>
               </div>
             </div>
           </div>
