@@ -4285,11 +4285,10 @@ function normalizeCatalogCategory(raw) {
     return "SHOES";
   }
 
-  if (/(шапк|кепк|cap|bag|сумк|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|перчат|шарф|рюкзак|кошелек|wallet|gloves|scarf)/i.test(s)) {
-    return "ACCESSORIES";
-  }
-
-  if (/(куртк|пальто|плащ|пиджак|жакет|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
+  // Clothing must win before accessory words.
+  // Examples we must NOT classify as accessories:
+  // "Блузка с шарфом", "Дубленка ... с ремнем", raw params mentioning ремень/шарф.
+  if (/(дублен|шуб|куртк|пальто|плащ|пиджак|жакет|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
     return "JACKETS";
   }
 
@@ -4301,8 +4300,12 @@ function normalizeCatalogCategory(raw) {
     return "BOTTOMS";
   }
 
-  if (/(футбол|майк|поло|рубаш|сорочк|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat|bra|бюстгаль|лиф|бикини)/i.test(s)) {
+  if (/(футбол|майк|поло|рубаш|сорочк|блуз|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat|bra|бюстгаль|лиф|бикини)/i.test(s)) {
     return "TOPS";
+  }
+
+  if (/(шапк|кепк|бейсболк|панам|балаклав|картуз|cap|beanie|hat|bag|сумк|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|варежк|перчат|шарф|палантин|платок|косынк|рюкзак|кошелек|wallet|gloves|scarf|socks|носк|гольф)/i.test(s)) {
+    return "ACCESSORIES";
   }
 
   return "OTHER";
@@ -4319,7 +4322,7 @@ function normalizeCatalogDisplayCategory(raw) {
     return "SHOES";
   }
 
-  if (/(куртк|пальто|плащ|пиджак|жакет|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
+  if (/(дублен|шуб|куртк|пальто|плащ|пиджак|жакет|бомбер|парка|ветров|пухов|coat|jacket|blazer|жилет|vest)/i.test(s)) {
     return "OUTERWEAR";
   }
 
@@ -4331,11 +4334,11 @@ function normalizeCatalogDisplayCategory(raw) {
     return "BOTTOMS";
   }
 
-  if (/(футбол|майк|поло|рубаш|сорочк|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat)/i.test(s)) {
+  if (/(футбол|майк|поло|рубаш|сорочк|блуз|лонгслив|топ|худи|свитш|свитер|джемпер|кардиган|cardigan|толстовк|олимпийк|водолазк|shirt|t-shirt|tee|hoodie|sweat)/i.test(s)) {
     return "TOPS";
   }
 
-  if (/(шапк|кепк|cap|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|перчат|шарф|gloves|scarf)/i.test(s)) {
+  if (/(шапк|кепк|бейсболк|панам|балаклав|картуз|cap|beanie|hat|belt|ремень|очки|\bочк(и|ов|ам|ами|ах)?\b|watch|час|варежк|перчат|шарф|палантин|платок|косынк|gloves|scarf|socks|носк|гольф)/i.test(s)) {
     return "ACCESSORIES";
   }
 
@@ -4860,6 +4863,27 @@ function getCatalogBagTypePredicates(bagType) {
   ];
 }
 
+
+function getCatalogAccessoryTypePredicates(accessoryType) {
+  const at = String(accessoryType || "").trim().toUpperCase();
+  if (!at) return null;
+
+  const taxonomy = {
+    HEADWEAR: ["HEADWEAR"],
+    SCARVES: ["SCARVES"],
+    GLOVES: ["GLOVES"],
+    BELTS: ["BELTS"],
+    SOCKS: ["SOCKS"],
+    ACCESSORIES: ["ACCESSORIES"],
+  }[at];
+
+  if (!taxonomy?.length) return null;
+
+  return [
+    { taxonomyGroup: "ACCESSORIES", taxonomySubgroup: { in: taxonomy } },
+  ];
+}
+
 function buildCatalogDbWhere({
   merchant,
   gender,
@@ -4874,6 +4898,7 @@ function buildCatalogDbWhere({
   clothingType,
   shoeType,
   bagType,
+  accessoryType,
   size,
   sizeTop,
   sizeBottom,
@@ -4912,6 +4937,11 @@ function buildCatalogDbWhere({
   const bagTypePredicates = getCatalogBagTypePredicates(bagType);
   if (String(displayCategory || "").trim().toUpperCase() === "BAGS" && bagTypePredicates?.length) {
     and.push({ OR: bagTypePredicates });
+  }
+
+  const accessoryTypePredicates = getCatalogAccessoryTypePredicates(accessoryType);
+  if (String(displayCategory || "").trim().toUpperCase() === "ACCESSORIES" && accessoryTypePredicates?.length) {
+    and.push({ OR: accessoryTypePredicates });
   }
 
   const brandNeedle = String(brand || "").trim();
@@ -5383,42 +5413,28 @@ function inferCatalogTaxonomy(product) {
       else taxonomySubgroup = "TOPS";
     }
   } else if (category === "ACCESSORIES") {
-    if (/сумк|\bbag\b|рюкзак|backpack|клатч|clutch|кошел|wallet|портмоне|кардхолдер|cardholder|шоппер|shopper|тоут|tote/.test(sourceText)) {
+    if (/(сумк|клатч|тоут|шоппер|рюкзак|портфель|портмоне|кардхолдер|кошелек|wallet|bag|backpack|clutch|tote|shopper|briefcase)/.test(sourceText)) {
       taxonomyGroup = "BAGS";
-
-      taxonomySubgroup = inferCatalogBagSubgroupFromText(sourceText);
+      const bagSourceText = `${sourceText} ${noisyText}`;
+      taxonomySubgroup = inferCatalogBagSubgroupFromText(bagSourceText);
     } else {
       taxonomyGroup = "ACCESSORIES";
-      taxonomySubgroup = "ACCESSORIES";
+
+      if (/(шапк|кепк|бейсболк|панам|балаклав|картуз|косынк|cap|beanie|hat)/.test(sourceText)) {
+        taxonomySubgroup = "HEADWEAR";
+      } else if (/(палантин|шарф|платок|scarf|stole|shawl)/.test(sourceText)) {
+        taxonomySubgroup = "SCARVES";
+      } else if (/(варежк|перчат|glove|mittens?)/.test(sourceText)) {
+        taxonomySubgroup = "GLOVES";
+      } else if (/(ремень|пояс|belt)/.test(sourceText)) {
+        taxonomySubgroup = "BELTS";
+      } else if (/(носк|гольф|socks?)/.test(sourceText)) {
+        taxonomySubgroup = "SOCKS";
+      } else {
+        taxonomySubgroup = "ACCESSORIES";
+      }
     }
   }
-
-  const styleTags = [];
-  if (/classic|оксфорд|дерби|лофер|пальто|рубаш|пиджак|жакет/.test(noisyText)) styleTags.push("classic");
-  if (/sport|running|trail|training|трениров|кроссов/.test(noisyText)) styleTags.push("sport");
-  if (/casual|hoodie|худи|джинс|футбол|sneaker|кед/.test(noisyText)) styleTags.push("casual");
-  if (/premium|luxury|кожа|leather|шерсть|wool|cashmere|кашемир/.test(noisyText)) styleTags.push("premium");
-
-  const occasionTags = [];
-  if (/office|офис|classic|дерби|оксфорд|рубаш|пиджак|жакет/.test(noisyText)) occasionTags.push("office");
-  if (/running|trail|sport|training|трениров/.test(noisyText)) occasionTags.push("sport");
-  if (/casual|джинс|футбол|худи|sneaker|кед/.test(noisyText)) occasionTags.push("casual");
-  if (/evening|вечер|premium|luxury/.test(noisyText)) occasionTags.push("evening");
-
-  const seasonTags = [];
-  if (/winter|зим|пухов|шерсть|wool/.test(noisyText)) seasonTags.push("winter");
-  if (/summer|летн|сандал|босонож|shorts|шорт/.test(noisyText)) seasonTags.push("summer");
-  if (/демисез|spring|autumn|fall|осень|весна/.test(noisyText)) seasonTags.push("midseason");
-
-  let colorFamily = null;
-  if (/black|черн|чёрн/.test(noisyText)) colorFamily = "black";
-  else if (/white|бел/.test(noisyText)) colorFamily = "white";
-  else if (/gray|grey|сер/.test(noisyText)) colorFamily = "gray";
-  else if (/blue|син|голуб/.test(noisyText)) colorFamily = "blue";
-  else if (/brown|корич|beige|беж/.test(noisyText)) colorFamily = "brown";
-  else if (/green|зел/.test(noisyText)) colorFamily = "green";
-  else if (/red|крас|бордов/.test(noisyText)) colorFamily = "red";
-  else if (/pink|роз/.test(noisyText)) colorFamily = "pink";
 
   const canPatchCategory = ["SHOES", "TOPS", "BOTTOMS", "JACKETS", "DRESS", "ACCESSORIES"].includes(category);
   const categoryPatch =
@@ -9136,6 +9152,10 @@ app.get("/api/catalog/brands", async (req, res) => {
       typeof req.query.bagType === "string" && req.query.bagType.trim()
         ? req.query.bagType.trim().toUpperCase()
         : "";
+    const accessoryType =
+      typeof req.query.accessoryType === "string" && req.query.accessoryType.trim()
+        ? req.query.accessoryType.trim().toUpperCase()
+        : "";
 
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
@@ -9158,6 +9178,7 @@ app.get("/api/catalog/brands", async (req, res) => {
       clothingType,
       shoeType,
       bagType,
+      accessoryType,
       size: "",
       sizeTop: "",
       sizeBottom: "",
@@ -9839,6 +9860,10 @@ app.get("/api/catalog/products", async (req, res) => {
       typeof req.query.bagType === "string" && req.query.bagType.trim()
         ? req.query.bagType.trim().toUpperCase()
         : "";
+    const accessoryType =
+      typeof req.query.accessoryType === "string" && req.query.accessoryType.trim()
+        ? req.query.accessoryType.trim().toUpperCase()
+        : "";
 
     const discountOnly =
       String(req.query.discountOnly || "").trim() === "1";
@@ -9943,6 +9968,7 @@ app.get("/api/catalog/products", async (req, res) => {
       clothingType,
       shoeType,
       bagType,
+      accessoryType,
       size: rawSize === "MY" ? "" : rawSize,
       sizeTop: effectiveMySizeTop,
       sizeBottom: effectiveMySizeBottom,
@@ -10129,7 +10155,7 @@ app.get("/api/catalog/products", async (req, res) => {
       offset === 0 &&
       total === 0 &&
       !!colorFamily &&
-      !!(displayCategory || category || clothingType || shoeType || bagType);
+      !!(displayCategory || category || clothingType || shoeType || bagType || accessoryType);
 
     if (isUnavailableSimilarFallback) {
       const fallbackWhere = buildCatalogDbWhere({
@@ -10146,6 +10172,8 @@ app.get("/api/catalog/products", async (req, res) => {
         clothingType,
         shoeType,
         bagType,
+      accessoryType,
+        accessoryType,
         size: rawSize === "MY" ? "" : rawSize,
         sizeTop: effectiveMySizeTop,
         sizeBottom: effectiveMySizeBottom,
