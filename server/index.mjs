@@ -4895,7 +4895,10 @@ function buildCatalogDbWhere({
     and.push({ brand: { contains: brandNeedle, mode: "insensitive" } });
   }
 
-  const normalizedColorFamily = normalizeCatalogColorFamily(colorFamily);
+  const normalizedColorFamily =
+    typeof normalizeCatalogColorFamily === "function"
+      ? normalizeCatalogColorFamily(colorFamily)
+      : String(colorFamily || "").trim().toLowerCase();
   if (normalizedColorFamily) {
     and.push({ colorFamily: normalizedColorFamily });
   }
