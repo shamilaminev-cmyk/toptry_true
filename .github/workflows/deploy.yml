@@ -1,99 +1,149 @@
-name: Deploy backend
+name: Build & Deploy (GHCR)
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'server/**'
-      - 'prisma/**'
-      - 'Dockerfile'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/deploy.yml'
+    branches: [ "main", "develop" ]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: backend-prod
-  cancel-in-progress: true
+  packages: write
 
 jobs:
-  deploy-backend:
+  build_and_deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Configure SSH
-        shell: bash
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set vars
+        id: vars
         run: |
-          set -euo pipefail
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
 
-          HOST="$(printf "%s" "${{ secrets.SSH_HOST }}" | tr -d '\r\n')"
-          PORT="$(printf "%s" "${{ secrets.SSH_PORT }}" | tr -d '\r\n')"
+          IMAGE_API="ghcr.io/${OWNER}/toptry-ai"
+          IMAGE_WEB="ghcr.io/${OWNER}/toptry-web"
 
-          if [ -z "$PORT" ]; then
-            PORT="22"
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            TAG="prod"
+
+            API_CONTAINER="toptry-ai-prod"
+            API_ENV_FILE="/root/toptry-ai-prod.env"
+            API_PORT_BIND="127.0.0.1:8080:5174"
+            API_ALIAS="ai"
+
+            WEB_CONTAINER="toptry-web-prod"
+            WEB_PORT_BIND="127.0.0.1:8082:80"
+          else
+            TAG="staging"
+
+            API_CONTAINER="toptry-ai-staging"
+            API_ENV_FILE="/opt/toptry-ai/.env.staging"
+            API_PORT_BIND="127.0.0.1:8081:5174"
+            API_ALIAS="ai-staging"
+
+            WEB_CONTAINER="toptry-web-staging"
+            WEB_PORT_BIND="127.0.0.1:8083:80"
           fi
 
-          mkdir -p ~/.ssh
+          echo "image_api=${IMAGE_API}" >> $GITHUB_OUTPUT
+          echo "image_web=${IMAGE_WEB}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "sha_tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
 
-          printf "%s" "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
-          echo >> ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
+          echo "api_container=${API_CONTAINER}" >> $GITHUB_OUTPUT
+          echo "api_env_file=${API_ENV_FILE}" >> $GITHUB_OUTPUT
+          echo "api_port_bind=${API_PORT_BIND}" >> $GITHUB_OUTPUT
+          echo "api_alias=${API_ALIAS}" >> $GITHUB_OUTPUT
 
-      - name: Deploy backend on server
-        shell: bash
+          echo "web_container=${WEB_CONTAINER}" >> $GITHUB_OUTPUT
+          echo "web_port_bind=${WEB_PORT_BIND}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR (push)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- API image ---
+      - name: Build & push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image_api }}:${{ steps.vars.outputs.tag }}
+            ${{ steps.vars.outputs.image_api }}:${{ steps.vars.outputs.sha_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # --- WEB image ---
+      - name: Build & push WEB image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.web
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image_web }}:${{ steps.vars.outputs.tag }}
+            ${{ steps.vars.outputs.image_web }}:${{ steps.vars.outputs.sha_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy on server (pull + restart)
         run: |
-          set -euo pipefail
+          IMAGE_API="${{ steps.vars.outputs.image_api }}"
+          IMAGE_WEB="${{ steps.vars.outputs.image_web }}"
+          TAG="${{ steps.vars.outputs.tag }}"
+
+          API_CONTAINER="${{ steps.vars.outputs.api_container }}"
+          API_ENV_FILE="${{ steps.vars.outputs.api_env_file }}"
+          API_PORT_BIND="${{ steps.vars.outputs.api_port_bind }}"
+          API_ALIAS="${{ steps.vars.outputs.api_alias }}"
+
+          WEB_CONTAINER="${{ steps.vars.outputs.web_container }}"
+          WEB_PORT_BIND="${{ steps.vars.outputs.web_port_bind }}"
 
           HOST="$(printf "%s" "${{ secrets.SSH_HOST }}" | tr -d '\r\n')"
           USER="$(printf "%s" "${{ secrets.SSH_USER }}" | tr -d '\r\n')"
           PORT="$(printf "%s" "${{ secrets.SSH_PORT }}" | tr -d '\r\n')"
 
-          if [ -z "$PORT" ]; then
-            PORT="22"
-          fi
+          mkdir -p ~/.ssh
+          printf "%s" "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          echo >> ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${PORT}" -H "${HOST}" >> ~/.ssh/known_hosts
 
-          ssh -i ~/.ssh/id_ed25519 -p "$PORT" "$USER@$HOST" bash -s <<'REMOTE'
-          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -p "${PORT}" "${USER}@${HOST}" bash -lc "set -e
+            echo '${{ secrets.GHCR_TOKEN }}' | sudo -n /usr/bin/docker login ghcr.io -u '${{ secrets.GHCR_USER }}' --password-stdin
 
-          cd /opt/toptry_true
+            # --- API ---
+            sudo -n /usr/bin/docker pull ${IMAGE_API}:${TAG}
+            sudo -n /usr/bin/docker rm -f ${API_CONTAINER} >/dev/null 2>&1 || true
+            sudo -n /usr/bin/docker run -d \
+              --name ${API_CONTAINER} \
+              --restart unless-stopped \
+              --network toptry-ai_default \
+              --network-alias ${API_ALIAS} \
+              --env-file ${API_ENV_FILE} \
+              -p ${API_PORT_BIND} \
+              ${IMAGE_API}:${TAG}
 
-          git fetch origin main
-          git checkout main
-          git reset --hard origin/main
-
-          echo "Deploying commit:"
-          git log -1 --oneline
-
-          ENV_FILE="/root/toptry-runtime.env"
-          if [ ! -f "$ENV_FILE" ]; then
-            ENV_FILE="/root/toptry-ai-prod.env"
-          fi
-
-          if [ ! -f "$ENV_FILE" ]; then
-            echo "ERROR: env file not found" >&2
-            exit 1
-          fi
-
-          docker compose -f docker-compose.timeweb.yml --env-file "$ENV_FILE" build backend
-          docker compose -f docker-compose.timeweb.yml --env-file "$ENV_FILE" up -d backend
-
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null; then
-              echo "Backend healthcheck OK"
-              curl -sS http://127.0.0.1:8080/api/health
-              echo
-              exit 0
-            fi
-
-            echo "Waiting for backend healthcheck... $i"
-            sleep 2
-          done
-
-          echo "ERROR: backend healthcheck failed" >&2
-          docker logs --tail 200 toptry-ai-prod || true
-          exit 1
-          REMOTE
+            # --- WEB ---
+            sudo -n /usr/bin/docker pull ${IMAGE_WEB}:${TAG}
+            sudo -n /usr/bin/docker rm -f ${WEB_CONTAINER} >/dev/null 2>&1 || true
+            sudo -n /usr/bin/docker run -d \
+              --name ${WEB_CONTAINER} \
+              --restart unless-stopped \
+              --network toptry-ai_default \
+              -p ${WEB_PORT_BIND} \
+              ${IMAGE_WEB}:${TAG}
+          "
