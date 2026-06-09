@@ -9686,6 +9686,273 @@ app.get("/api/catalog/deals", async (req, res) => {
 });
 
 
+
+
+function mapCatalogCollectionProductForApi(p, extra = {}) {
+  const price = Number(p?.price || p?.currentPrice || 0);
+  const oldPrice = Number(p?.oldPrice || p?.previousPrice || 0);
+  const previousPrice = Number(p?.previousPrice || 0);
+  const currentPrice = Number(p?.currentPrice || price || 0);
+  const delta = Number(p?.delta || (previousPrice > currentPrice ? previousPrice - currentPrice : 0));
+  const deltaPct = Number(p?.deltaPct || (previousPrice > 0 && currentPrice > 0 ? ((previousPrice - currentPrice) / previousPrice) * 100 : 0));
+
+  const discountPercent =
+    previousPrice > currentPrice && currentPrice > 0
+      ? Math.max(1, Math.round(deltaPct))
+      : oldPrice > price && price > 0
+        ? Math.max(1, Math.round(((oldPrice - price) / oldPrice) * 100))
+        : Number(p?.discountPercent || 0);
+
+  return {
+    id: p.id,
+    merchant: p.merchant,
+    externalId: p.externalId,
+    title: p.title,
+    brand: p.brand,
+    category: p.category,
+    gender: p.gender,
+    price,
+    oldPrice: oldPrice || previousPrice || null,
+    previousPrice: previousPrice || oldPrice || null,
+    currentPrice: currentPrice || price || null,
+    delta,
+    deltaPct: Math.round(deltaPct * 100) / 100,
+    discountPercent,
+    currency: p.currency || "RUB",
+    imageUrl: p.imageUrl,
+    images: p.imageUrl ? [p.imageUrl] : [],
+    productUrl: p.productUrl,
+    affiliateUrl: p.affiliateUrl,
+    sizesTop: p.sizesTop || [],
+    sizesBottom: p.sizesBottom || [],
+    sizesShoes: p.sizesShoes || [],
+    taxonomyGroup: p.taxonomyGroup,
+    taxonomySubgroup: p.taxonomySubgroup,
+    styleTags: p.styleTags || [],
+    occasionTags: p.occasionTags || [],
+    seasonTags: p.seasonTags || [],
+    colorFamily: p.colorFamily || "",
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+    detectedAt: p.detectedAt || null,
+    ...extra,
+  };
+}
+
+function normalizeCollectionLimit(value, fallback = 24, max = 60) {
+  const n = Number(value || fallback);
+  return Math.max(1, Math.min(max, Number.isFinite(n) ? Math.floor(n) : fallback));
+}
+
+app.get("/api/catalog/price-drops", async (req, res) => {
+  try {
+    const limit = normalizeCollectionLimit(req.query.limit, 24, 60);
+    const minDeltaPctRaw = Number(req.query.minDeltaPct || 10);
+    const minDeltaPct = Math.max(0, Math.min(90, Number.isFinite(minDeltaPctRaw) ? minDeltaPctRaw : 10));
+    const daysRaw = Number(req.query.days || 30);
+    const days = Math.max(1, Math.min(180, Number.isFinite(daysRaw) ? Math.floor(daysRaw) : 30));
+    const poolLimit = Math.max(120, Math.min(1200, limit * 80));
+
+    const rows = await prisma.$queryRawUnsafe(
+      `
+      with latest_drop as (
+        select distinct on (c."productId")
+          c."productId",
+          c."previousPrice",
+          c."currentPrice",
+          c.delta,
+          c."deltaPct",
+          c."detectedAt",
+          c."pipelineRunId"
+        from "CatalogProductPriceChange" c
+        where c.direction = 'DROP'
+          and c."deltaPct" >= $1
+          and c."detectedAt" >= now() - ($2::text || ' days')::interval
+        order by c."productId", c."detectedAt" desc, c."deltaPct" desc
+      )
+      select
+        p.id,
+        p.merchant,
+        p."externalId",
+        p.title,
+        p.brand,
+        p.category,
+        p.gender,
+        p.price,
+        p."oldPrice",
+        p.currency,
+        p."imageUrl",
+        p."productUrl",
+        p."affiliateUrl",
+        p."sizesTop",
+        p."sizesBottom",
+        p."sizesShoes",
+        p."taxonomyGroup",
+        p."taxonomySubgroup",
+        p."styleTags",
+        p."occasionTags",
+        p."seasonTags",
+        p."colorFamily",
+        p."createdAt",
+        p."updatedAt",
+        ld."previousPrice",
+        ld."currentPrice",
+        ld.delta,
+        ld."deltaPct",
+        ld."detectedAt"
+      from latest_drop ld
+      join "CatalogProduct" p on p.id = ld."productId"
+      where p."isActive" = true
+        and p.price is not null
+        and p.price > 0
+        and p."imageUrl" is not null
+        and p."imageUrl" <> ''
+        and coalesce(p."taxonomyGroup", '') in ('CLOTHING', 'SHOES', 'BAGS', 'ACCESSORIES')
+        and not (
+          lower(coalesce(p.title, '')) ~ '(зонт|umbrella|шнурк|shoelace|стельк|insole|украшен.*для обув|аксессуар.*для обув|средств.*для обув|уход.*обув|крем.*обув|губк.*обув|щетк.*обув|щётк.*обув|пропитк|дезодорант.*обув)'
+        )
+      order by random()
+      limit $3
+      `,
+      minDeltaPct,
+      days,
+      poolLimit
+    );
+
+    const products = rows.slice(0, limit).map((p) =>
+      mapCatalogCollectionProductForApi(p, { collection: "price-drops" })
+    );
+
+    return res.json({
+      ok: true,
+      products,
+      meta: {
+        limit,
+        pool: rows.length,
+        selected: products.length,
+        minDeltaPct,
+        days,
+        strategy: "price_change_drop_random_pool",
+      },
+    });
+  } catch (e) {
+    console.error("[toptry] /api/catalog/price-drops error", e);
+    return res.status(500).json({ error: e?.message || "Failed to load price drops" });
+  }
+});
+
+app.get("/api/wardrobe/price-drops", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const limit = normalizeCollectionLimit(req.query.limit, 24, 60);
+
+    const rows = await prisma.$queryRawUnsafe(
+      `
+      with wardrobe_catalog as (
+        select
+          w.id as "wardrobeItemId",
+          w.title as "wardrobeTitle",
+          w.price as "wardrobePrice",
+          w.currency as "wardrobeCurrency",
+          w."imageUrl" as "wardrobeImageUrl",
+          w."productUrl" as "wardrobeProductUrl",
+          w."affiliateUrl" as "wardrobeAffiliateUrl",
+          w."storeId" as "wardrobeStoreId",
+          w.brand as "wardrobeBrand",
+          w."createdAt" as "wardrobeAddedAt"
+        from "WardrobeItem" w
+        where w."userId" = $1
+          and w."sourceType" = 'catalog'
+          and w.price is not null
+          and w.price > 0
+      ),
+      matched as (
+        select distinct on (w."wardrobeItemId")
+          w.*,
+          p.id,
+          p.merchant,
+          p."externalId",
+          p.title,
+          p.brand,
+          p.category,
+          p.gender,
+          p.price,
+          p."oldPrice",
+          p.currency,
+          p."imageUrl",
+          p."productUrl",
+          p."affiliateUrl",
+          p."sizesTop",
+          p."sizesBottom",
+          p."sizesShoes",
+          p."taxonomyGroup",
+          p."taxonomySubgroup",
+          p."styleTags",
+          p."occasionTags",
+          p."seasonTags",
+          p."colorFamily",
+          p."createdAt",
+          p."updatedAt",
+          (w."wardrobePrice" - p.price) as delta,
+          case when w."wardrobePrice" > 0 then round((((w."wardrobePrice" - p.price) / w."wardrobePrice") * 100)::numeric, 2)::double precision else 0 end as "deltaPct"
+        from wardrobe_catalog w
+        join "CatalogProduct" p
+          on p."isActive" = true
+         and p.price is not null
+         and p.price > 0
+         and (
+              (coalesce(w."wardrobeAffiliateUrl", '') <> '' and p."affiliateUrl" = w."wardrobeAffiliateUrl")
+           or (coalesce(w."wardrobeProductUrl", '') <> '' and p."productUrl" = w."wardrobeProductUrl")
+           or (coalesce(w."wardrobeImageUrl", '') <> '' and p."imageUrl" = w."wardrobeImageUrl")
+           or (
+                coalesce(w."wardrobeImageUrl", '') <> ''
+            and lower(coalesce(p.brand, '')) = lower(coalesce(w."wardrobeBrand", ''))
+            and regexp_replace(lower(coalesce(p."imageUrl", '')), '[?#].*$', '') = regexp_replace(lower(coalesce(w."wardrobeImageUrl", '')), '[?#].*$', '')
+              )
+         )
+        where p.price < w."wardrobePrice"
+          and coalesce(p."taxonomyGroup", '') in ('CLOTHING', 'SHOES', 'BAGS', 'ACCESSORIES')
+        order by w."wardrobeItemId", (w."wardrobePrice" - p.price) desc, p."updatedAt" desc
+      )
+      select *
+      from matched
+      order by "deltaPct" desc, delta desc
+      limit $2
+      `,
+      userId,
+      limit
+    );
+
+    const items = rows.map((p) =>
+      mapCatalogCollectionProductForApi(p, {
+        collection: "wardrobe-price-drops",
+        wardrobeItemId: p.wardrobeItemId,
+        wardrobeTitle: p.wardrobeTitle,
+        wardrobePrice: Number(p.wardrobePrice || 0),
+        wardrobeAddedAt: p.wardrobeAddedAt,
+        previousPrice: Number(p.wardrobePrice || 0),
+        currentPrice: Number(p.price || 0),
+      })
+    );
+
+    return res.json({
+      ok: true,
+      items,
+      products: items,
+      meta: {
+        limit,
+        selected: items.length,
+        strategy: "wardrobe_snapshot_price_vs_current_catalog_price",
+      },
+    });
+  } catch (e) {
+    console.error("[toptry] /api/wardrobe/price-drops error", e);
+    return res.status(500).json({ error: e?.message || "Failed to load wardrobe price drops" });
+  }
+});
+
+
+
 app.get("/api/catalog/home-new", async (req, res) => {
   try {
     const rawLimit = Number(req.query.limit || 8);
