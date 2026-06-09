@@ -1,8 +1,6 @@
-name: Build & Deploy (GHCR)
+name: Build & Deploy backend (GHCR manual)
 
 on:
-  push:
-    branches: [ "main", "develop" ]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +21,6 @@ jobs:
           OWNER="${GITHUB_REPOSITORY_OWNER}"
 
           IMAGE_API="ghcr.io/${OWNER}/toptry-ai"
-          IMAGE_WEB="ghcr.io/${OWNER}/toptry-web"
 
           SHORT_SHA="${GITHUB_SHA::7}"
 
@@ -34,9 +31,6 @@ jobs:
             API_ENV_FILE="/root/toptry-ai-prod.env"
             API_PORT_BIND="127.0.0.1:8080:5174"
             API_ALIAS="ai"
-
-            WEB_CONTAINER="toptry-web-prod"
-            WEB_PORT_BIND="127.0.0.1:8082:80"
           else
             TAG="staging"
 
@@ -44,13 +38,9 @@ jobs:
             API_ENV_FILE="/opt/toptry-ai/.env.staging"
             API_PORT_BIND="127.0.0.1:8081:5174"
             API_ALIAS="ai-staging"
-
-            WEB_CONTAINER="toptry-web-staging"
-            WEB_PORT_BIND="127.0.0.1:8083:80"
           fi
 
           echo "image_api=${IMAGE_API}" >> $GITHUB_OUTPUT
-          echo "image_web=${IMAGE_WEB}" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "sha_tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
 
@@ -58,9 +48,6 @@ jobs:
           echo "api_env_file=${API_ENV_FILE}" >> $GITHUB_OUTPUT
           echo "api_port_bind=${API_PORT_BIND}" >> $GITHUB_OUTPUT
           echo "api_alias=${API_ALIAS}" >> $GITHUB_OUTPUT
-
-          echo "web_container=${WEB_CONTAINER}" >> $GITHUB_OUTPUT
-          echo "web_port_bind=${WEB_PORT_BIND}" >> $GITHUB_OUTPUT
 
       - name: Log in to GHCR (push)
         uses: docker/login-action@v3
@@ -98,7 +85,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy on server (pull + restart)
+      - name: Deploy backend on server (pull + restart)
         run: |
           IMAGE_API="${{ steps.vars.outputs.image_api }}"
           IMAGE_WEB="${{ steps.vars.outputs.image_web }}"
