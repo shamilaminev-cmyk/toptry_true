@@ -10167,6 +10167,7 @@ app.get("/api/catalog/home-new", async (req, res) => {
     if (selected.length < limit) selected = pickWithLimits(3, 3, false);
     if (selected.length < limit) selected = pickWithLimits(4, 4, false);
     if (selected.length < limit) selected = pickWithLimits(6, 6, true);
+    if (selected.length < limit) selected = pickWithLimits(limit, limit, true);
 
     const products = selected.slice(0, limit).map((p) => ({
       id: p.id,
