@@ -9459,6 +9459,88 @@ function shuffleCatalogCollectionRows(rows) {
   return out;
 }
 
+function normalizeCatalogCollectionText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[?#].*$/, "")
+    .replace(/[,/].*$/, "")
+    .replace(/\b(женск(ая|ие|ий)?|мужск(ая|ие|ий)?|детск(ая|ие|ий)?)\b/g, "")
+    .replace(/\b(черный|чёрный|белый|синий|голубой|серый|серебристый|красный|бордовый|зеленый|зелёный|розовый|бежевый|коричневый|желтый|жёлтый|оранжевый|фиолетовый|мультицвет|black|white|blue|navy|grey|gray|red|green|pink|beige|brown|yellow|orange|purple|multi)\b/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeCatalogCollectionImageKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/+/g, "/");
+}
+
+function getCatalogCollectionDedupeKey(product) {
+  const imageKey = normalizeCatalogCollectionImageKey(product?.imageUrl);
+  if (imageKey) return `img:${imageKey}`;
+
+  const merchant = normalizeCatalogCollectionText(product?.merchant || "unknown");
+  const brand = normalizeCatalogCollectionText(product?.brand || "");
+  const title = normalizeCatalogCollectionText(product?.title || "").slice(0, 96);
+
+  if (brand || title) return `txt:${merchant}|${brand}|${title}`;
+  return `id:${String(product?.id || Math.random()).trim()}`;
+}
+
+function pickCatalogCollectionDiverseRows({
+  rows,
+  limit,
+  merchantMax = 2,
+  groupMax = 2,
+  bagMax = Infinity,
+  luxuryMax = Infinity,
+  allowDupes = false,
+  titleKeyFn = null,
+}) {
+  const picked = [];
+  const merchantCounts = new Map();
+  const groupCounts = new Map();
+  const seenDedupe = new Set();
+  const seenTitle = new Set();
+  let bagCount = 0;
+  let luxuryCount = 0;
+
+  for (const p of Array.isArray(rows) ? rows : []) {
+    const merchant = String(p?.merchant || "unknown");
+    const group = String(p?.taxonomyGroup || "OTHER");
+    const dedupeKey = getCatalogCollectionDedupeKey(p);
+    const titleKey = typeof titleKeyFn === "function"
+      ? titleKeyFn(p)
+      : normalizeCatalogCollectionText(p?.title || "").slice(0, 96);
+    const isBag = group === "BAGS";
+    const isLuxury = Boolean(p?._isLuxury);
+
+    if ((merchantCounts.get(merchant) || 0) >= merchantMax) continue;
+    if ((groupCounts.get(group) || 0) >= groupMax) continue;
+    if (isBag && bagCount >= bagMax) continue;
+    if (isLuxury && luxuryCount >= luxuryMax) continue;
+    if (!allowDupes && dedupeKey && seenDedupe.has(dedupeKey)) continue;
+    if (!allowDupes && titleKey && seenTitle.has(titleKey)) continue;
+
+    picked.push(p);
+    merchantCounts.set(merchant, (merchantCounts.get(merchant) || 0) + 1);
+    groupCounts.set(group, (groupCounts.get(group) || 0) + 1);
+    if (dedupeKey) seenDedupe.add(dedupeKey);
+    if (titleKey) seenTitle.add(titleKey);
+    if (isBag) bagCount += 1;
+    if (isLuxury) luxuryCount += 1;
+
+    if (picked.length >= limit) break;
+  }
+
+  return picked;
+}
+
 app.get("/api/catalog/deals", async (req, res) => {
   try {
     const rawLimit = Number(req.query.limit || 4);
@@ -9607,43 +9689,22 @@ app.get("/api/catalog/deals", async (req, res) => {
 
     const selectionPool = shuffleCatalogCollectionRows(scored.slice(0, Math.max(limit * 30, 120)));
 
-    const pick = (merchantMax, groupMax, bagMax, luxuryMax, allowTitleDupes = false) => {
-      const selected = [];
-      const merchantCounts = new Map();
-      const groupCounts = new Map();
-      const seenTitles = new Set();
-      let bagCount = 0;
-      let luxuryCount = 0;
-
-      for (const p of selectionPool) {
-        const merchant = String(p.merchant || "unknown");
-        const group = String(p.taxonomyGroup || "OTHER");
-        const tk = p._titleKey || p.id;
-        const isBag = group === "BAGS";
-        const isLuxury = Boolean(p._isLuxury);
-
-        if ((merchantCounts.get(merchant) || 0) >= merchantMax) continue;
-        if ((groupCounts.get(group) || 0) >= groupMax) continue;
-        if (isBag && bagCount >= bagMax) continue;
-        if (isLuxury && luxuryCount >= luxuryMax) continue;
-        if (!allowTitleDupes && seenTitles.has(tk)) continue;
-
-        selected.push(p);
-        merchantCounts.set(merchant, (merchantCounts.get(merchant) || 0) + 1);
-        groupCounts.set(group, (groupCounts.get(group) || 0) + 1);
-        seenTitles.add(tk);
-        if (isBag) bagCount += 1;
-        if (isLuxury) luxuryCount += 1;
-
-        if (selected.length >= limit) break;
-      }
-
-      return selected;
-    };
+    const pick = (merchantMax, groupMax, bagMax, luxuryMax, allowDupes = false) =>
+      pickCatalogCollectionDiverseRows({
+        rows: selectionPool,
+        limit,
+        merchantMax,
+        groupMax,
+        bagMax,
+        luxuryMax,
+        allowDupes,
+        titleKeyFn: (p) => p._titleKey || p.id,
+      });
 
     let selected = pick(2, 2, 1, 1, false);
     if (selected.length < limit) selected = pick(3, 3, 1, 1, false);
-    if (selected.length < limit) selected = pick(4, 4, 2, 1, true);
+    if (selected.length < limit) selected = pick(4, 4, 2, 1, false);
+    if (selected.length < limit) selected = pick(6, 6, 3, 2, true);
 
     const products = selected.slice(0, limit).map((p) => {
       const price = Number(p.price || 0);
@@ -9692,7 +9753,7 @@ app.get("/api/catalog/deals", async (req, res) => {
         minDiscount,
         pool: rows.length,
         selected: products.length,
-        strategy: "deal_quality_score_discount_tryon_size_diverse_random_pool",
+        strategy: "deal_quality_score_discount_tryon_size_diverse_random_deduped_pool",
       },
     });
   } catch (e) {
@@ -10092,35 +10153,20 @@ app.get("/api/catalog/home-new", async (req, res) => {
 
     const selectionPool = shuffleCatalogCollectionRows(scored.slice(0, Math.max(limit * 30, 120)));
 
-    const pickWithLimits = (merchantMax, groupMax, allowTitleDupes = false) => {
-      const picked = [];
-      const merchantCounts = new Map();
-      const groupCounts = new Map();
-      const seenTitles = new Set();
-
-      for (const p of selectionPool) {
-        const merchant = String(p.merchant || "unknown");
-        const group = String(p.taxonomyGroup || "OTHER");
-        const tk = p._titleKey || p.id;
-
-        if ((merchantCounts.get(merchant) || 0) >= merchantMax) continue;
-        if ((groupCounts.get(group) || 0) >= groupMax) continue;
-        if (!allowTitleDupes && seenTitles.has(tk)) continue;
-
-        picked.push(p);
-        merchantCounts.set(merchant, (merchantCounts.get(merchant) || 0) + 1);
-        groupCounts.set(group, (groupCounts.get(group) || 0) + 1);
-        seenTitles.add(tk);
-
-        if (picked.length >= limit) break;
-      }
-
-      return picked;
-    };
+    const pickWithLimits = (merchantMax, groupMax, allowDupes = false) =>
+      pickCatalogCollectionDiverseRows({
+        rows: selectionPool,
+        limit,
+        merchantMax,
+        groupMax,
+        allowDupes,
+        titleKeyFn: (p) => p._titleKey || p.id,
+      });
 
     let selected = pickWithLimits(2, 2, false);
     if (selected.length < limit) selected = pickWithLimits(3, 3, false);
-    if (selected.length < limit) selected = pickWithLimits(4, 4, true);
+    if (selected.length < limit) selected = pickWithLimits(4, 4, false);
+    if (selected.length < limit) selected = pickWithLimits(6, 6, true);
 
     const products = selected.slice(0, limit).map((p) => ({
       id: p.id,
@@ -10157,7 +10203,7 @@ app.get("/api/catalog/home-new", async (req, res) => {
         limit,
         pool: rows.length,
         selected: products.length,
-        strategy: "fresh_ai_clean_diverse_random_pool",
+        strategy: "fresh_ai_clean_diverse_random_deduped_pool",
       },
     });
   } catch (e) {
