@@ -1,15 +1,6 @@
 name: Deploy backend via GHCR
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - 'server/**'
-      - 'prisma/**'
-      - 'Dockerfile'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
