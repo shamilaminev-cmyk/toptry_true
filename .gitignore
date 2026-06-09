@@ -1,5 +1,5 @@
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,71 +7,62 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+.next/
+.cache/
+vite
+
+# Environment / local config
+.env
+.env.*
 *.local
 
-# Editor directories and files
+# IDE / OS
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
+.vs/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-# IDE / OS
-.vs/
-.idea/
-.DS_Store
 
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Env
-.env
-.env.*
-
-# Builds
-dist/
-build/
-.next/
-# IDE / OS
-.vs/
-.idea/
-.DS_Store
-
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Env
-.env
-.env.*
-
-# Builds
-dist/
-build/
-.next/
-.cache/
-
-# Misc
-*.log
-
-
-
-# local patch helpers / backups
-patch_avatar_step*.pl
+# Backups
+*.bak
+*.bak.*
 server/index.mjs.bak
 server/index.mjs.BEFORE_*
-*.bak
+
+# Local patch / diagnostic scripts
 patch_*.py
-# local patch / backup artifacts
-*.bak.*
+fix_*.py
+check_*.py
+inspect_*.sh
+remove_old_*.py
+
+# Local AI / VTON test scripts
+test_*.py
+test_*.mjs
+
+# Local AI / VTON artifacts
+avatar*.png
+avatar*.jpg
+avatar*.jpeg
+wesh*.png
+wesh*.jpg
+wesh*.jpeg
+openai_result*.png
+flux_payload.json
+flux_test_assets/
+flux_test_outputs/
+
+# Accidental local package/build artifacts
+toptry-*@*
