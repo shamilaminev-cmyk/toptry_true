@@ -29,8 +29,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          HOST="$(printf "%s" "${{ secrets.TOPTRY_PROD_HOST }}" | tr -d '\r\n')"
-          PORT="$(printf "%s" "${{ secrets.TOPTRY_PROD_PORT }}" | tr -d '\r\n')"
+          HOST="$(printf "%s" "${{ secrets.SSH_HOST }}" | tr -d '\r\n')"
+          PORT="$(printf "%s" "${{ secrets.SSH_PORT }}" | tr -d '\r\n')"
 
           if [ -z "$PORT" ]; then
             PORT="22"
@@ -38,19 +38,9 @@ jobs:
 
           mkdir -p ~/.ssh
 
-          SSH_PRIVATE_KEY="${{ secrets.TOPTRY_PROD_SSH_KEY }}" python3 - <<'PYKEY'
-          import os
-          from pathlib import Path
-
-          key = os.environ.get("SSH_PRIVATE_KEY", "")
-          key = key.replace("\\n", "\n").replace("\r\n", "\n").replace("\r", "\n").strip() + "\n"
-
-          path = Path.home() / ".ssh" / "id_ed25519"
-          path.write_text(key)
-          path.chmod(0o600)
-          PYKEY
-
-          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
+          printf "%s" "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          echo >> ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy backend on server
@@ -58,9 +48,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          HOST="$(printf "%s" "${{ secrets.TOPTRY_PROD_HOST }}" | tr -d '\r\n')"
-          USER="$(printf "%s" "${{ secrets.TOPTRY_PROD_USER }}" | tr -d '\r\n')"
-          PORT="$(printf "%s" "${{ secrets.TOPTRY_PROD_PORT }}" | tr -d '\r\n')"
+          HOST="$(printf "%s" "${{ secrets.SSH_HOST }}" | tr -d '\r\n')"
+          USER="$(printf "%s" "${{ secrets.SSH_USER }}" | tr -d '\r\n')"
+          PORT="$(printf "%s" "${{ secrets.SSH_PORT }}" | tr -d '\r\n')"
 
           if [ -z "$PORT" ]; then
             PORT="22"
