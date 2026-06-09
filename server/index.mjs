@@ -9861,6 +9861,8 @@ app.get("/api/wardrobe/price-drops", requireAuth, async (req, res) => {
   try {
     const userId = req.auth.userId;
     const limit = normalizeCollectionLimit(req.query.limit, 24, 60);
+    const daysRaw = Number(req.query.days || 30);
+    const days = Math.max(1, Math.min(180, Number.isFinite(daysRaw) ? Math.floor(daysRaw) : 30));
 
     const rows = await prisma.$queryRawUnsafe(
       `
@@ -9881,6 +9883,19 @@ app.get("/api/wardrobe/price-drops", requireAuth, async (req, res) => {
           and w."sourceType" = 'catalog'
           and w.price is not null
           and w.price > 0
+      ),
+      latest_drop as (
+        select distinct on (c."productId")
+          c."productId",
+          c."previousPrice" as "eventPreviousPrice",
+          c."currentPrice" as "eventCurrentPrice",
+          c.delta as "eventDelta",
+          c."deltaPct" as "eventDeltaPct",
+          c."detectedAt"
+        from "CatalogProductPriceChange" c
+        where c.direction = 'DROP'
+          and c."detectedAt" >= now() - ($2::text || ' days')::interval
+        order by c."productId", c."detectedAt" desc, c."deltaPct" desc
       ),
       matched as (
         select distinct on (w."wardrobeItemId")
@@ -9909,6 +9924,11 @@ app.get("/api/wardrobe/price-drops", requireAuth, async (req, res) => {
           p."colorFamily",
           p."createdAt",
           p."updatedAt",
+          ld."detectedAt",
+          ld."eventPreviousPrice",
+          ld."eventCurrentPrice",
+          ld."eventDelta",
+          ld."eventDeltaPct",
           (w."wardrobePrice" - p.price) as delta,
           case when w."wardrobePrice" > 0 then round((((w."wardrobePrice" - p.price) / w."wardrobePrice") * 100)::numeric, 2)::double precision else 0 end as "deltaPct"
         from wardrobe_catalog w
@@ -9926,16 +9946,18 @@ app.get("/api/wardrobe/price-drops", requireAuth, async (req, res) => {
             and regexp_replace(lower(coalesce(p."imageUrl", '')), '[?#].*$', '') = regexp_replace(lower(coalesce(w."wardrobeImageUrl", '')), '[?#].*$', '')
               )
          )
+        join latest_drop ld on ld."productId" = p.id
         where p.price < w."wardrobePrice"
           and coalesce(p."taxonomyGroup", '') in ('CLOTHING', 'SHOES', 'BAGS', 'ACCESSORIES')
-        order by w."wardrobeItemId", (w."wardrobePrice" - p.price) desc, p."updatedAt" desc
+        order by w."wardrobeItemId", ld."detectedAt" desc, (w."wardrobePrice" - p.price) desc, p."updatedAt" desc
       )
       select *
       from matched
-      order by "deltaPct" desc, delta desc
-      limit $2
+      order by "detectedAt" desc, "deltaPct" desc, delta desc
+      limit $3
       `,
       userId,
+      days,
       limit
     );
 
@@ -9948,6 +9970,13 @@ app.get("/api/wardrobe/price-drops", requireAuth, async (req, res) => {
         wardrobeAddedAt: p.wardrobeAddedAt,
         previousPrice: Number(p.wardrobePrice || 0),
         currentPrice: Number(p.price || 0),
+        detectedAt: p.detectedAt || null,
+        priceDropDetectedAt: p.detectedAt || null,
+        eventPreviousPrice: p.eventPreviousPrice !== null && p.eventPreviousPrice !== undefined ? Number(p.eventPreviousPrice) : null,
+        eventCurrentPrice: p.eventCurrentPrice !== null && p.eventCurrentPrice !== undefined ? Number(p.eventCurrentPrice) : null,
+        eventDelta: p.eventDelta !== null && p.eventDelta !== undefined ? Number(p.eventDelta) : null,
+        eventDeltaPct: p.eventDeltaPct !== null && p.eventDeltaPct !== undefined ? Number(p.eventDeltaPct) : null,
+        priceDropDays: days,
       })
     );
 
@@ -9957,8 +9986,9 @@ app.get("/api/wardrobe/price-drops", requireAuth, async (req, res) => {
       products: items,
       meta: {
         limit,
+        days,
         selected: items.length,
-        strategy: "wardrobe_snapshot_price_vs_current_catalog_price",
+        strategy: "wardrobe_recent_price_change_vs_saved_price",
       },
     });
   } catch (e) {

@@ -86,7 +86,7 @@ const Wardrobe = () => {
     (async () => {
       setPriceDropsLoading(true);
       try {
-        const resp = await fetch(withApiOrigin('/api/wardrobe/price-drops?limit=8'), {
+        const resp = await fetch(withApiOrigin('/api/wardrobe/price-drops?limit=8&days=30'), {
           credentials: 'include',
         });
 
@@ -1188,6 +1188,15 @@ const Wardrobe = () => {
                 const deltaPct = Number(item.deltaPct || (previousPrice > currentPrice && previousPrice > 0 ? ((previousPrice - currentPrice) / previousPrice) * 100 : 0));
                 const dropRub = Math.max(0, Math.round(delta));
                 const discount = Math.max(0, Math.round(deltaPct));
+                const detectedAtRaw = item.priceDropDetectedAt || item.detectedAt || '';
+                const detectedAtDate = detectedAtRaw ? new Date(detectedAtRaw) : null;
+                const detectedAtLabel =
+                  detectedAtDate && !Number.isNaN(detectedAtDate.getTime())
+                    ? new Intl.DateTimeFormat('ru-RU', {
+                        day: 'numeric',
+                        month: 'long',
+                      }).format(detectedAtDate)
+                    : '';
 
                 return (
                   <div key={`${item.wardrobeItemId || item.id}-${item.id}`} className="rounded-[24px] bg-white border border-zinc-100 p-3 shadow-sm">
@@ -1214,6 +1223,12 @@ const Wardrobe = () => {
                     <p className="mt-3 text-[10px] font-black uppercase tracking-tight line-clamp-2">
                       {item.title || item.wardrobeTitle || 'Товар'}
                     </p>
+
+                    {detectedAtLabel ? (
+                      <p className="mt-2 text-[10px] font-bold text-zinc-500">
+                        Цена снизилась {detectedAtLabel}
+                      </p>
+                    ) : null}
 
                     {dropRub > 0 ? (
                       <p className="mt-1 text-[10px] font-black text-emerald-700">
