@@ -1,0 +1,80 @@
+name: Deploy frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pages/**'
+      - 'components/**'
+      - 'utils/**'
+      - 'public/**'
+      - 'index.tsx'
+      - 'index.css'
+      - 'App.tsx'
+      - 'store.tsx'
+      - 'types.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.*'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        env:
+          VITE_API_ORIGIN: https://api.toptry.ru
+        run: npm run build
+
+      - name: Write version
+        run: date -u +"%Y-%m-%dT%H:%M:%SZ" > dist/version.txt
+
+      - name: Upload dist to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.TOPTRY_PROD_HOST }}
+          username: ${{ secrets.TOPTRY_PROD_USER }}
+          key: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          source: "dist/*"
+          target: "/tmp/toptry-frontend-deploy"
+          strip_components: 1
+          rm: true
+
+      - name: Promote frontend atomically
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.TOPTRY_PROD_HOST }}
+          username: ${{ secrets.TOPTRY_PROD_USER }}
+          key: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            test -f /tmp/toptry-frontend-deploy/index.html
+
+            rm -rf /var/www/toptry.new
+            mkdir -p /var/www/toptry.new
+            cp -a /tmp/toptry-frontend-deploy/. /var/www/toptry.new/
+
+            if [ -d /var/www/toptry ]; then
+              rm -rf /var/www/toptry.prev
+              mv /var/www/toptry /var/www/toptry.prev
+            fi
+
+            mv /var/www/toptry.new /var/www/toptry
+
+            ls -la /var/www/toptry | head
