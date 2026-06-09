@@ -1,99 +1,35 @@
-name: Deploy backend via GHCR
+name: Deploy backend
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'prisma/**'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
-  group: backend-${{ github.ref_name }}
+  group: backend-prod
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy-backend:
+  deploy-backend:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set deployment variables
-        id: vars
+      - name: Configure SSH
         shell: bash
         run: |
           set -euo pipefail
-
-          OWNER="${GITHUB_REPOSITORY_OWNER}"
-          IMAGE="ghcr.io/${OWNER}/toptry-ai"
-          SHORT_SHA="${GITHUB_SHA::7}"
-
-          if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            TAG="prod"
-            CONTAINER="toptry-ai-prod"
-            ENV_FILE="/root/toptry-ai-prod.env"
-            PORT_BIND="127.0.0.1:8080:5174"
-            NETWORK_ALIAS="ai"
-            HEALTH_URL="http://127.0.0.1:8080/api/health"
-          elif [ "${GITHUB_REF_NAME}" = "develop" ]; then
-            TAG="staging"
-            CONTAINER="toptry-ai-staging"
-            ENV_FILE="/opt/toptry-ai/.env.staging"
-            PORT_BIND="127.0.0.1:8081:5174"
-            NETWORK_ALIAS="ai-staging"
-            HEALTH_URL="http://127.0.0.1:8081/api/health"
-          else
-            echo "Unsupported branch: ${GITHUB_REF_NAME}" >&2
-            exit 1
-          fi
-
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "container=${CONTAINER}" >> "$GITHUB_OUTPUT"
-          echo "env_file=${ENV_FILE}" >> "$GITHUB_OUTPUT"
-          echo "port_bind=${PORT_BIND}" >> "$GITHUB_OUTPUT"
-          echo "network_alias=${NETWORK_ALIAS}" >> "$GITHUB_OUTPUT"
-          echo "health_url=${HEALTH_URL}" >> "$GITHUB_OUTPUT"
-
-      - name: Login to GHCR for push
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: |
-            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.tag }}
-            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha_tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Deploy backend on server
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          IMAGE="${{ steps.vars.outputs.image }}"
-          TAG="${{ steps.vars.outputs.tag }}"
-          CONTAINER="${{ steps.vars.outputs.container }}"
-          ENV_FILE="${{ steps.vars.outputs.env_file }}"
-          PORT_BIND="${{ steps.vars.outputs.port_bind }}"
-          NETWORK_ALIAS="${{ steps.vars.outputs.network_alias }}"
-          HEALTH_URL="${{ steps.vars.outputs.health_url }}"
 
           HOST="$(printf "%s" "${{ secrets.TOPTRY_PROD_HOST }}" | tr -d '\r\n')"
-          USER="$(printf "%s" "${{ secrets.TOPTRY_PROD_USER }}" | tr -d '\r\n')"
           PORT="$(printf "%s" "${{ secrets.TOPTRY_PROD_PORT }}" | tr -d '\r\n')"
 
           if [ -z "$PORT" ]; then
@@ -117,48 +53,57 @@ jobs:
           ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
           ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
 
-          ssh -i ~/.ssh/id_ed25519 -p "$PORT" "$USER@$HOST" bash -s -- \
-            "$IMAGE" "$TAG" "$CONTAINER" "$ENV_FILE" "$PORT_BIND" "$NETWORK_ALIAS" "$HEALTH_URL" <<'REMOTE'
+      - name: Deploy backend on server
+        shell: bash
+        run: |
           set -euo pipefail
 
-          IMAGE="$1"
-          TAG="$2"
-          CONTAINER="$3"
-          ENV_FILE="$4"
-          PORT_BIND="$5"
-          NETWORK_ALIAS="$6"
-          HEALTH_URL="$7"
+          HOST="$(printf "%s" "${{ secrets.TOPTRY_PROD_HOST }}" | tr -d '\r\n')"
+          USER="$(printf "%s" "${{ secrets.TOPTRY_PROD_USER }}" | tr -d '\r\n')"
+          PORT="$(printf "%s" "${{ secrets.TOPTRY_PROD_PORT }}" | tr -d '\r\n')"
+
+          if [ -z "$PORT" ]; then
+            PORT="22"
+          fi
+
+          ssh -i ~/.ssh/id_ed25519 -p "$PORT" "$USER@$HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+
+          cd /opt/toptry_true
+
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+
+          echo "Deploying commit:"
+          git log -1 --oneline
+
+          ENV_FILE="/root/toptry-runtime.env"
+          if [ ! -f "$ENV_FILE" ]; then
+            ENV_FILE="/root/toptry-ai-prod.env"
+          fi
 
           if [ ! -f "$ENV_FILE" ]; then
-            echo "ERROR: env file not found: $ENV_FILE" >&2
+            echo "ERROR: env file not found" >&2
             exit 1
           fi
 
-          echo '${{ secrets.GHCR_TOKEN }}' | docker login ghcr.io -u '${{ secrets.GHCR_USER }}' --password-stdin
-
-          docker pull "${IMAGE}:${TAG}"
-
-          docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-
-          docker run -d \
-            --name "$CONTAINER" \
-            --restart unless-stopped \
-            --network toptry-ai_default \
-            --network-alias "$NETWORK_ALIAS" \
-            --env-file "$ENV_FILE" \
-            -p "$PORT_BIND" \
-            "${IMAGE}:${TAG}"
+          docker compose -f docker-compose.timeweb.yml --env-file "$ENV_FILE" build backend
+          docker compose -f docker-compose.timeweb.yml --env-file "$ENV_FILE" up -d backend
 
           for i in $(seq 1 30); do
-            if curl -fsS "$HEALTH_URL" >/dev/null; then
-              echo "Healthcheck OK: $HEALTH_URL"
+            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null; then
+              echo "Backend healthcheck OK"
+              curl -sS http://127.0.0.1:8080/api/health
+              echo
               exit 0
             fi
+
             echo "Waiting for backend healthcheck... $i"
             sleep 2
           done
 
-          echo "ERROR: backend healthcheck failed: $HEALTH_URL" >&2
-          docker logs --tail 200 "$CONTAINER" || true
+          echo "ERROR: backend healthcheck failed" >&2
+          docker logs --tail 200 toptry-ai-prod || true
           exit 1
           REMOTE
