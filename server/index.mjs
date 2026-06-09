@@ -5129,14 +5129,13 @@ function buildCatalogDedupeKey(row) {
   const imageUrl = normalizeCatalogImageForDedupe(
     pickFirst(row, ["image", "imageurl", "picture", "img"])
   );
-  const price = String(
-    toPrice(pickFirst(row, ["price", "current_price", "price_value"])) || ""
-  );
   const brand = normalizeCatalogBrandForDedupe(
     pickFirst(row, ["brand", "vendor", "manufacturer"])
   );
 
-  return [imageUrl, brand, price].join("|");
+  // Price must NOT be part of product identity.
+  // Otherwise every price change creates a new product id and price tracking misses drops.
+  return [imageUrl, brand].join("|");
 }
 
 function buildCatalogExternalId(row) {
@@ -10780,6 +10779,119 @@ app.post("/api/admin/catalog/record-price-changes", async (req, res) => {
     await prisma.$executeRawUnsafe(`create index if not exists "CatalogProductPriceChange_detectedAt_idx" on "CatalogProductPriceChange"("detectedAt");`);
     await prisma.$executeRawUnsafe(`create index if not exists "CatalogProductPriceChange_direction_idx" on "CatalogProductPriceChange"(direction);`);
 
+    // Backfill hidden drops caused by old product ids that included price in dedupe key.
+    // Stable match: merchant + normalized brand + normalized imageUrl.
+    const insertedHiddenDrops = await prisma.$executeRawUnsafe(
+      `
+      with active_products as (
+        select
+          p.id,
+          p.merchant,
+          p.title,
+          p.brand,
+          p.price,
+          p."oldPrice",
+          p.currency,
+          p."imageUrl",
+          p."productUrl",
+          p."affiliateUrl",
+          lower(coalesce(p.brand, '')) as brand_key,
+          regexp_replace(lower(coalesce(p."imageUrl", '')), '[?#].*$', '') as image_key
+        from "CatalogProduct" p
+        where p."isActive" = true
+          and p.merchant <> 'snowqueen'
+          and p.price is not null
+          and p.price > 0
+          and coalesce(p."imageUrl", '') <> ''
+      ),
+      old_products as (
+        select
+          p.id,
+          p.merchant,
+          p.title,
+          p.brand,
+          p.price,
+          p."oldPrice",
+          p.currency,
+          p."imageUrl",
+          p."productUrl",
+          p."affiliateUrl",
+          lower(coalesce(p.brand, '')) as brand_key,
+          regexp_replace(lower(coalesce(p."imageUrl", '')), '[?#].*$', '') as image_key,
+          p."updatedAt"
+        from "CatalogProduct" p
+        where p."isActive" = false
+          and p.merchant <> 'snowqueen'
+          and p.price is not null
+          and p.price > 0
+          and coalesce(p."imageUrl", '') <> ''
+      ),
+      best_old as (
+        select distinct on (a.id)
+          a.id as active_id,
+          a.merchant,
+          a.title,
+          a.price as current_price,
+          a."oldPrice" as current_old_price,
+          a.currency,
+          a."imageUrl",
+          a."productUrl",
+          a."affiliateUrl",
+          o.id as old_id,
+          o.price as previous_price,
+          o."updatedAt" as old_updated_at
+        from active_products a
+        join old_products o
+          on o.merchant = a.merchant
+         and o.brand_key = a.brand_key
+         and o.image_key = a.image_key
+         and o.id <> a.id
+        where a.price < o.price
+          and (o.price - a.price) >= $2
+          and (case when o.price > 0 then ((o.price - a.price) / o.price) * 100 else 0 end) >= $3
+        order by a.id, o.price desc, o."updatedAt" desc
+      )
+      insert into "CatalogProductPriceChange" (
+        id,
+        "changeKey",
+        "productId",
+        merchant,
+        title,
+        "previousPrice",
+        "currentPrice",
+        delta,
+        "deltaPct",
+        direction,
+        "detectedAt",
+        "pipelineRunId",
+        "imageUrl",
+        "productUrl",
+        "affiliateUrl"
+      )
+      select
+        'price-change-hidden-' || md5(active_id || ':' || old_id || ':' || previous_price::text || ':' || current_price::text),
+        md5('hidden:' || active_id || ':' || old_id || ':' || previous_price::text || ':' || current_price::text),
+        active_id,
+        merchant,
+        title,
+        previous_price,
+        current_price,
+        previous_price - current_price,
+        case when previous_price > 0 then round((((previous_price - current_price) / previous_price) * 100)::numeric, 2)::double precision else 0 end,
+        'DROP',
+        now(),
+        $1,
+        "imageUrl",
+        "productUrl",
+        "affiliateUrl"
+      from best_old
+      on conflict ("changeKey") do nothing
+      `,
+      pipelineRunId,
+      minDeltaRub,
+      minDeltaPct
+    );
+
     const insertedDrops = await prisma.$executeRawUnsafe(
       `
       insert into "CatalogProductPriceChange" (
@@ -10891,6 +11003,7 @@ app.post("/api/admin/catalog/record-price-changes", async (req, res) => {
       ok: true,
       pipelineRunId,
       insertedDrops,
+      insertedHiddenDrops,
       snapshotUpdated,
       byMerchant,
       minDeltaRub,
