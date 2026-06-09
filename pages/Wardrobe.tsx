@@ -1,5 +1,6 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
+import { catalogImageSrc } from "../utils/catalogImageSrc";
 import { useAppState } from '../store';
 import { ICONS } from '../constants';
 import { Category, Gender, WardrobeItem } from '../types';
@@ -54,6 +55,8 @@ const Wardrobe = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [menuItem, setMenuItem] = useState<WardrobeItem | null>(null);
   const [swipedItemId, setSwipedItemId] = useState<string | null>(null);
+  const [wardrobePriceDrops, setWardrobePriceDrops] = useState<any[]>([]);
+  const [priceDropsLoading, setPriceDropsLoading] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const touchCurrentXRef = useRef<number | null>(null);
@@ -65,6 +68,52 @@ const Wardrobe = () => {
     activeCategory === 'all'
       ? wardrobe
       : wardrobe.filter((i) => i.category === activeCategory);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!user?.id) {
+      setWardrobePriceDrops([]);
+      return;
+    }
+
+    const hasCatalogItems = wardrobe.some((item) => item?.sourceType === 'catalog' || item?.isCatalog);
+    if (!hasCatalogItems) {
+      setWardrobePriceDrops([]);
+      return;
+    }
+
+    (async () => {
+      setPriceDropsLoading(true);
+      try {
+        const resp = await fetch(withApiOrigin('/api/wardrobe/price-drops?limit=8'), {
+          credentials: 'include',
+        });
+
+        if (!resp.ok) {
+          if (!cancelled) setWardrobePriceDrops([]);
+          return;
+        }
+
+        const data = await resp.json().catch(() => ({}));
+        const items = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data?.products)
+            ? data.products
+            : [];
+
+        if (!cancelled) setWardrobePriceDrops(items);
+      } catch {
+        if (!cancelled) setWardrobePriceDrops([]);
+      } finally {
+        if (!cancelled) setPriceDropsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, wardrobe.length]);
 
   const isCatalogWardrobeItem = (item: WardrobeItem | null | undefined) =>
     item?.sourceType === 'catalog' || !!item?.isCatalog;
@@ -197,6 +246,17 @@ const Wardrobe = () => {
 
     const url = withApiOrigin(
       `/api/out/product/${encodeURIComponent(item.id)}?placement=wardrobe`
+    );
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const openBuyForWardrobePriceDrop = (item: any) => {
+    const productId = String(item?.id || item?.productId || item?.wardrobeItemId || '').trim();
+    if (!productId) return;
+
+    const url = withApiOrigin(
+      `/api/out/product/${encodeURIComponent(productId)}?placement=wardrobe_price_drop&wardrobeItemId=${encodeURIComponent(String(item?.wardrobeItemId || ''))}`
     );
 
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -1096,6 +1156,95 @@ const Wardrobe = () => {
             </div>
           </div>
         )}
+
+        {wardrobePriceDrops.length > 0 ? (
+          <section className="rounded-[32px] border border-zinc-100 bg-zinc-50 p-4 space-y-4">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-zinc-400">
+                  Цена снизилась
+                </p>
+                <h2 className="mt-1 text-xl font-black uppercase tracking-tighter">
+                  Подешевело в шкафу
+                </h2>
+              </div>
+              {priceDropsLoading ? (
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+                  Обновляем
+                </span>
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {wardrobePriceDrops.slice(0, 4).map((item: any) => {
+                const image =
+                  Array.isArray(item.images) && item.images[0]
+                    ? item.images[0]
+                    : (item.imageUrl || item.wardrobeImageUrl || '');
+
+                const currentPrice = Number(item.currentPrice || item.price || 0);
+                const previousPrice = Number(item.previousPrice || item.wardrobePrice || 0);
+                const delta = Number(item.delta || (previousPrice > currentPrice ? previousPrice - currentPrice : 0));
+                const deltaPct = Number(item.deltaPct || (previousPrice > currentPrice && previousPrice > 0 ? ((previousPrice - currentPrice) / previousPrice) * 100 : 0));
+                const dropRub = Math.max(0, Math.round(delta));
+                const discount = Math.max(0, Math.round(deltaPct));
+
+                return (
+                  <div key={`${item.wardrobeItemId || item.id}-${item.id}`} className="rounded-[24px] bg-white border border-zinc-100 p-3 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/product/${encodeURIComponent(item.id)}`)}
+                      className="relative block w-full aspect-[3/4] rounded-[20px] bg-zinc-50 overflow-hidden"
+                    >
+                      {dropRub > 0 ? (
+                        <div className="absolute left-2 top-2 z-10 rounded-full bg-zinc-950 px-2.5 py-1 text-[10px] font-black text-white">
+                          −{dropRub.toLocaleString('ru-RU')} ₽
+                        </div>
+                      ) : null}
+
+                      {image ? (
+                        <img
+                          src={catalogImageSrc(image, { w: 420 })}
+                          alt=""
+                          className="w-full h-full object-contain"
+                        />
+                      ) : null}
+                    </button>
+
+                    <p className="mt-3 text-[10px] font-black uppercase tracking-tight line-clamp-2">
+                      {item.title || item.wardrobeTitle || 'Товар'}
+                    </p>
+
+                    {dropRub > 0 ? (
+                      <p className="mt-1 text-[10px] font-black text-emerald-700">
+                        Подешевело на {dropRub.toLocaleString('ru-RU')} ₽{discount > 0 ? ` • −${discount}%` : ''}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <p className="text-xs font-black text-zinc-950">
+                        {currentPrice.toLocaleString('ru-RU')} ₽
+                      </p>
+                      {previousPrice > currentPrice ? (
+                        <p className="text-[10px] font-bold text-zinc-400 line-through">
+                          {previousPrice.toLocaleString('ru-RU')} ₽
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openBuyForWardrobePriceDrop(item)}
+                      className="mt-3 h-9 w-full rounded-full bg-zinc-900 text-white text-[9px] font-black uppercase tracking-[0.16em]"
+                    >
+                      Купить дешевле
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         {wardrobe.length === 0 ? (
           <div className="py-24 text-center border-2 border-dashed border-zinc-100 rounded-[48px] bg-zinc-50 px-8 space-y-8">
