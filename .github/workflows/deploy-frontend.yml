@@ -61,6 +61,7 @@ jobs:
           host: ${{ secrets.TOPTRY_PROD_HOST }}
           username: ${{ secrets.TOPTRY_PROD_USER }}
           key: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          port: ${{ secrets.TOPTRY_PROD_PORT }}
           script: |
             set -euo pipefail
 
