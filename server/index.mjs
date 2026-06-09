@@ -9445,6 +9445,20 @@ app.get("/api/catalog/products/:id", async (req, res) => {
 
 
 
+
+function shuffleCatalogCollectionRows(rows) {
+  const out = Array.isArray(rows) ? rows.slice() : [];
+
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
+  }
+
+  return out;
+}
+
 app.get("/api/catalog/deals", async (req, res) => {
   try {
     const rawLimit = Number(req.query.limit || 4);
@@ -9591,6 +9605,8 @@ app.get("/api/catalog/deals", async (req, res) => {
       };
     }).sort((a, b) => b._score - a._score);
 
+    const selectionPool = shuffleCatalogCollectionRows(scored.slice(0, Math.max(limit * 30, 120)));
+
     const pick = (merchantMax, groupMax, bagMax, luxuryMax, allowTitleDupes = false) => {
       const selected = [];
       const merchantCounts = new Map();
@@ -9599,7 +9615,7 @@ app.get("/api/catalog/deals", async (req, res) => {
       let bagCount = 0;
       let luxuryCount = 0;
 
-      for (const p of scored) {
+      for (const p of selectionPool) {
         const merchant = String(p.merchant || "unknown");
         const group = String(p.taxonomyGroup || "OTHER");
         const tk = p._titleKey || p.id;
@@ -9676,7 +9692,7 @@ app.get("/api/catalog/deals", async (req, res) => {
         minDiscount,
         pool: rows.length,
         selected: products.length,
-        strategy: "deal_quality_score_discount_tryon_size_diverse",
+        strategy: "deal_quality_score_discount_tryon_size_diverse_random_pool",
       },
     });
   } catch (e) {
@@ -10044,13 +10060,15 @@ app.get("/api/catalog/home-new", async (req, res) => {
       return { ...p, _score: score, _titleKey: titleKey(p) };
     }).sort((a, b) => b._score - a._score);
 
+    const selectionPool = shuffleCatalogCollectionRows(scored.slice(0, Math.max(limit * 30, 120)));
+
     const pickWithLimits = (merchantMax, groupMax, allowTitleDupes = false) => {
       const picked = [];
       const merchantCounts = new Map();
       const groupCounts = new Map();
       const seenTitles = new Set();
 
-      for (const p of scored) {
+      for (const p of selectionPool) {
         const merchant = String(p.merchant || "unknown");
         const group = String(p.taxonomyGroup || "OTHER");
         const tk = p._titleKey || p.id;
@@ -10109,7 +10127,7 @@ app.get("/api/catalog/home-new", async (req, res) => {
         limit,
         pool: rows.length,
         selected: products.length,
-        strategy: "fresh_ai_clean_diverse",
+        strategy: "fresh_ai_clean_diverse_random_pool",
       },
     });
   } catch (e) {
