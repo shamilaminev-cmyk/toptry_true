@@ -3966,6 +3966,12 @@ function toPrice(value) {
 }
 
 
+const DISABLED_CATALOG_MERCHANTS = new Set(["snowqueen"]);
+
+function isCatalogMerchantDisabled(merchant) {
+  return DISABLED_CATALOG_MERCHANTS.has(String(merchant || "").trim().toLowerCase());
+}
+
 const SAFE_CATALOG_ACTIVE_GROUPS = ["SHOES", "CLOTHING", "BAGS"];
 
 const BLOCK_CATALOG_RESTORE_TITLE_RE =
@@ -5478,6 +5484,14 @@ function startCatalogImportJob(merchant) {
 
   if (!allowed.has(m)) {
     return { ok: false, status: 400, error: "Unknown merchant" };
+  }
+
+  if (isCatalogMerchantDisabled(m)) {
+    return {
+      ok: false,
+      status: 410,
+      error: `Merchant ${m} feed is disabled`,
+    };
   }
 
   const existing = catalogImportJobs.get(m);
@@ -8109,6 +8123,11 @@ function mergeCatalogSizeArrays(a = {}, b = {}) {
 
 
 app.post("/api/admin/catalog/import/snowqueen", async (_req, res) => {
+  return res.status(410).json({
+    error: "snowqueen feed is disabled",
+    reason: "Remote images are protected by Variti and are not reliable for server-side catalog processing",
+  });
+
   try {
     const FEED_URL = process.env.ADMITAD_SNOWQUEEN_FEED_URL || "";
     if (!FEED_URL) {
