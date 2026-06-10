@@ -501,6 +501,48 @@ async function sendSmsRu(phone, message) {
   return data;
 }
 
+async function notifySupportRequestTelegram({ request, user }) {
+  const token = process.env.TELEGRAM_BOT_TOKEN || "";
+  const chatId = process.env.TELEGRAM_SUPPORT_CHAT_ID || "";
+
+  if (!token || !chatId) {
+    return { ok: false, skipped: true, reason: "telegram_not_configured" };
+  }
+
+  const text = [
+    "Новое обращение TopTry",
+    "",
+    `Тема: ${request.topic}`,
+    `Статус: ${request.status}`,
+    `Источник: ${request.source}`,
+    user?.phone ? `Телефон: ${user.phone}` : null,
+    user?.username ? `Username: ${user.username}` : null,
+    request.pageUrl ? `Страница: ${request.pageUrl}` : null,
+    request.lookId ? `lookId: ${request.lookId}` : null,
+    request.productId ? `productId: ${request.productId}` : null,
+    "",
+    String(request.message || "").slice(0, 1500),
+  ].filter(Boolean).join("\n");
+
+  const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true,
+    }),
+  });
+
+  const data = await resp.json().catch(() => null);
+
+  if (!resp.ok || !data?.ok) {
+    throw new Error(`telegram send failed: ${resp.status} ${JSON.stringify(data)}`);
+  }
+
+  return { ok: true };
+}
+
 // ---------- AUTH ----------
 app.post("/api/auth/register", async (req, res) => {
   try {
@@ -1891,6 +1933,151 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
     });
   } catch (e) {
     console.error("[toptry] /api/admin/dashboard/summary error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
+app.post("/api/support/request", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth?.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const topic = String(req.body?.topic || "").trim();
+    const message = String(req.body?.message || "").trim();
+    const source = String(req.body?.source || "profile").trim() || "profile";
+
+    if (!topic) {
+      return res.status(400).json({ error: "Topic is required" });
+    }
+
+    if (!message || message.length < 3) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    if (message.length > 4000) {
+      return res.status(400).json({ error: "Message is too long" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, phone: true, username: true, email: true },
+    });
+
+    const request = await prisma.supportRequest.create({
+      data: {
+        id: `sr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        userId,
+        topic,
+        message,
+        source,
+        pageUrl: req.body?.pageUrl ? String(req.body.pageUrl).slice(0, 1000) : null,
+        lookId: req.body?.lookId ? String(req.body.lookId).slice(0, 200) : null,
+        productId: req.body?.productId ? String(req.body.productId).slice(0, 200) : null,
+        userAgent: String(req.headers["user-agent"] || "").slice(0, 1000),
+        context: {
+          clientContext: req.body?.context || null,
+          ip:
+            req.headers["x-forwarded-for"] ||
+            req.socket?.remoteAddress ||
+            null,
+        },
+      },
+    });
+
+    notifySupportRequestTelegram({ request, user }).catch((e) => {
+      console.error("[toptry] support telegram notification error", e);
+    });
+
+    return res.json({
+      ok: true,
+      request: {
+        id: request.id,
+        topic: request.topic,
+        status: request.status,
+        createdAt: request.createdAt,
+      },
+    });
+  } catch (e) {
+    console.error("[toptry] /api/support/request error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.get("/api/admin/support/requests", requireAuth, requireTopTryAdmin, async (req, res) => {
+  try {
+    const limitRaw = Number(req.query.limit || 50);
+    const limit = Number.isFinite(limitRaw)
+      ? Math.max(1, Math.min(100, Math.floor(limitRaw)))
+      : 50;
+
+    const status = String(req.query.status || "").trim();
+
+    const requests = await prisma.supportRequest.findMany({
+      where: status ? { status } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            id: true,
+            phone: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    return res.json({
+      ok: true,
+      requests: requests.map((r) => ({
+        id: r.id,
+        topic: r.topic,
+        message: r.message,
+        status: r.status,
+        source: r.source,
+        pageUrl: r.pageUrl,
+        lookId: r.lookId,
+        productId: r.productId,
+        userAgent: r.userAgent,
+        context: r.context,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        user: r.user,
+      })),
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/support/requests error", e);
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+app.patch("/api/admin/support/requests/:id", requireAuth, requireTopTryAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const status = String(req.body?.status || "").trim();
+
+    const allowed = new Set(["OPEN", "IN_PROGRESS", "CLOSED", "SPAM"]);
+    if (!allowed.has(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    const request = await prisma.supportRequest.update({
+      where: { id },
+      data: { status },
+    });
+
+    return res.json({
+      ok: true,
+      request: {
+        id: request.id,
+        status: request.status,
+        updatedAt: request.updatedAt,
+      },
+    });
+  } catch (e) {
+    console.error("[toptry] /api/admin/support/requests/:id error", e);
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });

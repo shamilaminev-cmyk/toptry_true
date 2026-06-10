@@ -30,8 +30,9 @@ model User {
   following     Follow[]       @relation("following")
   followers     Follow[]       @relation("followers")
   phoneOtps     PhoneOtp[]
-  usageEvents   UsageEvent[]
-  entitlement   UserEntitlement?
+  usageEvents     UsageEvent[]
+  entitlement     UserEntitlement?
+  supportRequests SupportRequest[]
 }
 
 model WardrobeItem {
@@ -356,6 +357,29 @@ model UsageEvent {
   @@index([lookId])
   @@index([type])
   @@index([status])
+}
+
+model SupportRequest {
+  id        String   @id
+  userId    String?
+  topic     String
+  message   String
+  status    String   @default("OPEN")
+  source    String   @default("profile")
+  pageUrl   String?
+  lookId    String?
+  productId String?
+  userAgent String?
+  context   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([topic])
+  @@index([source])
 }
 
 model GenerationCreditGrant {
