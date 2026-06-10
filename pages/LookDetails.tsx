@@ -216,6 +216,11 @@ const LookDetails = () => {
   const [reportBusy, setReportBusy] = useState(false);
   const [reportResult, setReportResult] = useState('');
   const [reportError, setReportError] = useState('');
+  const [collections, setCollections] = useState<any[]>([]);
+  const [selectedCollectionId, setSelectedCollectionId] = useState('');
+  const [collectionBusy, setCollectionBusy] = useState(false);
+  const [collectionResult, setCollectionResult] = useState('');
+  const [collectionError, setCollectionError] = useState('');
   const commentsRef = useRef<HTMLElement | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -280,6 +285,34 @@ const LookDetails = () => {
       commentInputRef.current?.focus();
     }, 120);
   }, [loading, location.search, id]);
+
+  useEffect(() => {
+    const own = Boolean(localLooks.find((l) => String(l.id) === String(look?.id)));
+    if (!look?.id || !own || !look?.isPublic) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const resp = await fetch('/api/profile/look-collections', {
+          credentials: 'include',
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok || cancelled) return;
+
+        const rows = Array.isArray(data?.collections) ? data.collections : [];
+        setCollections(rows);
+        setSelectedCollectionId((prev) => prev || rows[0]?.id || '');
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [look?.id, look?.isPublic, localLooks]);
 
   if (loading) return <div className="p-10 text-center text-zinc-400">Загрузка...</div>;
   if (!look) return <div className="p-10 text-center">Образ не найден</div>;
@@ -419,6 +452,59 @@ const LookDetails = () => {
       showToast(data?.saved ? 'Образ сохранён' : 'Образ убран из сохранённых');
     } finally {
       setSaveBusy(false);
+    }
+  };
+
+  const loadCollections = async () => {
+    try {
+      const resp = await fetch('/api/profile/look-collections', {
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) return;
+
+      const rows = Array.isArray(data?.collections) ? data.collections : [];
+      setCollections(rows);
+      setSelectedCollectionId((prev) => prev || rows[0]?.id || '');
+    } catch {
+      // ignore
+    }
+  };
+
+  const addToCollection = async () => {
+    setCollectionResult('');
+    setCollectionError('');
+
+    if (!selectedCollectionId) {
+      setCollectionError('Сначала создайте подборку в профиле');
+      return;
+    }
+
+    if (!look?.id) return;
+
+    setCollectionBusy(true);
+
+    try {
+      const resp = await fetch(`/api/profile/look-collections/${encodeURIComponent(selectedCollectionId)}/items`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lookId: look.id }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось добавить образ в подборку');
+      }
+
+      setCollectionResult('Образ добавлен в подборку');
+      await loadCollections();
+    } catch (e: any) {
+      setCollectionError(e?.message || 'Не удалось добавить образ в подборку');
+    } finally {
+      setCollectionBusy(false);
     }
   };
 
@@ -635,6 +721,66 @@ const LookDetails = () => {
             <p className="mt-3 text-xs text-zinc-400 leading-relaxed">
               Соберите новый образ из этих товаров и посмотрите, как он будет выглядеть на вашем аватаре.
             </p>
+          </section>
+        )}
+
+        {isOwnLook && look.isPublic && (
+          <section className="rounded-3xl border border-zinc-100 bg-zinc-50 p-4 space-y-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                Подборки
+              </p>
+              <h3 className="mt-1 text-sm font-black tracking-tight">
+                Добавить в подборку
+              </h3>
+              <p className="mt-2 text-xs text-zinc-500 leading-relaxed">
+                Подборки отображаются на публичной витрине автора.
+              </p>
+            </div>
+
+            {collections.length ? (
+              <div className="grid md:grid-cols-[minmax(0,1fr)_auto] gap-2">
+                <select
+                  value={selectedCollectionId}
+                  onChange={(e) => setSelectedCollectionId(e.target.value)}
+                  className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm font-bold outline-none"
+                >
+                  {collections.map((collection) => (
+                    <option key={collection.id} value={collection.id}>
+                      {collection.title}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={addToCollection}
+                  disabled={collectionBusy}
+                  className="h-11 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.16em] disabled:opacity-50"
+                >
+                  {collectionBusy ? 'Добавляем...' : 'Добавить'}
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/profile"
+                className="h-11 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.16em] inline-flex items-center justify-center"
+              >
+                Создать подборку в профиле
+              </Link>
+            )}
+
+            {collectionResult ? (
+              <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-3 text-xs font-bold text-emerald-700">
+                {collectionResult}
+              </div>
+            ) : null}
+
+            {collectionError ? (
+              <div className="rounded-2xl bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-700">
+                {collectionError}
+              </div>
+            ) : null}
           </section>
         )}
 

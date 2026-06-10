@@ -50,6 +50,13 @@ const Profile = () => {
   const [publicProfileSaving, setPublicProfileSaving] = React.useState(false);
   const [publicProfileResult, setPublicProfileResult] = React.useState('');
   const [publicProfileError, setPublicProfileError] = React.useState('');
+  const [collections, setCollections] = React.useState<any[]>([]);
+  const [collectionsLoading, setCollectionsLoading] = React.useState(false);
+  const [collectionTitle, setCollectionTitle] = React.useState('');
+  const [collectionDescription, setCollectionDescription] = React.useState('');
+  const [collectionCreating, setCollectionCreating] = React.useState(false);
+  const [collectionError, setCollectionError] = React.useState('');
+  const [collectionResult, setCollectionResult] = React.useState('');
 
   useEffect(() => {
     if (!avatarOpen) return;
@@ -92,6 +99,12 @@ const Profile = () => {
     setPublicBio(user?.publicBio || '');
     setPublicSocialUrl(user?.publicSocialUrl || '');
   }, [user?.publicSlug, user?.publicDisplayName, user?.publicBio, user?.publicSocialUrl]);
+
+  useEffect(() => {
+    if (user?.id) {
+      loadCollections();
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -213,6 +226,78 @@ const Profile = () => {
       setPublicProfileError(e?.message || 'Не удалось сохранить публичную витрину');
     } finally {
       setPublicProfileSaving(false);
+    }
+  };
+
+  const loadCollections = async () => {
+    setCollectionsLoading(true);
+    setCollectionError('');
+
+    try {
+      const resp = await fetch('/api/profile/look-collections', {
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        navigate('/auth');
+        return;
+      }
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось загрузить подборки');
+      }
+
+      setCollections(Array.isArray(data?.collections) ? data.collections : []);
+    } catch (e: any) {
+      setCollectionError(e?.message || 'Не удалось загрузить подборки');
+    } finally {
+      setCollectionsLoading(false);
+    }
+  };
+
+  const createCollection = async () => {
+    setCollectionError('');
+    setCollectionResult('');
+
+    const title = collectionTitle.trim();
+    if (!title) {
+      setCollectionError('Введите название подборки');
+      return;
+    }
+
+    setCollectionCreating(true);
+
+    try {
+      const resp = await fetch('/api/profile/look-collections', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          description: collectionDescription,
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        navigate('/auth');
+        return;
+      }
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось создать подборку');
+      }
+
+      setCollectionTitle('');
+      setCollectionDescription('');
+      setCollectionResult('Подборка создана');
+      await loadCollections();
+    } catch (e: any) {
+      setCollectionError(e?.message || 'Не удалось создать подборку');
+    } finally {
+      setCollectionCreating(false);
     }
   };
 
@@ -726,6 +811,111 @@ const Profile = () => {
             {publicProfileSaving ? 'Сохраняем...' : 'Сохранить витрину'}
           </button>
         </div>
+        <div className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                Мои подборки
+              </p>
+              <h2 className="mt-1 text-xl font-black tracking-tight">
+                Коллекции для витрины
+              </h2>
+              <p className="mt-2 text-sm text-zinc-500 leading-relaxed max-w-2xl">
+                Собирайте опубликованные образы в тематические подборки: офис, выходные, вечер, сезонная капсула.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadCollections}
+              disabled={collectionsLoading}
+              className="h-10 px-4 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-black uppercase tracking-[0.16em] disabled:opacity-50"
+            >
+              {collectionsLoading ? 'Обновляем...' : 'Обновить'}
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+            <label className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                Название подборки
+              </span>
+              <input
+                value={collectionTitle}
+                onChange={(e) => setCollectionTitle(e.target.value.slice(0, 80))}
+                placeholder="Например: Офис без скуки"
+                className="w-full h-12 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-bold outline-none"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                Описание
+              </span>
+              <input
+                value={collectionDescription}
+                onChange={(e) => setCollectionDescription(e.target.value.slice(0, 220))}
+                placeholder="Коротко о стиле подборки"
+                className="w-full h-12 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-bold outline-none"
+              />
+            </label>
+          </div>
+
+          <button
+            type="button"
+            onClick={createCollection}
+            disabled={collectionCreating}
+            className="w-full h-12 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] disabled:opacity-50"
+          >
+            {collectionCreating ? 'Создаём...' : 'Создать подборку'}
+          </button>
+
+          {collectionResult ? (
+            <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-3 text-xs font-bold text-emerald-700">
+              {collectionResult}
+            </div>
+          ) : null}
+
+          {collectionError ? (
+            <div className="rounded-2xl bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-700">
+              {collectionError}
+            </div>
+          ) : null}
+
+          {collections.length ? (
+            <div className="grid md:grid-cols-2 gap-3">
+              {collections.map((collection) => (
+                <div key={collection.id} className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black tracking-tight">
+                        {collection.title}
+                      </div>
+                      {collection.description ? (
+                        <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                          {collection.description}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
+                      {collection.looksCount || 0}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">
+                    {collection.looksCount ? 'Образы уже добавлены' : 'Добавьте опубликованные образы из карточки образа'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-zinc-50 border border-dashed border-zinc-200 p-5 text-sm text-zinc-500">
+              Подборок пока нет. Создайте первую подборку, а затем добавьте в неё опубликованные образы.
+            </div>
+          )}
+        </div>
+
+
 
 
 

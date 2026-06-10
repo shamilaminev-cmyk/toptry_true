@@ -3361,6 +3361,198 @@ async function getLookVisibleToViewer(lookId, viewerUserId = "") {
   return null;
 }
 
+
+app.get("/api/profile/look-collections", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+
+    const collections = await prisma.lookCollection.findMany({
+      where: { userId },
+      orderBy: [
+        { sortOrder: "asc" },
+        { createdAt: "asc" },
+      ],
+      include: {
+        items: {
+          orderBy: [
+            { sortOrder: "asc" },
+            { createdAt: "asc" },
+          ],
+          include: {
+            look: {
+              select: {
+                id: true,
+                title: true,
+                isPublic: true,
+                resultImageKey: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return res.json({
+      ok: true,
+      collections: collections.map((collection) => ({
+        id: collection.id,
+        title: collection.title,
+        description: collection.description || "",
+        coverLookId: collection.coverLookId || "",
+        isPublic: collection.isPublic,
+        sortOrder: collection.sortOrder || 0,
+        looksCount: (collection.items || []).filter((item) => item.look?.isPublic).length,
+        looks: (collection.items || [])
+          .filter((item) => item.look?.isPublic)
+          .map((item) => ({
+            id: item.look.id,
+            title: item.look.title,
+            resultImageUrl: mediaUrlFromKey(item.look.resultImageKey),
+            updatedAt: item.look.updatedAt.toISOString(),
+          })),
+        createdAt: collection.createdAt.toISOString(),
+        updatedAt: collection.updatedAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    console.error("[toptry] /api/profile/look-collections error", err);
+    return res.status(500).json({ error: err?.message || "Failed to load collections" });
+  }
+});
+
+app.post("/api/profile/look-collections", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const title = String(req.body?.title || "").trim().slice(0, 80);
+    const description = String(req.body?.description || "").trim().slice(0, 220);
+
+    if (!title) {
+      return res.status(400).json({ error: "Название подборки обязательно" });
+    }
+
+    const existingCount = await prisma.lookCollection.count({ where: { userId } });
+    if (existingCount >= 20) {
+      return res.status(400).json({ error: "Пока можно создать до 20 подборок" });
+    }
+
+    const collection = await prisma.lookCollection.create({
+      data: {
+        id: `lc-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        userId,
+        title,
+        description: description || null,
+        isPublic: true,
+        sortOrder: existingCount,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      collection: {
+        id: collection.id,
+        title: collection.title,
+        description: collection.description || "",
+        coverLookId: collection.coverLookId || "",
+        isPublic: collection.isPublic,
+        sortOrder: collection.sortOrder || 0,
+        looksCount: 0,
+        looks: [],
+        createdAt: collection.createdAt.toISOString(),
+        updatedAt: collection.updatedAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("[toptry] POST /api/profile/look-collections error", err);
+    return res.status(500).json({ error: err?.message || "Failed to create collection" });
+  }
+});
+
+app.post("/api/profile/look-collections/:id/items", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const collectionId = String(req.params.id || "");
+    const lookId = String(req.body?.lookId || "");
+
+    if (!collectionId || !lookId) {
+      return res.status(400).json({ error: "collectionId and lookId are required" });
+    }
+
+    const [collection, look] = await Promise.all([
+      prisma.lookCollection.findFirst({
+        where: { id: collectionId, userId },
+      }),
+      prisma.look.findFirst({
+        where: { id: lookId, userId },
+        select: { id: true, isPublic: true },
+      }),
+    ]);
+
+    if (!collection) {
+      return res.status(404).json({ error: "Подборка не найдена" });
+    }
+
+    if (!look) {
+      return res.status(404).json({ error: "Образ не найден" });
+    }
+
+    if (!look.isPublic) {
+      return res.status(400).json({ error: "В подборку можно добавить только опубликованный образ" });
+    }
+
+    const currentCount = await prisma.lookCollectionItem.count({
+      where: { collectionId },
+    });
+
+    const item = await prisma.lookCollectionItem.upsert({
+      where: {
+        collectionId_lookId: {
+          collectionId,
+          lookId,
+        },
+      },
+      update: {},
+      create: {
+        id: `lci-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        collectionId,
+        lookId,
+        sortOrder: currentCount,
+      },
+    });
+
+    return res.json({ ok: true, item });
+  } catch (err) {
+    console.error("[toptry] POST /api/profile/look-collections/:id/items error", err);
+    return res.status(500).json({ error: err?.message || "Failed to add look to collection" });
+  }
+});
+
+app.delete("/api/profile/look-collections/:id/items/:lookId", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const collectionId = String(req.params.id || "");
+    const lookId = String(req.params.lookId || "");
+
+    const collection = await prisma.lookCollection.findFirst({
+      where: { id: collectionId, userId },
+      select: { id: true },
+    });
+
+    if (!collection) {
+      return res.status(404).json({ error: "Подборка не найдена" });
+    }
+
+    await prisma.lookCollectionItem.deleteMany({
+      where: { collectionId, lookId },
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[toptry] DELETE /api/profile/look-collections/:id/items/:lookId error", err);
+    return res.status(500).json({ error: err?.message || "Failed to remove look from collection" });
+  }
+});
+
 app.get("/api/users/public/:slug", async (req, res) => {
   try {
     const slug = String(req.params.slug || "").trim();
