@@ -195,7 +195,7 @@ const UserStorefront: React.FC = () => {
   const displayName = profile.username || 'Автор TopTry';
 
   return (
-    <div className="px-4 py-6 md:py-10 max-w-6xl mx-auto space-y-8">
+    <div className="px-4 py-6 md:py-10 pb-32 md:pb-36 max-w-6xl mx-auto space-y-8">
       <section className="relative overflow-hidden rounded-[36px] bg-zinc-900 text-white p-6 md:p-10">
         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none" />
 
@@ -233,7 +233,7 @@ const UserStorefront: React.FC = () => {
                     rel="noreferrer"
                     className="h-9 px-4 rounded-full bg-white/10 text-white text-[10px] font-black uppercase tracking-[0.16em] flex items-center justify-center"
                   >
-                    Соцсеть
+                    Соцсети автора
                   </a>
                 ) : null}
 

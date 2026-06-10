@@ -43,6 +43,12 @@ const Profile = () => {
   const [supportSending, setSupportSending] = React.useState(false);
   const [supportResult, setSupportResult] = React.useState('');
   const [supportError, setSupportError] = React.useState('');
+  const [publicSlug, setPublicSlug] = React.useState(user?.publicSlug || '');
+  const [publicBio, setPublicBio] = React.useState(user?.publicBio || '');
+  const [publicSocialUrl, setPublicSocialUrl] = React.useState(user?.publicSocialUrl || '');
+  const [publicProfileSaving, setPublicProfileSaving] = React.useState(false);
+  const [publicProfileResult, setPublicProfileResult] = React.useState('');
+  const [publicProfileError, setPublicProfileError] = React.useState('');
 
   useEffect(() => {
     if (!avatarOpen) return;
@@ -78,6 +84,12 @@ const Profile = () => {
     setSizeBottom(user?.sizeBottom || '');
     setSizeShoes(user?.sizeShoes || '');
   }, [user?.sizeTop, user?.sizeBottom, user?.sizeShoes]);
+
+  useEffect(() => {
+    setPublicSlug(user?.publicSlug || '');
+    setPublicBio(user?.publicBio || '');
+    setPublicSocialUrl(user?.publicSocialUrl || '');
+  }, [user?.publicSlug, user?.publicBio, user?.publicSocialUrl]);
 
   useEffect(() => {
     if (!user) return;
@@ -151,6 +163,52 @@ const Profile = () => {
       window.setTimeout(() => setReferralCopied(false), 1800);
     } catch {
       window.prompt('Скопируйте ссылку', link);
+    }
+  };
+
+  const normalizedPublicSlug = String(publicSlug || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  const publicStorefrontUrl = `${window.location.origin}/#/u/${encodeURIComponent(user?.publicSlug || normalizedPublicSlug || user?.id || '')}`;
+
+  const copyPublicStorefrontLink = async () => {
+    try {
+      await navigator.clipboard.writeText(publicStorefrontUrl);
+      setPublicProfileResult('Ссылка на витрину скопирована');
+      window.setTimeout(() => setPublicProfileResult(''), 1800);
+    } catch {
+      window.prompt('Скопируйте ссылку', publicStorefrontUrl);
+    }
+  };
+
+  const savePublicProfile = async () => {
+    setPublicProfileResult('');
+    setPublicProfileError('');
+
+    if (!normalizedPublicSlug || normalizedPublicSlug.length < 3) {
+      setPublicProfileError('Короткая ссылка должна быть не короче 3 символов');
+      return;
+    }
+
+    setPublicProfileSaving(true);
+
+    try {
+      await actions.updatePublicProfile(normalizedPublicSlug, publicBio, publicSocialUrl);
+      await actions.refreshMe();
+      setPublicProfileResult('Публичная витрина сохранена');
+    } catch (e: any) {
+      if (e?.message === 'SESSION_EXPIRED') {
+        setPublicProfileError('Сессия истекла. Войдите заново, чтобы сохранить витрину.');
+        navigate('/auth');
+        return;
+      }
+
+      setPublicProfileError(e?.message || 'Не удалось сохранить публичную витрину');
+    } finally {
+      setPublicProfileSaving(false);
     }
   };
 
@@ -543,6 +601,111 @@ const Profile = () => {
             </div>
           ) : null}
         </section>
+        <div className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                Публичная витрина
+              </p>
+              <h2 className="mt-1 text-xl font-black tracking-tight">
+                Ваша страница автора
+              </h2>
+              <p className="mt-2 text-sm text-zinc-500 leading-relaxed max-w-2xl">
+                Оформите публичную страницу с примеряемыми образами. Эту ссылку можно отправлять подписчикам, партнёрам и брендам.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => navigate(`/u/${user.publicSlug || user.id}`)}
+                className="h-10 px-4 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-black uppercase tracking-[0.16em]"
+              >
+                Открыть
+              </button>
+              <button
+                type="button"
+                onClick={copyPublicStorefrontLink}
+                className="h-10 px-4 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.16em]"
+              >
+                Скопировать
+              </button>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-[220px_minmax(0,1fr)] gap-3">
+            <label className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                Короткая ссылка
+              </span>
+              <div className="flex items-center rounded-2xl border border-zinc-200 bg-zinc-50 overflow-hidden">
+                <span className="pl-4 text-xs text-zinc-400">/u/</span>
+                <input
+                  value={publicSlug}
+                  onChange={(e) => setPublicSlug(e.target.value)}
+                  placeholder="shamil"
+                  className="w-full h-12 bg-transparent px-2 text-sm font-bold outline-none"
+                />
+              </div>
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                Ссылка на соцсети
+              </span>
+              <input
+                value={publicSocialUrl}
+                onChange={(e) => setPublicSocialUrl(e.target.value)}
+                placeholder="https://t.me/... или https://vk.com/..."
+                className="w-full h-12 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-bold outline-none"
+              />
+            </label>
+          </div>
+
+          <label className="block space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+              Описание автора
+            </span>
+            <textarea
+              value={publicBio}
+              onChange={(e) => setPublicBio(e.target.value)}
+              maxLength={280}
+              rows={3}
+              placeholder="Например: собираю примеряемые образы для офиса, выходных и путешествий."
+              className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm outline-none resize-none"
+            />
+            <span className="block text-right text-[10px] font-bold text-zinc-400">
+              {publicBio.length}/280
+            </span>
+          </label>
+
+          <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-3 text-[11px] text-zinc-500 break-all">
+            {publicStorefrontUrl}
+          </div>
+
+          {publicProfileResult ? (
+            <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-3 text-xs font-bold text-emerald-700">
+              {publicProfileResult}
+            </div>
+          ) : null}
+
+          {publicProfileError ? (
+            <div className="rounded-2xl bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-700">
+              {publicProfileError}
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={savePublicProfile}
+            disabled={publicProfileSaving}
+            className="w-full h-12 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] disabled:opacity-50"
+          >
+            {publicProfileSaving ? 'Сохраняем...' : 'Сохранить витрину'}
+          </button>
+        </div>
+
+
 
         <form onSubmit={submitSupportRequest} className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
           <div>

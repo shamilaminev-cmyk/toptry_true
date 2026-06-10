@@ -767,7 +767,27 @@ const LookDetails = () => {
             ))}
           </div>
 
-          {Array.isArray(look.sourceItems) && look.sourceItems.some((i: any) => i.isCatalog) && (
+          
+        {(look.authorSlug || look.userId) && (
+          <div className="bg-white rounded-[28px] border border-zinc-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                Автор образа
+              </p>
+              <div className="mt-1 text-sm font-black tracking-tight">
+                {look.authorName || 'Пользователь TopTry'}
+              </div>
+            </div>
+            <Link
+              to={`/u/${look.authorSlug || look.userId}`}
+              className="h-10 px-4 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.16em] flex items-center justify-center"
+            >
+              Все образы автора
+            </Link>
+          </div>
+        )}
+
+{Array.isArray(look.sourceItems) && look.sourceItems.some((i: any) => i.isCatalog) && (
             <div className="pt-4">
               <div className="bg-zinc-900 text-white p-4 rounded-2xl flex items-center justify-between">
                 <div>
