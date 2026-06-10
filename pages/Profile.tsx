@@ -164,6 +164,49 @@ const Profile = () => {
 
   const bigSrc = withApiOrigin(user.avatarUrl || user.selfieUrl || "");
 
+  const planCode = String(usageInfo?.plan || 'FREE').toUpperCase();
+  const planTitle = {
+    FREE: 'Базовый',
+    TESTER: 'Тестер',
+    ADMIN: 'Администратор',
+  }[planCode] || planCode;
+
+  const planDescription = {
+    FREE: 'Для знакомства с TopTry и регулярной примерки образов.',
+    TESTER: 'Расширенный лимит для активного тестирования продукта.',
+    ADMIN: 'Внутренний тариф команды TopTry с увеличенными лимитами.',
+  }[planCode] || 'Индивидуальный режим доступа к генерациям.';
+
+  const freeGenerationsRemaining = usageInfo
+    ? Math.max(0, Math.min(usageInfo.dailyRemaining, usageInfo.monthlyRemaining))
+    : 0;
+
+  const totalGenerationsAvailable = usageInfo
+    ? freeGenerationsRemaining + Math.max(0, usageInfo.generationCreditsRemaining || 0)
+    : 0;
+
+  const dailyProgressPct = usageInfo?.dailyLimit
+    ? Math.min(100, Math.round((usageInfo.dailyUsed / usageInfo.dailyLimit) * 100))
+    : 0;
+
+  const monthlyProgressPct = usageInfo?.monthlyLimit
+    ? Math.min(100, Math.round((usageInfo.monthlyUsed / usageInfo.monthlyLimit) * 100))
+    : 0;
+
+  const limitStatusText = usageInfo
+    ? totalGenerationsAvailable > 0
+      ? `Доступно генераций: ${totalGenerationsAvailable}`
+      : 'Лимит генераций исчерпан'
+    : 'Загружаем лимиты';
+
+  const nextGenerationHint = usageInfo
+    ? freeGenerationsRemaining > 0
+      ? 'Следующая генерация войдёт в ваш дневной и месячный лимит.'
+      : usageInfo.generationCreditsRemaining > 0
+        ? 'Бесплатный лимит исчерпан, следующая генерация спишется из бонусов.'
+        : 'Сегодня генерации недоступны. Можно пригласить друга и получить бонусы.'
+    : 'Скоро покажем актуальные лимиты.';
+
   const preprocessAvatarFile = async (file: File): Promise<string> => {
     const objectUrl = URL.createObjectURL(file);
 
@@ -312,64 +355,127 @@ const Profile = () => {
         </div>
 
         <div className="bg-zinc-50 rounded-[32px] p-6 space-y-6 border border-zinc-100">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-2">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div className="space-y-3">
               <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
-                Генерации образов
+                Тариф и генерации
               </p>
-              <div className="inline-flex px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] bg-zinc-900 text-white">
-                {usageInfo?.plan || 'FREE'}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] bg-zinc-900 text-white">
+                  {planCode}
+                </div>
+                <div className="inline-flex px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] bg-white border border-zinc-100 text-zinc-700">
+                  {planTitle}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-xl font-black tracking-tight text-zinc-900">
+                  {limitStatusText}
+                </h2>
+                <p className="mt-2 text-xs text-zinc-500 leading-relaxed max-w-xl">
+                  {planDescription} {nextGenerationHint}
+                </p>
               </div>
             </div>
 
-            <div className="text-right">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                Пакеты генераций
-              </p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-900">
-                скоро появятся
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/create')}
+              className="shrink-0 h-11 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
+            >
+              Создать образ
+            </button>
           </div>
 
           {usageInfo ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-4 rounded-2xl border border-zinc-100">
-                <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">
-                  Сегодня
-                </p>
-                <p className="text-lg font-bold">
-                  {usageInfo.dailyUsed}
-                  <span className="text-zinc-300 text-sm"> / {usageInfo.dailyLimit}</span>
-                </p>
-                <p className="mt-1 text-[10px] text-zinc-400 uppercase tracking-widest">
-                  осталось {usageInfo.dailyRemaining}
-                </p>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-zinc-100">
+                  <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                    Сегодня
+                  </p>
+                  <p className="text-lg font-bold">
+                    {usageInfo.dailyRemaining}
+                    <span className="text-zinc-300 text-sm"> осталось</span>
+                  </p>
+                  <p className="mt-1 text-[10px] text-zinc-400 uppercase tracking-widest">
+                    использовано {usageInfo.dailyUsed} из {usageInfo.dailyLimit}
+                  </p>
+                  <div className="mt-3 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-zinc-900"
+                      style={{ width: `${dailyProgressPct}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-zinc-100">
+                  <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                    В этом месяце
+                  </p>
+                  <p className="text-lg font-bold">
+                    {usageInfo.monthlyRemaining}
+                    <span className="text-zinc-300 text-sm"> осталось</span>
+                  </p>
+                  <p className="mt-1 text-[10px] text-zinc-400 uppercase tracking-widest">
+                    использовано {usageInfo.monthlyUsed} из {usageInfo.monthlyLimit}
+                  </p>
+                  <div className="mt-3 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-zinc-900"
+                      style={{ width: `${monthlyProgressPct}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-zinc-100">
+                  <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                    Бонусные
+                  </p>
+                  <p className="text-lg font-bold">
+                    {usageInfo.generationCreditsRemaining}
+                  </p>
+                  <p className="mt-1 text-[10px] text-zinc-400 uppercase tracking-widest">
+                    сверх лимита тарифа
+                  </p>
+                  <p className="mt-3 text-[11px] text-zinc-500 leading-relaxed">
+                    Бонусы можно получить за приглашения или вручную от команды TopTry.
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-white p-4 rounded-2xl border border-zinc-100">
-                <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">
-                  В месяц
-                </p>
-                <p className="text-lg font-bold">
-                  {usageInfo.monthlyUsed}
-                  <span className="text-zinc-300 text-sm"> / {usageInfo.monthlyLimit}</span>
-                </p>
-                <p className="mt-1 text-[10px] text-zinc-400 uppercase tracking-widest">
-                  осталось {usageInfo.monthlyRemaining}
-                </p>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-zinc-100">
-                <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">
-                  Бонусные
-                </p>
-                <p className="text-lg font-bold">
-                  {usageInfo.generationCreditsRemaining}
-                </p>
-                <p className="mt-1 text-[10px] text-zinc-400 uppercase tracking-widest">
-                  приглашения и пакеты
-                </p>
+              <div className="rounded-2xl bg-white border border-zinc-100 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
+                  Как получить больше генераций
+                </div>
+                <div className="mt-3 grid md:grid-cols-3 gap-3">
+                  <div className="rounded-2xl bg-zinc-50 p-3">
+                    <div className="text-xs font-black uppercase tracking-widest text-zinc-900">
+                      Пригласить друга
+                    </div>
+                    <p className="mt-2 text-[11px] text-zinc-500 leading-relaxed">
+                      Вы получите {referralInfo?.inviterRewardCredits || 3} бонусные генерации после регистрации друга.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 p-3">
+                    <div className="text-xs font-black uppercase tracking-widest text-zinc-900">
+                      Стать тестером
+                    </div>
+                    <p className="mt-2 text-[11px] text-zinc-500 leading-relaxed">
+                      Для активных тестеров доступен расширенный лимит 20 / день и 100 / месяц.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 p-3">
+                    <div className="text-xs font-black uppercase tracking-widest text-zinc-900">
+                      Пакеты генераций
+                    </div>
+                    <p className="mt-2 text-[11px] text-zinc-500 leading-relaxed">
+                      Платные пакеты появятся после запуска оплаты. Сейчас цены не финализированы.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
