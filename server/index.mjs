@@ -801,6 +801,9 @@ app.get("/api/auth/me", async (req, res) => {
         sizeBottom: true,
         sizeShoes: true,
         isPublic: true,
+        publicSlug: true,
+        publicBio: true,
+        publicSocialUrl: true,
         createdAt: true,
       },
     });
@@ -815,7 +818,7 @@ app.get("/api/auth/me", async (req, res) => {
 app.post("/api/profile/update", requireAuth, async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const { sizeTop, sizeBottom, sizeShoes } = req.body || {};
+    const { sizeTop, sizeBottom, sizeShoes, publicSlug, publicBio, publicSocialUrl } = req.body || {};
 
     const p = getPrisma();
     if (!p) return res.status(500).json({ error: "Database is not configured" });
@@ -834,25 +837,76 @@ app.post("/api/profile/update", requireAuth, async (req, res) => {
       return allowed.has(s) ? s : null;
     };
 
+    const normalizePublicSlug = (v) => {
+      const s = String(v || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 40);
+
+      if (!s) return null;
+      if (s.length < 3) {
+        const err = new Error("Короткая ссылка должна быть не короче 3 символов");
+        err.statusCode = 400;
+        throw err;
+      }
+      return s;
+    };
+
+    const normalizeText = (v, maxLen) => {
+      const s = String(v || "").trim();
+      if (!s) return null;
+      return s.slice(0, maxLen);
+    };
+
+    const normalizeUrl = (v) => {
+      const raw = String(v || "").trim();
+      if (!raw) return null;
+
+      const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+      try {
+        const url = new URL(withProtocol);
+        if (!["http:", "https:"].includes(url.protocol)) return null;
+        return url.toString().slice(0, 500);
+      } catch {
+        const err = new Error("Укажите корректную ссылку на соцсеть");
+        err.statusCode = 400;
+        throw err;
+      }
+    };
+
+    const nextPublicSlug = normalizePublicSlug(publicSlug);
+
     const user = await p.user.update({
       where: { id: userId },
       data: {
         sizeTop: normalizeSize(sizeTop),
         sizeBottom: normalizeSize(sizeBottom),
         sizeShoes: normalizeShoeSize(sizeShoes),
+        publicSlug: nextPublicSlug,
+        publicBio: normalizeText(publicBio, 280),
+        publicSocialUrl: normalizeUrl(publicSocialUrl),
       },
       select: {
         id: true,
         sizeTop: true,
         sizeBottom: true,
         sizeShoes: true,
+        publicSlug: true,
+        publicBio: true,
+        publicSocialUrl: true,
       },
     });
 
     return res.json({ ok: true, user });
   } catch (err) {
     console.error("[toptry] /api/profile/update error", err);
-    return res.status(500).json({ error: err?.message || "Failed to update profile" });
+    if (err?.code === "P2002") {
+      return res.status(409).json({ error: "Такая короткая ссылка уже занята" });
+    }
+    return res.status(err?.statusCode || 500).json({ error: err?.message || "Failed to update profile" });
   }
 });
 

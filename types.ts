@@ -77,6 +77,9 @@ export interface User {
   sizeTop?: string;
   sizeBottom?: string;
   sizeShoes?: string;
+  publicSlug?: string;
+  publicBio?: string;
+  publicSocialUrl?: string;
   tier: SubscriptionTier;
   limits: {
     hdTryOnRemaining: number;
@@ -98,6 +101,7 @@ export interface Look {
   createdAt: Date;
   authorName?: string;
   authorAvatar?: string;
+  authorSlug?: string;
 
   userDescription?: string;
   aiDescription?: string;

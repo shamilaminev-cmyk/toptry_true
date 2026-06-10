@@ -21,6 +21,7 @@ interface AppState {
     startPhoneAuth: (phone: string) => Promise<void>;
     verifyPhoneAuth: (phone: string, code: string, referralCode?: string) => Promise<any>;
     updateProfileSizes: (sizeTop: string, sizeBottom: string, sizeShoes: string) => Promise<void>;
+    updatePublicProfile: (publicSlug: string, publicBio: string, publicSocialUrl: string) => Promise<void>;
     refreshMe: () => Promise<User | null>;
     logout: () => Promise<void>;
     toggleHomeLayout: () => void;
@@ -529,6 +530,49 @@ register: async (email: string, username: string, password: string) => {
               sizeTop: data?.user?.sizeTop || undefined,
               sizeBottom: data?.user?.sizeBottom || undefined,
               sizeShoes: data?.user?.sizeShoes || undefined,
+              publicSlug: data?.user?.publicSlug || undefined,
+              publicBio: data?.user?.publicBio || undefined,
+              publicSocialUrl: data?.user?.publicSocialUrl || undefined,
+            }
+          : prev
+      );
+    },
+
+    updatePublicProfile: async (publicSlug: string, publicBio: string, publicSocialUrl: string) => {
+      const resp = await fetch('/api/profile/update', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sizeTop: user?.sizeTop || '',
+          sizeBottom: user?.sizeBottom || '',
+          sizeShoes: user?.sizeShoes || '',
+          publicSlug,
+          publicBio,
+          publicSocialUrl,
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        setUser(null);
+        setWardrobe([]);
+        setLooks([]);
+        throw new Error('SESSION_EXPIRED');
+      }
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Public profile update failed');
+      }
+
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              publicSlug: data?.user?.publicSlug || undefined,
+              publicBio: data?.user?.publicBio || undefined,
+              publicSocialUrl: data?.user?.publicSocialUrl || undefined,
             }
           : prev
       );
@@ -575,6 +619,9 @@ register: async (email: string, username: string, password: string) => {
           sizeTop: u.sizeTop || undefined,
           sizeBottom: u.sizeBottom || undefined,
           sizeShoes: u.sizeShoes || undefined,
+          publicSlug: u.publicSlug || undefined,
+          publicBio: u.publicBio || undefined,
+          publicSocialUrl: u.publicSocialUrl || undefined,
           tier: user?.tier || SubscriptionTier.FREE,
           limits: user?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
           isPublic: !!u.isPublic,
