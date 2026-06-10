@@ -169,6 +169,54 @@ const Profile = () => {
   }
 
   const bigSrc = withApiOrigin(user.avatarUrl || user.selfieUrl || "");
+  const hasTryOnPhoto = Boolean(user.avatarUrl || user.selfieUrl);
+  const hasSizes = Boolean(user.sizeTop || user.sizeBottom || user.sizeShoes);
+  const onboardingSteps = [
+    {
+      id: 'photo',
+      title: 'Фото для примерки',
+      description: hasTryOnPhoto
+        ? 'Фото загружено. Его можно обновить в любой момент.'
+        : 'Загрузите фото, чтобы примерять образы на себе.',
+      done: hasTryOnPhoto,
+      action: hasTryOnPhoto ? 'Обновить фото' : 'Загрузить фото',
+      onClick: () => {
+        setErr(null);
+        setAvatarOpen(true);
+      },
+    },
+    {
+      id: 'sizes',
+      title: 'Размеры',
+      description: hasSizes
+        ? 'Размеры указаны. Каталог сможет точнее показывать подходящие товары.'
+        : 'Укажите размеры верха, низа или обуви для фильтра “Мой размер”.',
+      done: hasSizes,
+      action: hasSizes ? 'Изменить размеры' : 'Указать размеры',
+      onClick: () => {
+        document.getElementById('profile-sizes')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+    },
+    {
+      id: 'catalog',
+      title: 'Выберите товары',
+      description: 'Откройте каталог, добавьте вещи в шкаф или сразу соберите образ.',
+      done: false,
+      action: 'Перейти в каталог',
+      onClick: () => navigate('/catalog'),
+    },
+    {
+      id: 'create',
+      title: 'Создайте первый образ',
+      description: 'Выберите до 5 вещей и посмотрите, как они будут выглядеть на вас.',
+      done: false,
+      action: 'Создать образ',
+      onClick: () => navigate('/create-look'),
+    },
+  ];
+
+  const onboardingDoneCount = onboardingSteps.filter((step) => step.done).length;
+  const onboardingProgressPct = Math.round((onboardingDoneCount / onboardingSteps.length) * 100);
 
   const planCode = String(usageInfo?.plan || 'FREE').toUpperCase();
   const planTitle = {
@@ -408,6 +456,94 @@ const Profile = () => {
           </div>
         </div>
 
+        <section className="bg-zinc-900 text-white rounded-[32px] p-6 space-y-5 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/50">
+                Быстрый старт
+              </p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight">
+                Настройте TopTry за несколько шагов
+              </h2>
+              <p className="mt-2 text-sm text-white/60 leading-relaxed max-w-xl">
+                Загрузите фото, укажите размеры, выберите товары и создайте первый образ.
+              </p>
+            </div>
+
+            <div className="shrink-0 rounded-2xl bg-white/10 px-4 py-3 text-right">
+              <div className="text-2xl font-black">{onboardingDoneCount}/{onboardingSteps.length}</div>
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">
+                готово
+              </div>
+            </div>
+          </div>
+
+          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-white transition-all"
+              style={{ width: `${onboardingProgressPct}%` }}
+            />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            {onboardingSteps.map((step, idx) => (
+              <button
+                key={step.id}
+                type="button"
+                onClick={step.onClick}
+                className="text-left rounded-2xl bg-white/10 hover:bg-white/15 transition-colors p-4 border border-white/10"
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${
+                    step.done ? 'bg-white text-zinc-900' : 'bg-white/10 text-white/70'
+                  }`}>
+                    {step.done ? '✓' : idx + 1}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-black uppercase tracking-[0.08em]">
+                        {step.title}
+                      </div>
+                      {step.done && (
+                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-white/60">
+                          готово
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 text-xs text-white/60 leading-relaxed">
+                      {step.description}
+                    </p>
+                    <div className="mt-3 text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                      {step.action}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {onboardingDoneCount >= 2 ? (
+            <div className="rounded-2xl bg-white text-zinc-900 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <div className="text-sm font-black tracking-tight">
+                  Можно переходить к примерке
+                </div>
+                <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                  Вы уже готовы выбрать вещи и создать первый образ.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/create-look')}
+                className="h-10 px-4 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
+              >
+                Создать образ
+              </button>
+            </div>
+          ) : null}
+        </section>
+
         <form onSubmit={submitSupportRequest} className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
           <div>
             <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
@@ -502,7 +638,7 @@ const Profile = () => {
 
             <button
               type="button"
-              onClick={() => navigate('/create')}
+              onClick={() => navigate('/create-look')}
               className="shrink-0 h-11 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
             >
               Создать образ
@@ -605,7 +741,7 @@ const Profile = () => {
           )}
         </div>
 
-        <div className="bg-white rounded-[32px] p-6 space-y-4 border border-zinc-100">
+        <div id="profile-sizes" className="bg-white rounded-[32px] p-6 space-y-4 border border-zinc-100 scroll-mt-24">
           <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
             Ваши размеры
           </p>
