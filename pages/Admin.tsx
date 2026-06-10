@@ -72,6 +72,11 @@ const Admin: React.FC = () => {
   const [adminActionResult, setAdminActionResult] = React.useState<any | null>(null);
   const [adminActionError, setAdminActionError] = React.useState('');
 
+  const [supportRequests, setSupportRequests] = React.useState<any[]>([]);
+  const [supportLoading, setSupportLoading] = React.useState(false);
+  const [supportError, setSupportError] = React.useState('');
+  const [supportStatusLoading, setSupportStatusLoading] = React.useState('');
+
   const load = React.useCallback(async () => {
     setLoading(true);
     setError('');
@@ -97,9 +102,59 @@ const Admin: React.FC = () => {
     }
   }, []);
 
+  const loadSupportRequests = React.useCallback(async () => {
+    setSupportLoading(true);
+    setSupportError('');
+
+    try {
+      const resp = await fetch(adminApiUrl('/api/admin/support/requests?limit=20'), {
+        credentials: 'include',
+      });
+      const json = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(json?.error || `Ошибка ${resp.status}`);
+      }
+
+      setSupportRequests(json?.requests || []);
+    } catch (err: any) {
+      setSupportError(err?.message || String(err));
+      setSupportRequests([]);
+    } finally {
+      setSupportLoading(false);
+    }
+  }, []);
+
+  const updateSupportRequestStatus = async (id: string, status: string) => {
+    setSupportStatusLoading(id);
+    setSupportError('');
+
+    try {
+      const resp = await fetch(adminApiUrl(`/api/admin/support/requests/${encodeURIComponent(id)}`), {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+
+      const json = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(json?.error || `Ошибка ${resp.status}`);
+      }
+
+      await loadSupportRequests();
+    } catch (err: any) {
+      setSupportError(err?.message || String(err));
+    } finally {
+      setSupportStatusLoading('');
+    }
+  };
+
   React.useEffect(() => {
     load();
-  }, [load]);
+    loadSupportRequests();
+  }, [load, loadSupportRequests]);
 
   const submitEntitlement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,7 +289,10 @@ const Admin: React.FC = () => {
         </div>
 
         <button
-          onClick={load}
+          onClick={() => {
+            load();
+            loadSupportRequests();
+          }}
           className="h-11 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
         >
           Обновить
@@ -393,6 +451,123 @@ const Admin: React.FC = () => {
           </pre>
         </section>
       )}
+
+      <section className="rounded-[32px] border border-zinc-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-black uppercase tracking-[0.18em] text-zinc-900">
+              Обращения пользователей
+            </h2>
+            <p className="mt-2 text-xs text-zinc-500 leading-relaxed">
+              Последние сообщения из формы связи в профиле.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={loadSupportRequests}
+            className="h-10 px-4 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-black uppercase tracking-[0.18em]"
+          >
+            Обновить обращения
+          </button>
+        </div>
+
+        {supportError && (
+          <div className="mt-4 rounded-2xl bg-rose-50 border border-rose-100 p-4 text-xs text-rose-700">
+            {supportError}
+          </div>
+        )}
+
+        {supportLoading ? (
+          <div className="mt-4 rounded-2xl bg-zinc-50 p-4 text-xs text-zinc-400">
+            Загружаем обращения…
+          </div>
+        ) : supportRequests.length === 0 ? (
+          <div className="mt-4 rounded-2xl bg-zinc-50 p-4 text-xs text-zinc-400">
+            Пока нет обращений.
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-3">
+            {supportRequests.map((r: any) => (
+              <div key={r.id} className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-zinc-900 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">
+                        {r.status}
+                      </span>
+                      <span className="text-xs font-black uppercase tracking-[0.14em] text-zinc-900">
+                        {r.topic}
+                      </span>
+                      <span className="text-[10px] text-zinc-400">
+                        {r.createdAt ? new Date(r.createdAt).toLocaleString('ru-RU') : ''}
+                      </span>
+                    </div>
+
+                    <p className="mt-3 text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">
+                      {r.message}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-400">
+                      <span>id: {r.id}</span>
+                      {r.user?.phone && <span>phone: {r.user.phone}</span>}
+                      {r.source && <span>source: {r.source}</span>}
+                      {r.lookId && <span>look: {r.lookId}</span>}
+                      {r.productId && <span>product: {r.productId}</span>}
+                    </div>
+
+                    {r.pageUrl && (
+                      <a
+                        href={r.pageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex text-[11px] font-bold text-zinc-900 underline"
+                      >
+                        Открыть страницу пользователя
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {r.status !== 'OPEN' && (
+                      <button
+                        type="button"
+                        disabled={supportStatusLoading === r.id}
+                        onClick={() => updateSupportRequestStatus(r.id, 'OPEN')}
+                        className="h-9 px-3 rounded-full bg-white border border-zinc-100 text-[10px] font-black uppercase tracking-[0.14em] disabled:opacity-50"
+                      >
+                        Открыть
+                      </button>
+                    )}
+
+                    {r.status !== 'IN_PROGRESS' && (
+                      <button
+                        type="button"
+                        disabled={supportStatusLoading === r.id}
+                        onClick={() => updateSupportRequestStatus(r.id, 'IN_PROGRESS')}
+                        className="h-9 px-3 rounded-full bg-white border border-zinc-100 text-[10px] font-black uppercase tracking-[0.14em] disabled:opacity-50"
+                      >
+                        В работе
+                      </button>
+                    )}
+
+                    {r.status !== 'CLOSED' && (
+                      <button
+                        type="button"
+                        disabled={supportStatusLoading === r.id}
+                        onClick={() => updateSupportRequestStatus(r.id, 'CLOSED')}
+                        className="h-9 px-3 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.14em] disabled:opacity-50"
+                      >
+                        Закрыть
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Пользователи" value={data?.users?.total} hint={`+${fmt(data?.users?.new7d)} за 7 дней`} />

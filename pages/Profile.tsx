@@ -162,6 +162,12 @@ const Profile = () => {
     );
   }
 
+  const [supportTopic, setSupportTopic] = React.useState('Другое');
+  const [supportMessage, setSupportMessage] = React.useState('');
+  const [supportSending, setSupportSending] = React.useState(false);
+  const [supportResult, setSupportResult] = React.useState('');
+  const [supportError, setSupportError] = React.useState('');
+
   const bigSrc = withApiOrigin(user.avatarUrl || user.selfieUrl || "");
 
   const planCode = String(usageInfo?.plan || 'FREE').toUpperCase();
@@ -206,6 +212,54 @@ const Profile = () => {
         ? 'Бесплатный лимит исчерпан, следующая генерация спишется из бонусов.'
         : 'Сегодня генерации недоступны. Можно пригласить друга и получить бонусы.'
     : 'Скоро покажем актуальные лимиты.';
+
+  const submitSupportRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const msg = supportMessage.trim();
+    if (msg.length < 3) {
+      setSupportError('Напишите, пожалуйста, чуть подробнее.');
+      setSupportResult('');
+      return;
+    }
+
+    setSupportSending(true);
+    setSupportError('');
+    setSupportResult('');
+
+    try {
+      const resp = await fetch('/api/support/request', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          topic: supportTopic,
+          message: msg,
+          source: 'profile',
+          pageUrl: window.location.href,
+          context: {
+            plan: usageInfo?.plan || null,
+            dailyRemaining: usageInfo?.dailyRemaining ?? null,
+            monthlyRemaining: usageInfo?.monthlyRemaining ?? null,
+            generationCreditsRemaining: usageInfo?.generationCreditsRemaining ?? null,
+          },
+        }),
+      });
+
+      const json = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(json?.error || `Ошибка ${resp.status}`);
+      }
+
+      setSupportMessage('');
+      setSupportResult(`Обращение отправлено. Номер: ${json?.request?.id || '—'}`);
+    } catch (err: any) {
+      setSupportError(err?.message || String(err));
+    } finally {
+      setSupportSending(false);
+    }
+  };
 
   const preprocessAvatarFile = async (file: File): Promise<string> => {
     const objectUrl = URL.createObjectURL(file);
@@ -353,6 +407,72 @@ const Profile = () => {
             <p className="text-sm text-zinc-400 uppercase tracking-widest font-medium">{user.phone}</p>
           </div>
         </div>
+
+        <form onSubmit={submitSupportRequest} className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
+          <div>
+            <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
+              Связаться с TopTry
+            </p>
+            <h2 className="mt-2 text-xl font-black tracking-tight text-zinc-900">
+              Напишите нам, если что-то пошло не так
+            </h2>
+            <p className="mt-2 text-xs text-zinc-500 leading-relaxed">
+              Можно сообщить о проблеме с генерацией, товаром, лимитами или предложить улучшение.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-[220px_1fr] gap-3">
+            <label className="space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                Тема
+              </span>
+              <select
+                value={supportTopic}
+                onChange={(e) => setSupportTopic(e.target.value)}
+                className="w-full rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm outline-none focus:border-zinc-900"
+              >
+                <option value="Проблема с генерацией">Проблема с генерацией</option>
+                <option value="Проблема с товаром">Проблема с товаром</option>
+                <option value="Лимиты / генерации">Лимиты / генерации</option>
+                <option value="Хочу стать тестером">Хочу стать тестером</option>
+                <option value="Оплата / тарифы">Оплата / тарифы</option>
+                <option value="Предложение">Предложение</option>
+                <option value="Другое">Другое</option>
+              </select>
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                Сообщение
+              </span>
+              <textarea
+                value={supportMessage}
+                onChange={(e) => setSupportMessage(e.target.value)}
+                placeholder="Опишите, что произошло или что хотелось бы улучшить..."
+                rows={4}
+                className="w-full rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm outline-none focus:border-zinc-900 resize-none"
+              />
+            </label>
+          </div>
+
+          {(supportError || supportResult) && (
+            <div className={`rounded-2xl p-4 text-xs leading-relaxed ${
+              supportError
+                ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+            }`}>
+              {supportError || supportResult}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={supportSending}
+            className="h-11 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] disabled:opacity-50"
+          >
+            {supportSending ? 'Отправляем…' : 'Отправить сообщение'}
+          </button>
+        </form>
 
         <div className="bg-zinc-50 rounded-[32px] p-6 space-y-6 border border-zinc-100">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
