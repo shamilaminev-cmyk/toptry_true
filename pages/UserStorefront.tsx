@@ -143,6 +143,7 @@ const UserStorefront: React.FC = () => {
 
   const [profile, setProfile] = useState<any | null>(null);
   const [collections, setCollections] = useState<any[]>([]);
+  const [activeCollectionId, setActiveCollectionId] = useState('');
   const [looks, setLooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -168,6 +169,7 @@ const UserStorefront: React.FC = () => {
 
         setProfile(data?.user || null);
         setCollections(Array.isArray(data?.collections) ? data.collections : []);
+        setActiveCollectionId('');
         setLooks(Array.isArray(data?.looks) ? data.looks : []);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || String(e));
@@ -222,6 +224,38 @@ const UserStorefront: React.FC = () => {
       },
     });
   };
+
+  const openCollection = (collectionId: string) => {
+    setActiveCollectionId(collectionId);
+
+    window.setTimeout(() => {
+      document.getElementById('storefront-looks')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 80);
+  };
+
+  const showAllLooks = () => {
+    setActiveCollectionId('');
+
+    window.setTimeout(() => {
+      document.getElementById('storefront-looks')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 80);
+  };
+
+  const activeCollection = activeCollectionId
+    ? collections.find((collection) => String(collection.id) === String(activeCollectionId))
+    : null;
+
+  const activeCollectionLooks = activeCollection && Array.isArray(activeCollection.looks)
+    ? activeCollection.looks
+    : [];
+
+  const visibleLooks = activeCollection ? activeCollectionLooks : looks;
 
   if (loading) {
     return (
@@ -340,8 +374,19 @@ const UserStorefront: React.FC = () => {
               const collectionLooks = Array.isArray(collection.looks) ? collection.looks : [];
               const count = collectionLooks.length;
 
+              const isActive = String(activeCollectionId) === String(collection.id);
+
               return (
-                <article key={collection.id} className="rounded-[28px] overflow-hidden border border-zinc-100 bg-white shadow-sm">
+                <button
+                  key={collection.id}
+                  type="button"
+                  onClick={() => openCollection(collection.id)}
+                  className={`text-left rounded-[28px] overflow-hidden border bg-white shadow-sm transition-all ${
+                    isActive
+                      ? 'border-zinc-900 ring-4 ring-zinc-900/10 -translate-y-0.5'
+                      : 'border-zinc-100 hover:border-zinc-300 hover:-translate-y-0.5'
+                  }`}
+                >
                   <CollectionPreview looks={collectionLooks} count={count} />
 
                   <div className="p-4">
@@ -349,11 +394,13 @@ const UserStorefront: React.FC = () => {
                     {collection.description ? (
                       <p className="mt-2 text-xs text-zinc-500 leading-relaxed">{collection.description}</p>
                     ) : null}
-                    <div className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">
-                      Открыть подборку
+                    <div className={`mt-3 text-[10px] font-black uppercase tracking-[0.16em] ${
+                      isActive ? 'text-zinc-900' : 'text-zinc-400'
+                    }`}>
+                      {isActive ? 'Подборка открыта' : 'Открыть подборку'}
                     </div>
                   </div>
-                </article>
+                </button>
               );
             })}
           </div>
@@ -369,27 +416,48 @@ const UserStorefront: React.FC = () => {
         )}
       </section>
 
-      <section className="space-y-4">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
-            Образы
-          </p>
-          <h2 className="mt-1 text-2xl font-black tracking-tight">
-            Примеряемые образы
-          </h2>
+      <section id="storefront-looks" className="space-y-4 scroll-mt-24">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+              {activeCollection ? 'Подборка' : 'Образы'}
+            </p>
+            <h2 className="mt-1 text-2xl font-black tracking-tight">
+              {activeCollection ? activeCollection.title : 'Примеряемые образы'}
+            </h2>
+            {activeCollection?.description ? (
+              <p className="mt-2 text-sm text-zinc-500 leading-relaxed max-w-2xl">
+                {activeCollection.description}
+              </p>
+            ) : null}
+          </div>
+
+          {activeCollection ? (
+            <button
+              type="button"
+              onClick={showAllLooks}
+              className="h-10 px-4 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-black uppercase tracking-[0.16em]"
+            >
+              Все образы автора
+            </button>
+          ) : null}
         </div>
 
-        {looks.length ? (
+        {visibleLooks.length ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {looks.map((look) => (
+            {visibleLooks.map((look) => (
               <StorefrontLookCard key={look.id} look={look} onTry={tryLook} />
             ))}
           </div>
         ) : (
           <div className="rounded-[28px] bg-zinc-50 border border-zinc-100 p-8 text-center">
-            <h3 className="font-black tracking-tight">Пока нет опубликованных образов</h3>
+            <h3 className="font-black tracking-tight">
+              {activeCollection ? 'В подборке пока нет образов' : 'Пока нет опубликованных образов'}
+            </h3>
             <p className="mt-2 text-sm text-zinc-500">
-              Когда автор опубликует образы, они появятся на этой странице.
+              {activeCollection
+                ? 'Автор скоро добавит сюда примеряемые образы.'
+                : 'Когда автор опубликует образы, они появятся на этой странице.'}
             </p>
           </div>
         )}
