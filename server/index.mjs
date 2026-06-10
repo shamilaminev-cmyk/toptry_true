@@ -9715,7 +9715,9 @@ app.get("/api/catalog/deals", async (req, res) => {
       const subgroup = String(p.taxonomySubgroup || "");
 
       const categoryScore =
-        group === "CLOTHING" ? 24 :
+        // Homepage merchandising: clothing must be visible on TopTry.
+        // Without a strong boost, large shoe feeds drown clothing deals in the shortlist.
+        group === "CLOTHING" ? 140 :
         group === "SHOES" ? 22 :
         group === "BAGS" ? 8 :
         0;
@@ -9973,15 +9975,7 @@ app.get("/api/catalog/price-drops", async (req, res) => {
         and not (
           lower(coalesce(p.title, '')) ~ '(зонт|umbrella|шнурк|shoelace|стельк|insole|украшен.*для обув|аксессуар.*для обув|средств.*для обув|уход.*обув|крем.*обув|губк.*обув|щетк.*обув|щётк.*обув|пропитк|дезодорант.*обув)'
         )
-      order by
-        case coalesce(p."taxonomyGroup", '')
-          when 'CLOTHING' then 0
-          when 'SHOES' then 1
-          when 'BAGS' then 2
-          when 'ACCESSORIES' then 3
-          else 4
-        end,
-        random()
+      order by random()
       limit $3
       `,
       minDeltaPct,
