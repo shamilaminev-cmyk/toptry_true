@@ -19,9 +19,10 @@ model User {
   sizeBottom      String?
   sizeShoes       String?
   isPublic        Boolean   @default(false)
-  publicSlug      String?   @unique
-  publicBio       String?
-  publicSocialUrl String?
+  publicSlug        String?   @unique
+  publicDisplayName String?
+  publicBio         String?
+  publicSocialUrl   String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

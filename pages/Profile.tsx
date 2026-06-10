@@ -44,6 +44,7 @@ const Profile = () => {
   const [supportResult, setSupportResult] = React.useState('');
   const [supportError, setSupportError] = React.useState('');
   const [publicSlug, setPublicSlug] = React.useState(user?.publicSlug || '');
+  const [publicDisplayName, setPublicDisplayName] = React.useState(user?.publicDisplayName || '');
   const [publicBio, setPublicBio] = React.useState(user?.publicBio || '');
   const [publicSocialUrl, setPublicSocialUrl] = React.useState(user?.publicSocialUrl || '');
   const [publicProfileSaving, setPublicProfileSaving] = React.useState(false);
@@ -87,9 +88,10 @@ const Profile = () => {
 
   useEffect(() => {
     setPublicSlug(user?.publicSlug || '');
+    setPublicDisplayName(user?.publicDisplayName || '');
     setPublicBio(user?.publicBio || '');
     setPublicSocialUrl(user?.publicSocialUrl || '');
-  }, [user?.publicSlug, user?.publicBio, user?.publicSocialUrl]);
+  }, [user?.publicSlug, user?.publicDisplayName, user?.publicBio, user?.publicSocialUrl]);
 
   useEffect(() => {
     if (!user) return;
@@ -198,7 +200,7 @@ const Profile = () => {
     setPublicProfileSaving(true);
 
     try {
-      await actions.updatePublicProfile(normalizedPublicSlug, publicBio, publicSocialUrl);
+      await actions.updatePublicProfile(normalizedPublicSlug, publicDisplayName, publicBio, publicSocialUrl);
       await actions.refreshMe();
       setPublicProfileResult('Публичная витрина сохранена');
     } catch (e: any) {
@@ -635,7 +637,19 @@ const Profile = () => {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-[220px_minmax(0,1fr)] gap-3">
+          <div className="grid md:grid-cols-[minmax(0,1fr)_220px] gap-3">
+            <label className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                Имя на витрине
+              </span>
+              <input
+                value={publicDisplayName}
+                onChange={(e) => setPublicDisplayName(e.target.value.slice(0, 80))}
+                placeholder="Например: Шамиль Аминев или Bourbaki Style"
+                className="w-full h-12 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-bold outline-none"
+              />
+            </label>
+
             <label className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
                 Короткая ссылка

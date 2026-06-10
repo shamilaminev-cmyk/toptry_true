@@ -78,6 +78,7 @@ export interface User {
   sizeBottom?: string;
   sizeShoes?: string;
   publicSlug?: string;
+  publicDisplayName?: string;
   publicBio?: string;
   publicSocialUrl?: string;
   tier: SubscriptionTier;

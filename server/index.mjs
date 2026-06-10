@@ -802,6 +802,7 @@ app.get("/api/auth/me", async (req, res) => {
         sizeShoes: true,
         isPublic: true,
         publicSlug: true,
+        publicDisplayName: true,
         publicBio: true,
         publicSocialUrl: true,
         createdAt: true,
@@ -818,7 +819,7 @@ app.get("/api/auth/me", async (req, res) => {
 app.post("/api/profile/update", requireAuth, async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const { sizeTop, sizeBottom, sizeShoes, publicSlug, publicBio, publicSocialUrl } = req.body || {};
+    const { sizeTop, sizeBottom, sizeShoes, publicSlug, publicDisplayName, publicBio, publicSocialUrl } = req.body || {};
 
     const p = getPrisma();
     if (!p) return res.status(500).json({ error: "Database is not configured" });
@@ -886,6 +887,7 @@ app.post("/api/profile/update", requireAuth, async (req, res) => {
         sizeBottom: normalizeSize(sizeBottom),
         sizeShoes: normalizeShoeSize(sizeShoes),
         publicSlug: nextPublicSlug,
+        publicDisplayName: normalizeText(publicDisplayName, 80),
         publicBio: normalizeText(publicBio, 280),
         publicSocialUrl: normalizeUrl(publicSocialUrl),
       },
@@ -895,6 +897,7 @@ app.post("/api/profile/update", requireAuth, async (req, res) => {
         sizeBottom: true,
         sizeShoes: true,
         publicSlug: true,
+        publicDisplayName: true,
         publicBio: true,
         publicSocialUrl: true,
       },
@@ -3289,8 +3292,8 @@ app.delete("/api/wardrobe/item/:id", requireAuth, async (req, res) => {
 // ---------- LOOKS / SOCIAL ----------
 
 function publicAuthorName(user) {
-  const name = String(user?.username || "").trim();
-  return name || "Пользователь TopTry";
+  const user = user;
+  return user?.publicDisplayName || user?.username || "Автор TopTry";
 }
 
 async function mapLookForApi(row, viewerUserId = "") {
@@ -3378,6 +3381,7 @@ app.get("/api/users/public/:slug", async (req, res) => {
         username: true,
         avatarUrl: true,
         publicSlug: true,
+        publicDisplayName: true,
         publicBio: true,
         publicSocialUrl: true,
         createdAt: true,
@@ -3407,7 +3411,7 @@ app.get("/api/users/public/:slug", async (req, res) => {
             include: {
               look: {
                 include: {
-                  user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true } },
+                  user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
                 },
               },
             },
@@ -3421,7 +3425,7 @@ app.get("/api/users/public/:slug", async (req, res) => {
           isPublic: true,
         },
         include: {
-          user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true } },
+          user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
         },
         orderBy: { updatedAt: "desc" },
         take: 60,
@@ -3457,6 +3461,7 @@ app.get("/api/users/public/:slug", async (req, res) => {
         username: user.username || "",
         avatarUrl: user.avatarUrl || "",
         publicSlug: user.publicSlug || user.id,
+        publicDisplayName: user.publicDisplayName || "",
         publicBio: user.publicBio || "",
         publicSocialUrl: user.publicSocialUrl || "",
         createdAt: user.createdAt.toISOString(),

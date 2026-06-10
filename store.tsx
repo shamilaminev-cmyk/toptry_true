@@ -21,7 +21,7 @@ interface AppState {
     startPhoneAuth: (phone: string) => Promise<void>;
     verifyPhoneAuth: (phone: string, code: string, referralCode?: string) => Promise<any>;
     updateProfileSizes: (sizeTop: string, sizeBottom: string, sizeShoes: string) => Promise<void>;
-    updatePublicProfile: (publicSlug: string, publicBio: string, publicSocialUrl: string) => Promise<void>;
+    updatePublicProfile: (publicSlug: string, publicDisplayName: string, publicBio: string, publicSocialUrl: string) => Promise<void>;
     refreshMe: () => Promise<User | null>;
     logout: () => Promise<void>;
     toggleHomeLayout: () => void;
@@ -531,6 +531,7 @@ register: async (email: string, username: string, password: string) => {
               sizeBottom: data?.user?.sizeBottom || undefined,
               sizeShoes: data?.user?.sizeShoes || undefined,
               publicSlug: data?.user?.publicSlug || undefined,
+              publicDisplayName: data?.user?.publicDisplayName || undefined,
               publicBio: data?.user?.publicBio || undefined,
               publicSocialUrl: data?.user?.publicSocialUrl || undefined,
             }
@@ -538,7 +539,7 @@ register: async (email: string, username: string, password: string) => {
       );
     },
 
-    updatePublicProfile: async (publicSlug: string, publicBio: string, publicSocialUrl: string) => {
+    updatePublicProfile: async (publicSlug: string, publicDisplayName: string, publicBio: string, publicSocialUrl: string) => {
       const resp = await fetch('/api/profile/update', {
         method: 'POST',
         credentials: 'include',
@@ -548,6 +549,7 @@ register: async (email: string, username: string, password: string) => {
           sizeBottom: user?.sizeBottom || '',
           sizeShoes: user?.sizeShoes || '',
           publicSlug,
+          publicDisplayName,
           publicBio,
           publicSocialUrl,
         }),
@@ -571,6 +573,7 @@ register: async (email: string, username: string, password: string) => {
           ? {
               ...prev,
               publicSlug: data?.user?.publicSlug || undefined,
+              publicDisplayName: data?.user?.publicDisplayName || undefined,
               publicBio: data?.user?.publicBio || undefined,
               publicSocialUrl: data?.user?.publicSocialUrl || undefined,
             }
@@ -620,6 +623,7 @@ register: async (email: string, username: string, password: string) => {
           sizeBottom: u.sizeBottom || undefined,
           sizeShoes: u.sizeShoes || undefined,
           publicSlug: u.publicSlug || undefined,
+          publicDisplayName: u.publicDisplayName || undefined,
           publicBio: u.publicBio || undefined,
           publicSocialUrl: u.publicSocialUrl || undefined,
           tier: user?.tier || SubscriptionTier.FREE,
