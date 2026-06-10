@@ -38,6 +38,12 @@ const Profile = () => {
   const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
   const [referralCopied, setReferralCopied] = useState(false);
   const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
+  const [supportTopic, setSupportTopic] = React.useState('Другое');
+  const [supportMessage, setSupportMessage] = React.useState('');
+  const [supportSending, setSupportSending] = React.useState(false);
+  const [supportResult, setSupportResult] = React.useState('');
+  const [supportError, setSupportError] = React.useState('');
+
   useEffect(() => {
     if (!avatarOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -161,12 +167,6 @@ const Profile = () => {
       </div>
     );
   }
-
-  const [supportTopic, setSupportTopic] = React.useState('Другое');
-  const [supportMessage, setSupportMessage] = React.useState('');
-  const [supportSending, setSupportSending] = React.useState(false);
-  const [supportResult, setSupportResult] = React.useState('');
-  const [supportError, setSupportError] = React.useState('');
 
   const bigSrc = withApiOrigin(user.avatarUrl || user.selfieUrl || "");
 
