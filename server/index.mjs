@@ -9545,12 +9545,20 @@ function catalogCollectionGroup(row) {
   return String(row?.taxonomyGroup || row?.category || "OTHER").toUpperCase();
 }
 
+function catalogCollectionGender(row) {
+  const gender = String(row?.gender || "").trim().toUpperCase();
+  if (gender === "FEMALE" || gender === "MALE") return gender;
+  return "UNISEX";
+}
+
 function pickCatalogCollectionMerchandisedRows({
   rows,
   limit,
   requiredClothing = 2,
   merchantMax = 3,
   groupMax = {},
+  genderMax = {},
+  requiredGenders = [],
   titleKeyFn = null,
 }) {
   const source = Array.isArray(rows) ? rows : [];
@@ -9559,11 +9567,28 @@ function pickCatalogCollectionMerchandisedRows({
   const seenTitle = new Set();
   const merchantCounts = new Map();
   const groupCounts = new Map();
+  const genderCounts = new Map();
+
+  const normalizedRequiredGenders = Array.from(
+    new Set(
+      (Array.isArray(requiredGenders) ? requiredGenders : [])
+        .map((g) => String(g || "").trim().toUpperCase())
+        .filter((g) => g === "FEMALE" || g === "MALE")
+    )
+  );
+
+  const resolvedGenderMax = {
+    FEMALE: Math.max(1, Math.ceil(limit * 0.6)),
+    MALE: Math.max(1, Math.ceil(limit * 0.6)),
+    UNISEX: Math.max(1, Math.ceil(limit * 0.35)),
+    ...(genderMax || {}),
+  };
 
   const add = (p, strict = true) => {
     if (!p || picked.length >= limit) return false;
 
     const group = catalogCollectionGroup(p);
+    const gender = catalogCollectionGender(p);
     const merchant = String(p?.merchant || "unknown");
     const dedupeKey = getCatalogCollectionDedupeKey(p);
     const titleKey = typeof titleKeyFn === "function" ? titleKeyFn(p) : "";
@@ -9576,6 +9601,9 @@ function pickCatalogCollectionMerchandisedRows({
 
       const maxForGroup = Number(groupMax[group] ?? limit);
       if ((groupCounts.get(group) || 0) >= maxForGroup) return false;
+
+      const maxForGender = Number(resolvedGenderMax[gender] ?? limit);
+      if ((genderCounts.get(gender) || 0) >= maxForGender) return false;
     }
 
     picked.push(p);
@@ -9583,24 +9611,41 @@ function pickCatalogCollectionMerchandisedRows({
     if (titleKey) seenTitle.add(titleKey);
     merchantCounts.set(merchant, (merchantCounts.get(merchant) || 0) + 1);
     groupCounts.set(group, (groupCounts.get(group) || 0) + 1);
+    genderCounts.set(gender, (genderCounts.get(gender) || 0) + 1);
 
     return true;
   };
 
   // First force clothing into homepage blocks. TopTry must not look like bags/shoes only.
   const clothingTarget = Math.max(0, Math.min(limit, Number(requiredClothing || 0)));
+
+  for (const requiredGender of normalizedRequiredGenders) {
+    if ((groupCounts.get("CLOTHING") || 0) >= clothingTarget) break;
+    if ((genderCounts.get(requiredGender) || 0) > 0) continue;
+
+    for (const p of source) {
+      if (
+        catalogCollectionGroup(p) === "CLOTHING" &&
+        catalogCollectionGender(p) === requiredGender &&
+        add(p, true)
+      ) {
+        break;
+      }
+    }
+  }
+
   for (const p of source) {
     if ((groupCounts.get("CLOTHING") || 0) >= clothingTarget) break;
     if (catalogCollectionGroup(p) === "CLOTHING") add(p, true);
   }
 
-  // Then fill with strict group/merchant caps.
+  // Then fill with strict group/merchant/gender caps.
   for (const p of source) {
     if (picked.length >= limit) break;
     add(p, true);
   }
 
-  // Last fallback: keep dedupe but relax group/merchant caps if the pool is narrow.
+  // Last fallback: keep dedupe but relax caps if the pool is narrow.
   for (const p of source) {
     if (picked.length >= limit) break;
     add(p, false);
@@ -9790,6 +9835,12 @@ app.get("/api/catalog/deals", async (req, res) => {
         SHOES: Math.max(1, Math.ceil(limit * 0.45)),
         BAGS: Math.max(1, Math.floor(limit * 0.2)),
       },
+      genderMax: {
+        FEMALE: Math.max(2, Math.ceil(limit * 0.6)),
+        MALE: Math.max(2, Math.ceil(limit * 0.6)),
+        UNISEX: Math.max(1, Math.floor(limit * 0.25)),
+      },
+      requiredGenders: ["FEMALE", "MALE"],
       titleKeyFn: (p) => p._titleKey || p.id,
     });
 
@@ -9840,7 +9891,7 @@ app.get("/api/catalog/deals", async (req, res) => {
         minDiscount,
         pool: rows.length,
         selected: products.length,
-        strategy: "deal_quality_score_merchandised_clothing_required_pool",
+        strategy: "deal_quality_score_merchandised_clothing_gender_balanced_pool",
       },
     });
   } catch (e) {
@@ -9994,6 +10045,12 @@ app.get("/api/catalog/price-drops", async (req, res) => {
         BAGS: Math.max(1, Math.floor(limit * 0.25)),
         ACCESSORIES: Math.max(1, Math.floor(limit * 0.2)),
       },
+      genderMax: {
+        FEMALE: Math.max(2, Math.ceil(limit * 0.6)),
+        MALE: Math.max(2, Math.ceil(limit * 0.6)),
+        UNISEX: Math.max(1, Math.floor(limit * 0.25)),
+      },
+      requiredGenders: ["FEMALE", "MALE"],
       titleKeyFn: (p) => String(p.title || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().slice(0, 90),
     });
 
@@ -10010,7 +10067,7 @@ app.get("/api/catalog/price-drops", async (req, res) => {
         selected: products.length,
         minDeltaPct,
         days,
-        strategy: "price_change_drop_merchandised_clothing_required_pool",
+        strategy: "price_change_drop_merchandised_clothing_gender_balanced_pool",
       },
     });
   } catch (e) {
@@ -10282,6 +10339,12 @@ app.get("/api/catalog/home-new", async (req, res) => {
         SHOES: Math.max(1, Math.ceil(limit * 0.35)),
         BAGS: Math.max(1, Math.floor(limit * 0.25)),
       },
+      genderMax: {
+        FEMALE: Math.max(2, Math.ceil(limit * 0.6)),
+        MALE: Math.max(2, Math.ceil(limit * 0.6)),
+        UNISEX: Math.max(1, Math.floor(limit * 0.25)),
+      },
+      requiredGenders: ["FEMALE", "MALE"],
       titleKeyFn: (p) => p._titleKey || p.id,
     });
 
@@ -10320,7 +10383,7 @@ app.get("/api/catalog/home-new", async (req, res) => {
         limit,
         pool: rows.length,
         selected: products.length,
-        strategy: "fresh_ai_clean_merchandised_clothing_required_pool",
+        strategy: "fresh_ai_clean_merchandised_clothing_gender_balanced_pool",
       },
     });
   } catch (e) {
