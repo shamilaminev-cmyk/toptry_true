@@ -3362,6 +3362,51 @@ async function getLookVisibleToViewer(lookId, viewerUserId = "") {
 }
 
 
+
+app.get("/api/profile/published-looks", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+
+    const looks = await prisma.look.findMany({
+      where: {
+        userId,
+        isPublic: true,
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+      select: {
+        id: true,
+        title: true,
+        resultImageKey: true,
+        sourceItems: true,
+        likesCount: true,
+        savesCount: true,
+        commentsCount: true,
+        updatedAt: true,
+        createdAt: true,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      looks: looks.map((look) => ({
+        id: look.id,
+        title: look.title || "Образ TopTry",
+        resultImageUrl: mediaUrlFromKey(look.resultImageKey),
+        sourceItemsCount: Array.isArray(look.sourceItems) ? look.sourceItems.length : 0,
+        likes: look.likesCount || 0,
+        saves: look.savesCount || 0,
+        comments: look.commentsCount || 0,
+        updatedAt: look.updatedAt.toISOString(),
+        createdAt: look.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    console.error("[toptry] /api/profile/published-looks error", err);
+    return res.status(500).json({ error: err?.message || "Failed to load published looks" });
+  }
+});
+
 app.get("/api/profile/look-collections", requireAuth, async (req, res) => {
   try {
     const userId = req.auth.userId;

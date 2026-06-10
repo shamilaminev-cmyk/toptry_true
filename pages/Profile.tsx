@@ -57,6 +57,10 @@ const Profile = () => {
   const [collectionCreating, setCollectionCreating] = React.useState(false);
   const [collectionError, setCollectionError] = React.useState('');
   const [collectionResult, setCollectionResult] = React.useState('');
+  const [publishedLooks, setPublishedLooks] = React.useState<any[]>([]);
+  const [publishedLooksLoading, setPublishedLooksLoading] = React.useState(false);
+  const [activeCollectionId, setActiveCollectionId] = React.useState('');
+  const [addingLookIds, setAddingLookIds] = React.useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!avatarOpen) return;
@@ -103,6 +107,7 @@ const Profile = () => {
   useEffect(() => {
     if (user?.id) {
       loadCollections();
+      loadPublishedLooks();
     }
   }, [user?.id]);
 
@@ -298,6 +303,67 @@ const Profile = () => {
       setCollectionError(e?.message || 'Не удалось создать подборку');
     } finally {
       setCollectionCreating(false);
+    }
+  };
+
+  const loadPublishedLooks = async () => {
+    setPublishedLooksLoading(true);
+
+    try {
+      const resp = await fetch('/api/profile/published-looks', {
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        navigate('/auth');
+        return;
+      }
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось загрузить опубликованные образы');
+      }
+
+      setPublishedLooks(Array.isArray(data?.looks) ? data.looks : []);
+    } catch (e: any) {
+      setCollectionError(e?.message || 'Не удалось загрузить опубликованные образы');
+    } finally {
+      setPublishedLooksLoading(false);
+    }
+  };
+
+  const addLookToCollection = async (collectionId: string, lookId: string) => {
+    if (!collectionId || !lookId) return;
+
+    setCollectionError('');
+    setCollectionResult('');
+    setAddingLookIds((prev) => ({ ...prev, [lookId]: true }));
+
+    try {
+      const resp = await fetch(`/api/profile/look-collections/${encodeURIComponent(collectionId)}/items`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lookId }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        navigate('/auth');
+        return;
+      }
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось добавить образ в подборку');
+      }
+
+      setCollectionResult('Образ добавлен в подборку');
+      await loadCollections();
+    } catch (e: any) {
+      setCollectionError(e?.message || 'Не удалось добавить образ в подборку');
+    } finally {
+      setAddingLookIds((prev) => ({ ...prev, [lookId]: false }));
     }
   };
 
@@ -884,35 +950,141 @@ const Profile = () => {
 
           {collections.length ? (
             <div className="grid md:grid-cols-2 gap-3">
-              {collections.map((collection) => (
-                <div key={collection.id} className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-black tracking-tight">
-                        {collection.title}
-                      </div>
-                      {collection.description ? (
-                        <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
-                          {collection.description}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
-                      {collection.looksCount || 0}
-                    </span>
-                  </div>
+              {collections.map((collection) => {
+                const collectionLooks = Array.isArray(collection.looks) ? collection.looks : [];
 
-                  <div className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">
-                    {collection.looksCount ? 'Образы уже добавлены' : 'Добавьте опубликованные образы из карточки образа'}
+                return (
+                  <div key={collection.id} className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black tracking-tight">
+                          {collection.title}
+                        </div>
+                        {collection.description ? (
+                          <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                            {collection.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">
+                        {collection.looksCount || 0}
+                      </span>
+                    </div>
+
+                    {collectionLooks.length ? (
+                      <div className="flex -space-x-2">
+                        {collectionLooks.slice(0, 5).map((look: any) => (
+                          <div key={look.id} className="w-12 h-12 rounded-2xl bg-zinc-100 border-2 border-white overflow-hidden">
+                            {look.resultImageUrl ? (
+                              <img src={withApiOrigin(look.resultImageUrl)} alt="" className="w-full h-full object-cover" />
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl bg-white border border-dashed border-zinc-200 p-4 text-xs text-zinc-500">
+                        В подборке пока нет образов.
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveCollectionId((prev) => prev === collection.id ? '' : collection.id);
+                          if (!publishedLooks.length) loadPublishedLooks();
+                        }}
+                        className="h-10 px-4 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.16em]"
+                      >
+                        Добавить образы
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/u/${user.publicSlug || user.id}`)}
+                        className="h-10 px-4 rounded-full bg-white text-zinc-900 border border-zinc-200 text-[10px] font-black uppercase tracking-[0.16em]"
+                      >
+                        Открыть витрину
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-2xl bg-zinc-50 border border-dashed border-zinc-200 p-5 text-sm text-zinc-500">
               Подборок пока нет. Создайте первую подборку, а затем добавьте в неё опубликованные образы.
             </div>
           )}
+
+          {activeCollectionId ? (
+            <div className="rounded-[28px] border border-zinc-100 bg-zinc-50 p-4 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                    Добавление образов
+                  </p>
+                  <h3 className="mt-1 text-sm font-black tracking-tight">
+                    Выберите опубликованные образы
+                  </h3>
+                  <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                    В подборки можно добавлять только опубликованные образы.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveCollectionId('')}
+                  className="h-10 px-4 rounded-full bg-white text-zinc-900 border border-zinc-200 text-[10px] font-black uppercase tracking-[0.16em]"
+                >
+                  Закрыть
+                </button>
+              </div>
+
+              {publishedLooksLoading ? (
+                <div className="rounded-2xl bg-white p-5 text-sm text-zinc-500">
+                  Загружаем опубликованные образы...
+                </div>
+              ) : publishedLooks.length ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {publishedLooks.map((look) => {
+                    const activeCollection = collections.find((collection) => collection.id === activeCollectionId);
+                    const alreadyInCollection = Boolean(
+                      activeCollection?.looks?.some((item: any) => String(item.id) === String(look.id))
+                    );
+
+                    return (
+                      <div key={look.id} className="rounded-2xl bg-white border border-zinc-100 overflow-hidden">
+                        <div className="aspect-[3/4] bg-zinc-100">
+                          {look.resultImageUrl ? (
+                            <img src={withApiOrigin(look.resultImageUrl)} alt="" className="w-full h-full object-cover" />
+                          ) : null}
+                        </div>
+                        <div className="p-3 space-y-3">
+                          <div className="text-xs font-black tracking-tight line-clamp-2">
+                            {look.title || 'Образ TopTry'}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => addLookToCollection(activeCollectionId, look.id)}
+                            disabled={alreadyInCollection || Boolean(addingLookIds[look.id])}
+                            className="w-full h-9 rounded-full bg-zinc-900 text-white text-[9px] font-black uppercase tracking-[0.14em] disabled:bg-zinc-100 disabled:text-zinc-400"
+                          >
+                            {alreadyInCollection ? 'Уже в подборке' : addingLookIds[look.id] ? 'Добавляем...' : 'Добавить'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-white p-5 text-sm text-zinc-500">
+                  У вас пока нет опубликованных образов. Опубликуйте образ, чтобы добавить его в подборку.
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
 
 
