@@ -144,6 +144,7 @@ const UserStorefront: React.FC = () => {
   const [profile, setProfile] = useState<any | null>(null);
   const [collections, setCollections] = useState<any[]>([]);
   const [activeCollectionId, setActiveCollectionId] = useState('');
+  const [profileViewTrackedKey, setProfileViewTrackedKey] = useState('');
   const [looks, setLooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -188,6 +189,41 @@ const UserStorefront: React.FC = () => {
     return current;
   }, []);
 
+  const trackCreatorEvent = async (
+    type: string,
+    payload: { collectionId?: string; lookId?: string; meta?: any } = {}
+  ) => {
+    const creatorSlug = profile?.publicSlug || slug || '';
+    if (!creatorSlug) return;
+
+    try {
+      await fetch(apiUrl('/api/creator/events'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          creatorSlug,
+          collectionId: payload.collectionId,
+          lookId: payload.lookId,
+          source: 'creator_storefront',
+          pageUrl: window.location.href,
+          meta: payload.meta || null,
+        }),
+      });
+    } catch {
+      // tracking must not break storefront UX
+    }
+  };
+
+  useEffect(() => {
+    const key = profile?.id ? `${profile.id}:${profile.publicSlug || slug || ''}` : '';
+    if (!key || key === profileViewTrackedKey) return;
+
+    setProfileViewTrackedKey(key);
+    trackCreatorEvent('CREATOR_PROFILE_VIEW');
+  }, [profile?.id, profile?.publicSlug, slug, profileViewTrackedKey]);
+
   const handleShare = async () => {
     try {
       if (navigator.share) {
@@ -214,6 +250,14 @@ const UserStorefront: React.FC = () => {
       return;
     }
 
+    void trackCreatorEvent('CREATOR_LOOK_TRYON_STARTED', {
+      lookId: look.id,
+      meta: {
+        sourceItemsCount: sourceItems.length,
+        collectionId: activeCollectionId || null,
+      },
+    });
+
     navigate('/create-look', {
       state: {
         preselectedItems: sourceItems,
@@ -227,6 +271,7 @@ const UserStorefront: React.FC = () => {
 
   const openCollection = (collectionId: string) => {
     setActiveCollectionId(collectionId);
+    void trackCreatorEvent('CREATOR_COLLECTION_OPEN', { collectionId });
 
     window.setTimeout(() => {
       document.getElementById('storefront-looks')?.scrollIntoView({

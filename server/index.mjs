@@ -3598,6 +3598,226 @@ app.delete("/api/profile/look-collections/:id/items/:lookId", requireAuth, async
   }
 });
 
+
+const CREATOR_EVENT_TYPES = new Set([
+  "CREATOR_PROFILE_VIEW",
+  "CREATOR_COLLECTION_OPEN",
+  "CREATOR_LOOK_TRYON_STARTED",
+]);
+
+function normalizeCreatorEventString(value, maxLen = 500) {
+  const s = String(value || "").trim();
+  if (!s) return null;
+  return s.slice(0, maxLen);
+}
+
+function normalizeCreatorEventMeta(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value;
+}
+
+app.post("/api/creator/events", async (req, res) => {
+  try {
+    const type = normalizeCreatorEventString(req.body?.type, 80);
+    const creatorSlug = normalizeCreatorEventString(req.body?.creatorSlug || req.body?.slug, 120);
+    const collectionId = normalizeCreatorEventString(req.body?.collectionId, 120);
+    const lookId = normalizeCreatorEventString(req.body?.lookId, 120);
+    const source = normalizeCreatorEventString(req.body?.source, 120) || "creator_storefront";
+    const pageUrl = normalizeCreatorEventString(req.body?.pageUrl, 1000);
+    const meta = normalizeCreatorEventMeta(req.body?.meta);
+
+    if (!type || !CREATOR_EVENT_TYPES.has(type)) {
+      return res.status(400).json({ error: "Unsupported creator event type" });
+    }
+
+    if (!creatorSlug) {
+      return res.status(400).json({ error: "creatorSlug is required" });
+    }
+
+    const creator = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { publicSlug: creatorSlug },
+          { id: creatorSlug },
+        ],
+      },
+      select: {
+        id: true,
+        publicSlug: true,
+      },
+    });
+
+    if (!creator) {
+      return res.status(404).json({ error: "Creator not found" });
+    }
+
+    if (collectionId) {
+      const collection = await prisma.lookCollection.findFirst({
+        where: {
+          id: collectionId,
+          userId: creator.id,
+          isPublic: true,
+        },
+        select: { id: true },
+      });
+
+      if (!collection) {
+        return res.status(404).json({ error: "Collection not found" });
+      }
+    }
+
+    if (lookId) {
+      const look = await prisma.look.findFirst({
+        where: {
+          id: lookId,
+          userId: creator.id,
+          isPublic: true,
+        },
+        select: { id: true },
+      });
+
+      if (!look) {
+        return res.status(404).json({ error: "Look not found" });
+      }
+    }
+
+    const event = await prisma.creatorEvent.create({
+      data: {
+        id: `ce-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        creatorUserId: creator.id,
+        actorUserId: req.auth?.userId || null,
+        type,
+        creatorSlug: creator.publicSlug || creatorSlug,
+        collectionId,
+        lookId,
+        source,
+        pageUrl,
+        userAgent: normalizeCreatorEventString(req.get("user-agent"), 1000),
+        meta,
+      },
+      select: {
+        id: true,
+        type: true,
+        creatorUserId: true,
+        actorUserId: true,
+        createdAt: true,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      event: {
+        ...event,
+        createdAt: event.createdAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("[toptry] POST /api/creator/events error", err);
+    return res.status(500).json({ error: err?.message || "Failed to record creator event" });
+  }
+});
+
+app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(90, Number(req.query.days || 30) || 30));
+    const limit = Math.max(50, Math.min(5000, Number(req.query.limit || 2000) || 2000));
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const events = await prisma.creatorEvent.findMany({
+      where: {
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+
+    const creatorIds = Array.from(new Set(events.map((event) => event.creatorUserId).filter(Boolean)));
+    const creators = creatorIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: creatorIds } },
+          select: {
+            id: true,
+            phone: true,
+            username: true,
+            publicSlug: true,
+            publicDisplayName: true,
+            avatarUrl: true,
+          },
+        })
+      : [];
+
+    const creatorById = new Map(creators.map((creator) => [creator.id, creator]));
+
+    const totals = {
+      all: events.length,
+      profileViews: 0,
+      collectionOpens: 0,
+      tryonStarts: 0,
+    };
+
+    const byCreator = new Map();
+
+    for (const event of events) {
+      if (event.type === "CREATOR_PROFILE_VIEW") totals.profileViews += 1;
+      if (event.type === "CREATOR_COLLECTION_OPEN") totals.collectionOpens += 1;
+      if (event.type === "CREATOR_LOOK_TRYON_STARTED") totals.tryonStarts += 1;
+
+      const row = byCreator.get(event.creatorUserId) || {
+        creatorUserId: event.creatorUserId,
+        total: 0,
+        profileViews: 0,
+        collectionOpens: 0,
+        tryonStarts: 0,
+        lastEventAt: null,
+      };
+
+      row.total += 1;
+      if (event.type === "CREATOR_PROFILE_VIEW") row.profileViews += 1;
+      if (event.type === "CREATOR_COLLECTION_OPEN") row.collectionOpens += 1;
+      if (event.type === "CREATOR_LOOK_TRYON_STARTED") row.tryonStarts += 1;
+      if (!row.lastEventAt || event.createdAt > row.lastEventAt) row.lastEventAt = event.createdAt;
+
+      byCreator.set(event.creatorUserId, row);
+    }
+
+    const creatorRows = Array.from(byCreator.values())
+      .map((row) => {
+        const creator = creatorById.get(row.creatorUserId);
+        return {
+          ...row,
+          lastEventAt: row.lastEventAt ? row.lastEventAt.toISOString() : null,
+          publicSlug: creator?.publicSlug || "",
+          publicDisplayName: creator?.publicDisplayName || "",
+          username: creator?.username || "",
+          phone: creator?.phone || "",
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+
+    return res.json({
+      ok: true,
+      days,
+      since: since.toISOString(),
+      totals,
+      creators: creatorRows,
+      recent: events.slice(0, 50).map((event) => ({
+        id: event.id,
+        type: event.type,
+        creatorUserId: event.creatorUserId,
+        actorUserId: event.actorUserId,
+        creatorSlug: event.creatorSlug,
+        collectionId: event.collectionId,
+        lookId: event.lookId,
+        source: event.source,
+        createdAt: event.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    console.error("[toptry] /api/admin/creator/events/summary error", err);
+    return res.status(500).json({ error: err?.message || "Failed to load creator event summary" });
+  }
+});
+
 app.get("/api/users/public/:slug", async (req, res) => {
   try {
     const slug = String(req.params.slug || "").trim();

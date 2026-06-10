@@ -182,6 +182,28 @@ model Clickout {
   meta      Json?
 }
 
+model CreatorEvent {
+  id            String   @id
+  creatorUserId String
+  actorUserId   String?
+  type          String
+  creatorSlug   String?
+  collectionId  String?
+  lookId        String?
+  source        String?
+  pageUrl       String?
+  userAgent     String?
+  meta          Json?
+  createdAt     DateTime @default(now())
+
+  @@index([creatorUserId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([type, createdAt])
+  @@index([collectionId])
+  @@index([lookId])
+}
+
+
 model PhoneOtp {
   id         String    @id
   userId     String?
