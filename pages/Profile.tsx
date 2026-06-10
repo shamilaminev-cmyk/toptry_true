@@ -972,14 +972,55 @@ const Profile = () => {
                     </div>
 
                     {collectionLooks.length ? (
-                      <div className="flex -space-x-2">
-                        {collectionLooks.slice(0, 5).map((look: any) => (
-                          <div key={look.id} className="w-12 h-12 rounded-2xl bg-zinc-100 border-2 border-white overflow-hidden">
-                            {look.resultImageUrl ? (
-                              <img src={withApiOrigin(look.resultImageUrl)} alt="" className="w-full h-full object-cover" />
-                            ) : null}
+                      <div className="relative aspect-[4/3] rounded-2xl bg-zinc-100 overflow-hidden border border-white">
+                        {collectionLooks.length === 1 ? (
+                          <img
+                            src={withApiOrigin(collectionLooks[0].resultImageUrl)}
+                            alt=""
+                            className="w-full h-full object-cover object-top"
+                          />
+                        ) : collectionLooks.length === 2 ? (
+                          <div className="grid grid-cols-2 h-full gap-px bg-white">
+                            {collectionLooks.slice(0, 2).map((look: any) => (
+                              <div key={look.id} className="bg-zinc-100 overflow-hidden">
+                                {look.resultImageUrl ? (
+                                  <img src={withApiOrigin(look.resultImageUrl)} alt="" className="w-full h-full object-cover object-top" />
+                                ) : null}
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        ) : collectionLooks.length === 3 ? (
+                          <div className="grid grid-cols-2 h-full gap-px bg-white">
+                            <div className="bg-zinc-100 overflow-hidden">
+                              {collectionLooks[0]?.resultImageUrl ? (
+                                <img src={withApiOrigin(collectionLooks[0].resultImageUrl)} alt="" className="w-full h-full object-cover object-top" />
+                              ) : null}
+                            </div>
+                            <div className="grid grid-rows-2 gap-px">
+                              {collectionLooks.slice(1, 3).map((look: any) => (
+                                <div key={look.id} className="bg-zinc-100 overflow-hidden">
+                                  {look.resultImageUrl ? (
+                                    <img src={withApiOrigin(look.resultImageUrl)} alt="" className="w-full h-full object-cover object-top" />
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 grid-rows-2 h-full gap-px bg-white">
+                            {collectionLooks.slice(0, 4).map((look: any) => (
+                              <div key={look.id} className="bg-zinc-100 overflow-hidden">
+                                {look.resultImageUrl ? (
+                                  <img src={withApiOrigin(look.resultImageUrl)} alt="" className="w-full h-full object-cover object-top" />
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="absolute top-3 right-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-900 shadow-sm">
+                          {collectionLooks.length}
+                        </div>
                       </div>
                     ) : (
                       <div className="rounded-2xl bg-white border border-dashed border-zinc-200 p-4 text-xs text-zinc-500">

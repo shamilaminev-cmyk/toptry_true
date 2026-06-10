@@ -16,6 +16,63 @@ const formatRub = (value: any) => {
   return `${Math.round(n).toLocaleString('ru-RU')} ${CURRENCY}`;
 };
 
+const CollectionPreview: React.FC<{ looks: any[]; count: number }> = ({ looks, count }) => {
+  const previewLooks = Array.isArray(looks) ? looks.slice(0, 4) : [];
+
+  const renderImage = (look: any, className = '') => {
+    const src = look?.resultImageUrl ? withApiOrigin(look.resultImageUrl) : '';
+
+    return (
+      <div className={`relative bg-zinc-100 overflow-hidden ${className}`}>
+        {src ? (
+          <img src={src} alt="" className="w-full h-full object-cover object-top" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-[10px] font-black uppercase tracking-[0.18em] text-zinc-300">
+            TopTry
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="relative aspect-[4/3] bg-zinc-100 overflow-hidden">
+      {previewLooks.length === 0 ? (
+        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-400">
+          Подборка
+        </div>
+      ) : previewLooks.length === 1 ? (
+        renderImage(previewLooks[0], 'w-full h-full')
+      ) : previewLooks.length === 2 ? (
+        <div className="grid grid-cols-2 h-full gap-px bg-white">
+          {renderImage(previewLooks[0], 'h-full')}
+          {renderImage(previewLooks[1], 'h-full')}
+        </div>
+      ) : previewLooks.length === 3 ? (
+        <div className="grid grid-cols-2 h-full gap-px bg-white">
+          {renderImage(previewLooks[0], 'h-full')}
+          <div className="grid grid-rows-2 gap-px">
+            {renderImage(previewLooks[1], 'h-full')}
+            {renderImage(previewLooks[2], 'h-full')}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 grid-rows-2 h-full gap-px bg-white">
+          {previewLooks.map((look) => (
+            <React.Fragment key={look.id}>
+              {renderImage(look, 'h-full')}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+
+      <div className="absolute top-3 right-3 rounded-full bg-white/90 backdrop-blur px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-zinc-900 shadow-sm">
+        {count} {count === 1 ? 'образ' : count > 1 && count < 5 ? 'образа' : 'образов'}
+      </div>
+    </div>
+  );
+};
+
 const StorefrontLookCard: React.FC<{ look: any; onTry: (look: any) => void }> = ({ look, onTry }) => {
   const imageUrl = look?.resultImageUrl ? withApiOrigin(look.resultImageUrl) : '';
   const sourceItems = Array.isArray(look?.sourceItems) ? look.sourceItems : [];
@@ -280,21 +337,20 @@ const UserStorefront: React.FC = () => {
         {collections.length ? (
           <div className="grid md:grid-cols-3 gap-4">
             {collections.map((collection) => {
-              const firstLook = Array.isArray(collection.looks) ? collection.looks[0] : null;
-              const cover = firstLook?.resultImageUrl ? withApiOrigin(firstLook.resultImageUrl) : '';
+              const collectionLooks = Array.isArray(collection.looks) ? collection.looks : [];
+              const count = collectionLooks.length;
 
               return (
                 <article key={collection.id} className="rounded-[28px] overflow-hidden border border-zinc-100 bg-white shadow-sm">
-                  <div className="aspect-[4/3] bg-zinc-100 overflow-hidden">
-                    {cover ? <img src={cover} alt="" className="w-full h-full object-cover" /> : null}
-                  </div>
+                  <CollectionPreview looks={collectionLooks} count={count} />
+
                   <div className="p-4">
                     <h3 className="text-sm font-black uppercase tracking-tight">{collection.title}</h3>
                     {collection.description ? (
                       <p className="mt-2 text-xs text-zinc-500 leading-relaxed">{collection.description}</p>
                     ) : null}
                     <div className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">
-                      {(collection.looks || []).length} образов
+                      Открыть подборку
                     </div>
                   </div>
                 </article>
