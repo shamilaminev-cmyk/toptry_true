@@ -3286,6 +3286,7 @@ async function mapLookForApi(row, viewerUserId = "") {
     userDescription: row.userDescription || null,
     authorName: publicAuthorName(author),
     authorAvatar: author?.avatarUrl || "",
+    authorSlug: author?.publicSlug || author?.id || "",
     viewerLiked,
     viewerSaved,
   };
@@ -3303,6 +3304,117 @@ async function getLookVisibleToViewer(lookId, viewerUserId = "") {
   if (row.isPublic || (viewerUserId && row.userId === viewerUserId)) return row;
   return null;
 }
+
+app.get("/api/users/public/:slug", async (req, res) => {
+  try {
+    const slug = String(req.params.slug || "").trim();
+    if (!slug) return res.status(400).json({ error: "Slug is required" });
+
+    const viewerUserId = req.auth?.userId || "";
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { publicSlug: slug },
+          { id: slug },
+        ],
+      },
+      select: {
+        id: true,
+        username: true,
+        avatarUrl: true,
+        publicSlug: true,
+        publicBio: true,
+        publicSocialUrl: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const [collections, looks] = await Promise.all([
+      prisma.lookCollection.findMany({
+        where: {
+          userId: user.id,
+          isPublic: true,
+        },
+        orderBy: [
+          { sortOrder: "asc" },
+          { createdAt: "asc" },
+        ],
+        include: {
+          items: {
+            orderBy: [
+              { sortOrder: "asc" },
+              { createdAt: "asc" },
+            ],
+            include: {
+              look: {
+                include: {
+                  user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true } },
+                },
+              },
+            },
+          },
+        },
+      }).catch(() => []),
+
+      prisma.look.findMany({
+        where: {
+          userId: user.id,
+          isPublic: true,
+        },
+        include: {
+          user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true } },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 60,
+      }),
+    ]);
+
+    const mappedLooks = await Promise.all(looks.map((row) => mapLookForApi(row, viewerUserId)));
+
+    const mappedCollections = await Promise.all((collections || []).map(async (collection) => {
+      const collectionLooks = await Promise.all(
+        (collection.items || [])
+          .map((item) => item.look)
+          .filter((look) => look?.isPublic)
+          .map((look) => mapLookForApi(look, viewerUserId))
+      );
+
+      return {
+        id: collection.id,
+        title: collection.title,
+        description: collection.description || "",
+        coverLookId: collection.coverLookId || "",
+        sortOrder: collection.sortOrder || 0,
+        looks: collectionLooks,
+        createdAt: collection.createdAt.toISOString(),
+        updatedAt: collection.updatedAt.toISOString(),
+      };
+    }));
+
+    return res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        username: user.username || "",
+        avatarUrl: user.avatarUrl || "",
+        publicSlug: user.publicSlug || user.id,
+        publicBio: user.publicBio || "",
+        publicSocialUrl: user.publicSocialUrl || "",
+        createdAt: user.createdAt.toISOString(),
+      },
+      collections: mappedCollections,
+      looks: mappedLooks,
+    });
+  } catch (err) {
+    console.error("[toptry] /api/users/public/:slug error", err);
+    return res.status(500).json({ error: err?.message || "Unknown server error" });
+  }
+});
 
 app.get("/api/looks/public", async (req, res) => {
   try {
