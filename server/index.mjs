@@ -3392,7 +3392,7 @@ app.get("/api/profile/published-looks", requireAuth, async (req, res) => {
       looks: looks.map((look) => ({
         id: look.id,
         title: look.title || "Образ TopTry",
-        resultImageUrl: mediaUrlFromKey(look.resultImageKey),
+        resultImageUrl: look.resultImageKey ? `/media/${look.resultImageKey}` : '',
         sourceItemsCount: Array.isArray(look.sourceItems) ? look.sourceItems.length : 0,
         likes: look.likesCount || 0,
         saves: look.savesCount || 0,
@@ -3453,7 +3453,7 @@ app.get("/api/profile/look-collections", requireAuth, async (req, res) => {
           .map((item) => ({
             id: item.look.id,
             title: item.look.title,
-            resultImageUrl: mediaUrlFromKey(item.look.resultImageKey),
+            resultImageUrl: item.look.resultImageKey ? `/media/${item.look.resultImageKey}` : '',
             updatedAt: item.look.updatedAt.toISOString(),
           })),
         createdAt: collection.createdAt.toISOString(),
