@@ -210,6 +210,12 @@ const LookDetails = () => {
   const [publishBusy, setPublishBusy] = useState(false);
   const [viewerSaved, setViewerSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportProblemType, setReportProblemType] = useState('Одежда наложилась плохо');
+  const [reportMessage, setReportMessage] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportResult, setReportResult] = useState('');
+  const [reportError, setReportError] = useState('');
   const commentsRef = useRef<HTMLElement | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -219,6 +225,15 @@ const LookDetails = () => {
     'Хорошо смотрится',
     'Интересное сочетание',
     'Где купить?',
+  ];
+
+  const reportProblemTypes = [
+    'Лицо изменилось',
+    'Одежда наложилась плохо',
+    'Вещь не появилась',
+    'Странные руки / тело',
+    'Плохое качество изображения',
+    'Другое',
   ];
 
   useEffect(() => {
@@ -407,6 +422,66 @@ const LookDetails = () => {
     }
   };
 
+  const submitLookReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!user?.id) {
+      showToast('Войдите, чтобы отправить обращение');
+      navigate('/auth');
+      return;
+    }
+
+    if (!look?.id) return;
+
+    const messageText = String(reportMessage || '').trim();
+    const composedMessage = [
+      `Тип проблемы: ${reportProblemType}`,
+      messageText ? `Комментарий: ${messageText}` : null,
+    ].filter(Boolean).join('\n');
+
+    setReportBusy(true);
+    setReportError('');
+    setReportResult('');
+
+    try {
+      const resp = await fetch('/api/support/request', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          topic: 'Проблема с генерацией',
+          message: composedMessage,
+          source: 'look_details',
+          lookId: String(look.id),
+          pageUrl: window.location.href,
+          context: {
+            problemType: reportProblemType,
+            userMessage: messageText || null,
+            lookTitle: look.title || null,
+            isPublic: Boolean(look.isPublic),
+            sourceItemCount: Array.isArray(look.sourceItems) ? look.sourceItems.length : null,
+            itemIds: Array.isArray(look.items) ? look.items : Array.isArray(look.itemIds) ? look.itemIds : null,
+            resultImageUrl: look.resultImageUrl || null,
+          },
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || `Ошибка ${resp.status}`);
+      }
+
+      setReportMessage('');
+      setReportResult(`Спасибо, обращение отправлено. Номер: ${data?.request?.id || '—'}`);
+      showToast('Обращение отправлено');
+    } catch (err: any) {
+      setReportError(err?.message || String(err));
+    } finally {
+      setReportBusy(false);
+    }
+  };
+
   const handleShare = async () => {
     const url = window.location.href;
     const title = look?.title || 'Образ TopTry';
@@ -577,6 +652,78 @@ const LookDetails = () => {
             )}
           </section>
         )}
+
+        <section className="rounded-3xl border border-zinc-100 bg-zinc-50 p-4 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
+                Качество примерки
+              </h2>
+              <p className="mt-2 text-sm text-zinc-600 leading-relaxed">
+                Если образ получился странно, сообщите нам. Мы привяжем обращение к этому образу и сможем быстрее разобраться.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setReportOpen((v) => !v);
+                setReportError('');
+                setReportResult('');
+              }}
+              className="shrink-0 px-4 py-2 rounded-full bg-white border border-zinc-100 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-900"
+            >
+              {reportOpen ? 'Скрыть' : 'Сообщить'}
+            </button>
+          </div>
+
+          {reportOpen && (
+            <form onSubmit={submitLookReport} className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {reportProblemTypes.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setReportProblemType(type)}
+                    className={`px-3 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest ${
+                      reportProblemType === type
+                        ? 'border-zinc-900 bg-zinc-900 text-white'
+                        : 'border-zinc-200 bg-white text-zinc-500'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                value={reportMessage}
+                onChange={(e) => setReportMessage(e.target.value)}
+                placeholder="Можно добавить комментарий: что именно выглядит неправильно?"
+                rows={3}
+                className="w-full rounded-2xl border border-zinc-100 bg-white px-4 py-3 text-sm outline-none focus:border-zinc-900 resize-none"
+              />
+
+              {(reportError || reportResult) && (
+                <div className={`rounded-2xl p-3 text-xs leading-relaxed ${
+                  reportError
+                    ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                    : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                }`}>
+                  {reportError || reportResult}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={reportBusy}
+                className="h-10 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] disabled:opacity-50"
+              >
+                {reportBusy ? 'Отправляем…' : 'Отправить проблему'}
+              </button>
+            </form>
+          )}
+        </section>
 
         <section className="space-y-4">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Товары образа</h2>
