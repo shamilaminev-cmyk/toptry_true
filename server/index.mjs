@@ -9541,6 +9541,74 @@ function pickCatalogCollectionDiverseRows({
   return picked;
 }
 
+function catalogCollectionGroup(row) {
+  return String(row?.taxonomyGroup || row?.category || "OTHER").toUpperCase();
+}
+
+function pickCatalogCollectionMerchandisedRows({
+  rows,
+  limit,
+  requiredClothing = 2,
+  merchantMax = 3,
+  groupMax = {},
+  titleKeyFn = null,
+}) {
+  const source = Array.isArray(rows) ? rows : [];
+  const picked = [];
+  const seenDedupe = new Set();
+  const seenTitle = new Set();
+  const merchantCounts = new Map();
+  const groupCounts = new Map();
+
+  const add = (p, strict = true) => {
+    if (!p || picked.length >= limit) return false;
+
+    const group = catalogCollectionGroup(p);
+    const merchant = String(p?.merchant || "unknown");
+    const dedupeKey = getCatalogCollectionDedupeKey(p);
+    const titleKey = typeof titleKeyFn === "function" ? titleKeyFn(p) : "";
+
+    if (dedupeKey && seenDedupe.has(dedupeKey)) return false;
+    if (titleKey && seenTitle.has(titleKey)) return false;
+
+    if (strict) {
+      if ((merchantCounts.get(merchant) || 0) >= merchantMax) return false;
+
+      const maxForGroup = Number(groupMax[group] ?? limit);
+      if ((groupCounts.get(group) || 0) >= maxForGroup) return false;
+    }
+
+    picked.push(p);
+    if (dedupeKey) seenDedupe.add(dedupeKey);
+    if (titleKey) seenTitle.add(titleKey);
+    merchantCounts.set(merchant, (merchantCounts.get(merchant) || 0) + 1);
+    groupCounts.set(group, (groupCounts.get(group) || 0) + 1);
+
+    return true;
+  };
+
+  // First force clothing into homepage blocks. TopTry must not look like bags/shoes only.
+  const clothingTarget = Math.max(0, Math.min(limit, Number(requiredClothing || 0)));
+  for (const p of source) {
+    if ((groupCounts.get("CLOTHING") || 0) >= clothingTarget) break;
+    if (catalogCollectionGroup(p) === "CLOTHING") add(p, true);
+  }
+
+  // Then fill with strict group/merchant caps.
+  for (const p of source) {
+    if (picked.length >= limit) break;
+    add(p, true);
+  }
+
+  // Last fallback: keep dedupe but relax group/merchant caps if the pool is narrow.
+  for (const p of source) {
+    if (picked.length >= limit) break;
+    add(p, false);
+  }
+
+  return picked.slice(0, limit);
+}
+
 app.get("/api/catalog/deals", async (req, res) => {
   try {
     const rawLimit = Number(req.query.limit || 4);
@@ -9602,7 +9670,16 @@ app.get("/api/catalog/deals", async (req, res) => {
         and coalesce(p."taxonomyGroup", '') in ('CLOTHING', 'SHOES', 'BAGS')
         and lr."isTryOnRelevantSuggested" = true
         and coalesce(cardinality(lr."rejectReasons"), 0) = 0
-      order by "discountPercent" desc, p."createdAt" desc, p."updatedAt" desc
+      order by
+        case coalesce(p."taxonomyGroup", '')
+          when 'CLOTHING' then 0
+          when 'SHOES' then 1
+          when 'BAGS' then 2
+          else 3
+        end,
+        "discountPercent" desc,
+        p."createdAt" desc,
+        p."updatedAt" desc
       limit $2
       `,
       minDiscount,
@@ -9701,10 +9778,18 @@ app.get("/api/catalog/deals", async (req, res) => {
         titleKeyFn: (p) => p._titleKey || p.id,
       });
 
-    let selected = pick(2, 2, 1, 1, false);
-    if (selected.length < limit) selected = pick(3, 3, 1, 1, false);
-    if (selected.length < limit) selected = pick(4, 4, 2, 1, false);
-    if (selected.length < limit) selected = pick(6, 6, 3, 2, true);
+    let selected = pickCatalogCollectionMerchandisedRows({
+      rows: selectionPool,
+      limit,
+      requiredClothing: Math.min(2, Math.max(1, Math.ceil(limit * 0.3))),
+      merchantMax: Math.max(2, Math.ceil(limit * 0.45)),
+      groupMax: {
+        CLOTHING: Math.max(2, Math.ceil(limit * 0.5)),
+        SHOES: Math.max(1, Math.ceil(limit * 0.45)),
+        BAGS: Math.max(1, Math.floor(limit * 0.2)),
+      },
+      titleKeyFn: (p) => p._titleKey || p.id,
+    });
 
     const products = selected.slice(0, limit).map((p) => {
       const price = Number(p.price || 0);
@@ -9753,7 +9838,7 @@ app.get("/api/catalog/deals", async (req, res) => {
         minDiscount,
         pool: rows.length,
         selected: products.length,
-        strategy: "deal_quality_score_discount_tryon_size_diverse_random_deduped_pool",
+        strategy: "deal_quality_score_merchandised_clothing_required_pool",
       },
     });
   } catch (e) {
@@ -9888,7 +9973,15 @@ app.get("/api/catalog/price-drops", async (req, res) => {
         and not (
           lower(coalesce(p.title, '')) ~ '(зонт|umbrella|шнурк|shoelace|стельк|insole|украшен.*для обув|аксессуар.*для обув|средств.*для обув|уход.*обув|крем.*обув|губк.*обув|щетк.*обув|щётк.*обув|пропитк|дезодорант.*обув)'
         )
-      order by random()
+      order by
+        case coalesce(p."taxonomyGroup", '')
+          when 'CLOTHING' then 0
+          when 'SHOES' then 1
+          when 'BAGS' then 2
+          when 'ACCESSORIES' then 3
+          else 4
+        end,
+        random()
       limit $3
       `,
       minDeltaPct,
@@ -9896,7 +9989,21 @@ app.get("/api/catalog/price-drops", async (req, res) => {
       poolLimit
     );
 
-    const products = rows.slice(0, limit).map((p) =>
+    const selected = pickCatalogCollectionMerchandisedRows({
+      rows: shuffleCatalogCollectionRows(rows),
+      limit,
+      requiredClothing: Math.min(2, Math.max(1, Math.ceil(limit * 0.25))),
+      merchantMax: Math.max(2, Math.ceil(limit * 0.45)),
+      groupMax: {
+        CLOTHING: Math.max(2, Math.ceil(limit * 0.45)),
+        SHOES: Math.max(1, Math.ceil(limit * 0.45)),
+        BAGS: Math.max(1, Math.floor(limit * 0.25)),
+        ACCESSORIES: Math.max(1, Math.floor(limit * 0.2)),
+      },
+      titleKeyFn: (p) => String(p.title || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().slice(0, 90),
+    });
+
+    const products = selected.map((p) =>
       mapCatalogCollectionProductForApi(p, { collection: "price-drops" })
     );
 
@@ -9909,7 +10016,7 @@ app.get("/api/catalog/price-drops", async (req, res) => {
         selected: products.length,
         minDeltaPct,
         days,
-        strategy: "price_change_drop_random_pool",
+        strategy: "price_change_drop_merchandised_clothing_required_pool",
       },
     });
   } catch (e) {
@@ -10113,7 +10220,15 @@ app.get("/api/catalog/home-new", async (req, res) => {
         and coalesce(p."taxonomyGroup", '') in ('CLOTHING', 'SHOES', 'BAGS')
         and lr."isTryOnRelevantSuggested" = true
         and coalesce(cardinality(lr."rejectReasons"), 0) = 0
-      order by p."createdAt" desc, p."updatedAt" desc
+      order by
+        case coalesce(p."taxonomyGroup", '')
+          when 'CLOTHING' then 0
+          when 'SHOES' then 1
+          when 'BAGS' then 2
+          else 3
+        end,
+        p."createdAt" desc,
+        p."updatedAt" desc
       limit $1
       `,
       poolLimit
@@ -10163,11 +10278,18 @@ app.get("/api/catalog/home-new", async (req, res) => {
         titleKeyFn: (p) => p._titleKey || p.id,
       });
 
-    let selected = pickWithLimits(2, 2, false);
-    if (selected.length < limit) selected = pickWithLimits(3, 3, false);
-    if (selected.length < limit) selected = pickWithLimits(4, 4, false);
-    if (selected.length < limit) selected = pickWithLimits(6, 6, true);
-    if (selected.length < limit) selected = pickWithLimits(limit, limit, true);
+    let selected = pickCatalogCollectionMerchandisedRows({
+      rows: selectionPool,
+      limit,
+      requiredClothing: Math.min(3, Math.max(2, Math.ceil(limit * 0.35))),
+      merchantMax: Math.max(2, Math.ceil(limit * 0.4)),
+      groupMax: {
+        CLOTHING: Math.max(2, Math.ceil(limit * 0.55)),
+        SHOES: Math.max(1, Math.ceil(limit * 0.35)),
+        BAGS: Math.max(1, Math.floor(limit * 0.25)),
+      },
+      titleKeyFn: (p) => p._titleKey || p.id,
+    });
 
     const products = selected.slice(0, limit).map((p) => ({
       id: p.id,
@@ -10204,7 +10326,7 @@ app.get("/api/catalog/home-new", async (req, res) => {
         limit,
         pool: rows.length,
         selected: products.length,
-        strategy: "fresh_ai_clean_diverse_random_deduped_pool",
+        strategy: "fresh_ai_clean_merchandised_clothing_required_pool",
       },
     });
   } catch (e) {
