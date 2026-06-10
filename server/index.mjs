@@ -11901,6 +11901,90 @@ setImmediate(async () => {
   }
 });
 
+
+function parseToptryClockTime(value, fallback = "03:30") {
+  const raw = String(value || fallback).trim();
+  const m = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return parseToptryClockTime(fallback, "03:30");
+
+  const hour = Math.max(0, Math.min(23, Number(m[1])));
+  const minute = Math.max(0, Math.min(59, Number(m[2])));
+
+  return { hour, minute, label: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}` };
+}
+
+function getToptryMoscowDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type) => Number(parts.find((p) => p.type === type)?.value || 0);
+
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+    dateKey: `${String(get("year")).padStart(4, "0")}-${String(get("month")).padStart(2, "0")}-${String(get("day")).padStart(2, "0")}`,
+  };
+}
+
+let catalogNightlySchedulerLastDateKey = "";
+
+function maybeStartCatalogNightlyScheduler() {
+  const enabled = String(process.env.CATALOG_NIGHTLY_SCHEDULER_ENABLED || "").trim() === "1";
+  if (!enabled) {
+    console.log("[toptry] catalog nightly scheduler disabled");
+    return;
+  }
+
+  const schedule = parseToptryClockTime(process.env.CATALOG_NIGHTLY_SCHEDULER_TIME_MSK || "03:30");
+  const applySafe = String(process.env.CATALOG_NIGHTLY_SCHEDULER_APPLY_SAFE || "").trim() === "1";
+  const tickMs = Math.max(30_000, Number(process.env.CATALOG_NIGHTLY_SCHEDULER_TICK_MS || 60_000));
+
+  console.log("[toptry] catalog nightly scheduler enabled", {
+    timeMsk: schedule.label,
+    applySafe,
+    tickMs,
+  });
+
+  const tick = () => {
+    try {
+      const now = getToptryMoscowDateParts(new Date());
+
+      if (now.hour !== schedule.hour || now.minute !== schedule.minute) return;
+      if (catalogNightlySchedulerLastDateKey === now.dateKey) return;
+
+      catalogNightlySchedulerLastDateKey = now.dateKey;
+
+      const result = startCatalogNightlyPipeline({
+        applySafe,
+        trigger: `scheduler:${schedule.label}:msk`,
+      });
+
+      console.log("[toptry] catalog nightly scheduler tick", {
+        dateKey: now.dateKey,
+        timeMsk: schedule.label,
+        result,
+      });
+    } catch (e) {
+      console.error("[toptry] catalog nightly scheduler error", e?.stack || e);
+    }
+  };
+
+  setInterval(tick, tickMs);
+  setTimeout(tick, 5_000);
+}
+
+maybeStartCatalogNightlyScheduler();
+
 app.get("/api/admin/catalog/nightly-pipeline/runs/:id", async (req, res) => {
   try {
     const id = String(req.params.id || "");
