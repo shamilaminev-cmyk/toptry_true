@@ -166,11 +166,13 @@ const Profile = () => {
     }
   };
 
-  const normalizedPublicSlug = String(publicSlug || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  const normalizePublicSlugInput = (value: string) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '')
+      .slice(0, 40);
+
+  const normalizedPublicSlug = normalizePublicSlugInput(publicSlug).replace(/^[-_]+|[-_]+$/g, '');
 
   const publicStorefrontUrl = `${window.location.origin}/#/u/${encodeURIComponent(user?.publicSlug || normalizedPublicSlug || user?.id || '')}`;
 
@@ -189,7 +191,7 @@ const Profile = () => {
     setPublicProfileError('');
 
     if (!normalizedPublicSlug || normalizedPublicSlug.length < 3) {
-      setPublicProfileError('Короткая ссылка должна быть не короче 3 символов');
+      setPublicProfileError('Короткая ссылка должна быть не короче 3 символов. Используйте латиницу, цифры, дефис или подчёркивание.');
       return;
     }
 
@@ -642,11 +644,17 @@ const Profile = () => {
                 <span className="pl-4 text-xs text-zinc-400">/u/</span>
                 <input
                   value={publicSlug}
-                  onChange={(e) => setPublicSlug(e.target.value)}
+                  onChange={(e) => setPublicSlug(normalizePublicSlugInput(e.target.value))}
                   placeholder="shamil"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   className="w-full h-12 bg-transparent px-2 text-sm font-bold outline-none"
                 />
               </div>
+              <span className="block text-[10px] font-bold text-zinc-400 leading-relaxed">
+                Только латиница, цифры, дефис и подчёркивание. Минимум 3 символа.
+              </span>
             </label>
 
             <label className="space-y-2">
