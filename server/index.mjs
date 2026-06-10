@@ -1895,7 +1895,7 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
   }
 });
 
-app.post("/api/admin/users/credits-by-phone", async (req, res) => {
+app.post("/api/admin/users/credits-by-phone", requireAuth, requireTopTryAdmin, async (req, res) => {
   try {
     const phone = normalizePhone(req.body?.phone || req.query.phone);
     if (!phone) {
@@ -1951,7 +1951,7 @@ app.post("/api/admin/users/credits-by-phone", async (req, res) => {
 });
 
 
-app.post("/api/admin/users/entitlement-by-phone", async (req, res) => {
+app.post("/api/admin/users/entitlement-by-phone", requireAuth, requireTopTryAdmin, async (req, res) => {
   try {
     const phone = normalizePhone(req.body?.phone || req.query.phone);
     if (!phone) {

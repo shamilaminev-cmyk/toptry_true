@@ -3,6 +3,13 @@ import { Link } from 'react-router-dom';
 
 type AdminSummary = any;
 
+const API_ORIGIN = String(import.meta.env.VITE_API_ORIGIN || '').replace(/\/+$/, '');
+
+function adminApiUrl(path: string) {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return API_ORIGIN ? `${API_ORIGIN}${p}` : p;
+}
+
 const numberFmt = new Intl.NumberFormat('ru-RU');
 
 function fmt(value: any) {
@@ -70,7 +77,7 @@ const Admin: React.FC = () => {
     setError('');
 
     try {
-      const resp = await fetch('/api/admin/dashboard/summary', {
+      const resp = await fetch(adminApiUrl('/api/admin/dashboard/summary'), {
         credentials: 'include',
       });
       const json = await resp.json().catch(() => ({}));
@@ -101,7 +108,7 @@ const Admin: React.FC = () => {
     setAdminActionResult(null);
 
     try {
-      const resp = await fetch('/api/admin/users/entitlement-by-phone', {
+      const resp = await fetch(adminApiUrl('/api/admin/users/entitlement-by-phone'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
@@ -139,7 +146,7 @@ const Admin: React.FC = () => {
     setAdminActionResult(null);
 
     try {
-      const resp = await fetch('/api/admin/users/credits-by-phone', {
+      const resp = await fetch(adminApiUrl('/api/admin/users/credits-by-phone'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
