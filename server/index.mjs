@@ -3292,7 +3292,6 @@ app.delete("/api/wardrobe/item/:id", requireAuth, async (req, res) => {
 // ---------- LOOKS / SOCIAL ----------
 
 function publicAuthorName(user) {
-  const user = user;
   return user?.publicDisplayName || user?.username || "Автор TopTry";
 }
 
