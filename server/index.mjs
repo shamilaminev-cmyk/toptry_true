@@ -3310,7 +3310,7 @@ async function mapLookForApi(row, viewerUserId = "") {
   const author = row?.user || (row?.userId
     ? await prisma.user.findUnique({
         where: { id: row.userId },
-        select: { id: true, username: true, avatarUrl: true },
+        select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true },
       }).catch(() => null)
     : null);
 
@@ -3363,7 +3363,7 @@ async function getLookVisibleToViewer(lookId, viewerUserId = "") {
   const row = await prisma.look.findUnique({
     where: { id: lookId },
     include: {
-      user: { select: { id: true, username: true, avatarUrl: true } },
+      user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
     },
   });
 
@@ -4112,7 +4112,7 @@ app.get("/api/looks/public", async (req, res) => {
       prisma.look.findMany({
         where: { isPublic: true },
         include: {
-          user: { select: { id: true, username: true, avatarUrl: true } },
+          user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
         },
         orderBy: { updatedAt: "desc" },
         take: limit,
@@ -4143,7 +4143,7 @@ app.get("/api/looks/my", requireAuth, async (req, res) => {
     const rows = await prisma.look.findMany({
       where: { userId },
       include: {
-        user: { select: { id: true, username: true, avatarUrl: true } },
+        user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -4169,7 +4169,7 @@ app.get("/api/looks/saved", requireAuth, async (req, res) => {
         include: {
           look: {
             include: {
-              user: { select: { id: true, username: true, avatarUrl: true } },
+              user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
             },
           },
         },
@@ -4231,7 +4231,7 @@ app.post("/api/looks/:id/publish", requireAuth, async (req, res) => {
       where: { id },
       data: { isPublic: true },
       include: {
-        user: { select: { id: true, username: true, avatarUrl: true } },
+        user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
       },
     });
 
@@ -4258,7 +4258,7 @@ app.post("/api/looks/:id/unpublish", requireAuth, async (req, res) => {
       where: { id },
       data: { isPublic: false },
       include: {
-        user: { select: { id: true, username: true, avatarUrl: true } },
+        user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
       },
     });
 
@@ -4491,7 +4491,7 @@ app.get("/api/looks/:id/comments", async (req, res) => {
     const rows = await prisma.comment.findMany({
       where: { lookId },
       include: {
-        user: { select: { id: true, username: true, avatarUrl: true } },
+        user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
       },
       orderBy: { createdAt: "asc" },
       take: 100,
@@ -4535,7 +4535,7 @@ app.post("/api/looks/:id/comments", requireAuth, async (req, res) => {
           text,
         },
         include: {
-          user: { select: { id: true, username: true, avatarUrl: true } },
+          user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
         },
       });
 
