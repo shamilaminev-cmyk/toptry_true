@@ -3747,12 +3747,19 @@ app.get("/api/profile/creator-analytics", requireAuth, async (req, res) => {
       take: 2000,
     });
 
+    const followersCount = await prisma.follow.count({
+      where: { followingId: userId },
+    }).catch(() => 0);
+
     const totals = {
       all: events.length,
       profileViews: 0,
       collectionOpens: 0,
       tryonStarts: 0,
       clickouts: 0,
+      followersCount: Number(followersCount || 0),
+      follows: 0,
+      unfollows: 0,
     };
 
     const byCollection = new Map();
@@ -3763,6 +3770,8 @@ app.get("/api/profile/creator-analytics", requireAuth, async (req, res) => {
       if (event.type === "CREATOR_COLLECTION_OPEN") totals.collectionOpens += 1;
       if (event.type === "CREATOR_LOOK_TRYON_STARTED") totals.tryonStarts += 1;
       if (event.type === "CREATOR_CLICKOUT") totals.clickouts += 1;
+      if (event.type === "CREATOR_FOLLOW") totals.follows += 1;
+      if (event.type === "CREATOR_UNFOLLOW") totals.unfollows += 1;
 
       if (event.collectionId) {
         const row = byCollection.get(event.collectionId) || {

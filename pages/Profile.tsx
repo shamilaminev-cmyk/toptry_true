@@ -33,6 +33,9 @@ type CreatorAnalyticsInfo = {
     collectionOpens: number;
     tryonStarts: number;
     clickouts: number;
+    followersCount: number;
+    follows: number;
+    unfollows: number;
   };
   popularCollections: any[];
   popularLooks: any[];
@@ -796,7 +799,7 @@ const Profile = () => {
                 Статистика витрины
               </h2>
               <p className="mt-2 text-sm text-zinc-500 leading-relaxed max-w-2xl">
-                Личная аналитика автора за 7 дней: просмотры витрины, открытия подборок и старты примерки.
+                Личная аналитика автора за 7 дней: просмотры, подписки, примерки и переходы к покупке.
               </p>
             </div>
 
@@ -816,7 +819,7 @@ const Profile = () => {
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Событий</div>
               <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.all || 0}</div>
@@ -836,6 +839,18 @@ const Profile = () => {
             <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Переходы</div>
               <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.clickouts || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Подписчики</div>
+              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.followersCount || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Новые</div>
+              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.follows || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Отписки</div>
+              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.unfollows || 0}</div>
             </div>
           </div>
 
@@ -1352,7 +1367,7 @@ const Profile = () => {
                   Загружаем опубликованные образы...
                 </div>
               ) : publishedLooks.length ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                   {publishedLooks.map((look) => {
                     const activeCollection = collections.find((collection) => collection.id === activeCollectionId);
                     const alreadyInCollection = Boolean(

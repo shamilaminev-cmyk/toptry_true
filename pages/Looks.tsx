@@ -619,6 +619,7 @@ const Looks = () => {
             const totalPrice =
               Number(look.priceBuyNowRUB || 0) ||
               sourceItems.reduce((sum: number, item: any) => sum + (Number(item?.price || 0) || 0), 0);
+            const clickoutPlacement = tab === 'following' ? 'following_feed' : 'feed';
             const effectiveIsPublic = Boolean(publishedOverrides[String(look.id)] ?? look.isPublic);
             const authorHref = authorStorefrontRoute(look);
             const authorLabel = look.authorName || 'Автор';
@@ -832,7 +833,7 @@ const Looks = () => {
                       <div className="space-y-3">
                         {sourceItems.slice(0, 3).map((item: any, idx: number) => {
                           const hasBuyUrl = !!(item?.affiliateUrl || item?.productUrl);
-                          const buyUrl = sourceItemClickoutUrl(item, 'feed', String(look.id), idx);
+                          const buyUrl = sourceItemClickoutUrl(item, clickoutPlacement, String(look.id), idx);
                           const imageUrl = Array.isArray(item?.images) ? item.images[0] : item?.imageUrl;
 
                           return (
