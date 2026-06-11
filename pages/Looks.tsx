@@ -226,9 +226,10 @@ const Looks = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const tabParam = new URLSearchParams(location.search).get('tab');
-  const initialTab = tabParam === 'mine' ? 'mine' : tabParam === 'saved' ? 'saved' : 'feed';
-  const [tab, setTab] = React.useState<'feed' | 'mine' | 'saved'>(initialTab as 'feed' | 'mine' | 'saved');
+  const initialTab = tabParam === 'mine' ? 'mine' : tabParam === 'saved' ? 'saved' : tabParam === 'following' ? 'following' : 'feed';
+  const [tab, setTab] = React.useState<'feed' | 'following' | 'mine' | 'saved'>(initialTab as 'feed' | 'following' | 'mine' | 'saved');
   const [feedLooks, setFeedLooks] = React.useState<any[]>([]);
+  const [followingLooks, setFollowingLooks] = React.useState<any[]>([]);
   const [savedLooks, setSavedLooks] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [likedPulseIds, setLikedPulseIds] = React.useState<Record<string, boolean>>({});
@@ -240,19 +241,24 @@ const Looks = () => {
 
   React.useEffect(() => {
     const requestedParam = new URLSearchParams(location.search).get('tab');
-    const requestedTab = requestedParam === 'mine' ? 'mine' : requestedParam === 'saved' ? 'saved' : 'feed';
+    const requestedTab = requestedParam === 'mine' ? 'mine' : requestedParam === 'saved' ? 'saved' : requestedParam === 'following' ? 'following' : 'feed';
     setTab(requestedTab);
   }, [location.search]);
 
   React.useEffect(() => {
-    if (tab !== 'feed' && tab !== 'saved') return;
+    if (tab !== 'feed' && tab !== 'saved' && tab !== 'following') return;
 
     let cancelled = false;
 
     (async () => {
       setLoading(true);
       try {
-        const endpoint = tab === 'saved' ? '/api/looks/saved?limit=50' : '/api/looks/public?limit=50';
+        const endpoint =
+          tab === 'saved'
+            ? '/api/looks/saved?limit=50'
+            : tab === 'following'
+              ? '/api/looks/following?limit=50'
+              : '/api/looks/public?limit=50';
         const resp = await fetch(endpoint, { credentials: 'include' });
         const data = await resp.json().catch(() => ({}));
 
@@ -260,6 +266,7 @@ const Looks = () => {
 
         if (!resp.ok) {
           if (tab === 'saved') setSavedLooks([]);
+          else if (tab === 'following') setFollowingLooks([]);
           else setFeedLooks([]);
           return;
         }
@@ -268,10 +275,12 @@ const Looks = () => {
         const mapped = raw.map((l: any) => ({ ...l, createdAt: l?.createdAt ? new Date(l.createdAt) : new Date() }));
 
         if (tab === 'saved') setSavedLooks(mapped);
+        else if (tab === 'following') setFollowingLooks(mapped);
         else setFeedLooks(mapped);
       } catch {
         if (!cancelled) {
           if (tab === 'saved') setSavedLooks([]);
+          else if (tab === 'following') setFollowingLooks([]);
           else setFeedLooks([]);
         }
       } finally {
@@ -284,7 +293,7 @@ const Looks = () => {
     };
   }, [tab, user?.id]);
 
-  const visibleLooks = tab === 'mine' ? looks : tab === 'saved' ? savedLooks : feedLooks;
+  const visibleLooks = tab === 'mine' ? looks : tab === 'saved' ? savedLooks : tab === 'following' ? followingLooks : feedLooks;
 
   const requireAuthForSocial = (message: string) => {
     if (user?.id) return true;
@@ -483,7 +492,7 @@ const Looks = () => {
       <div className="p-4 sticky top-0 bg-white z-40 border-b border-zinc-100 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-bold uppercase tracking-tighter">
-            {tab === 'feed' ? 'Лента образов' : tab === 'saved' ? 'Сохранённые' : 'Мои образы'}
+            {tab === 'feed' ? 'Лента образов' : tab === 'following' ? 'Подписки' : tab === 'saved' ? 'Сохранённые' : 'Мои образы'}
           </h1>
 
           <Link
@@ -548,7 +557,7 @@ const Looks = () => {
         </div>
       </div>
 
-      {loading && tab === 'feed' && (
+      {loading && tab !== 'mine' && (
         <div className="py-10 text-center text-xs text-zinc-400 uppercase tracking-widest">
           Загрузка...
         </div>
@@ -558,14 +567,22 @@ const Looks = () => {
         <div className="px-4 py-16 text-center">
           <div className="bg-zinc-50 border border-zinc-100 rounded-[32px] p-8 space-y-4">
             <h3 className="text-lg font-bold uppercase tracking-widest">
-              {tab === 'feed' ? 'Пока нет публичных образов' : tab === 'saved' ? 'Пока нет сохранённых образов' : 'У вас пока нет образов'}
+              {tab === 'feed'
+                ? 'Пока нет публичных образов'
+                : tab === 'following'
+                  ? 'Пока нет образов от авторов'
+                  : tab === 'saved'
+                    ? 'Пока нет сохранённых образов'
+                    : 'У вас пока нет образов'}
             </h3>
             <p className="text-xs text-zinc-400 leading-relaxed uppercase tracking-wider">
               {tab === 'feed'
                 ? 'Сгенерируйте и опубликуйте первые образы, чтобы наполнить ленту.'
-                : tab === 'saved'
-                  ? 'Сохраняйте понравившиеся образы из ленты, чтобы вернуться к ним позже.'
-                  : 'Создайте первый образ и он появится здесь.'}
+                : tab === 'following'
+                  ? 'Подпишитесь на авторов, чтобы видеть здесь их новые примеряемые образы.'
+                  : tab === 'saved'
+                    ? 'Сохраняйте понравившиеся образы из ленты, чтобы вернуться к ним позже.'
+                    : 'Создайте первый образ и он появится здесь.'}
             </p>
             <Link
               to="/create-look"

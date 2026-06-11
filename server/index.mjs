@@ -3615,6 +3615,8 @@ const CREATOR_EVENT_TYPES = new Set([
   "CREATOR_COLLECTION_OPEN",
   "CREATOR_LOOK_TRYON_STARTED",
   "CREATOR_CLICKOUT",
+  "CREATOR_FOLLOW",
+  "CREATOR_UNFOLLOW",
 ]);
 
 function normalizeCreatorEventString(value, maxLen = 500) {
@@ -4019,7 +4021,7 @@ app.get("/api/users/public/:slug", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const [collections, looks] = await Promise.all([
+    const [collections, looks, followersCount, viewerFollow] = await Promise.all([
       prisma.lookCollection.findMany({
         where: {
           userId: user.id,
@@ -4057,6 +4059,22 @@ app.get("/api/users/public/:slug", async (req, res) => {
         orderBy: { updatedAt: "desc" },
         take: 60,
       }),
+
+      prisma.follow.count({
+        where: { followingId: user.id },
+      }).catch(() => 0),
+
+      viewerUserId && viewerUserId !== user.id
+        ? prisma.follow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId: viewerUserId,
+                followingId: user.id,
+              },
+            },
+            select: { id: true },
+          }).catch(() => null)
+        : null,
     ]);
 
     const mappedLooks = await Promise.all(looks.map((row) => mapLookForApi(row, viewerUserId)));
@@ -4091,6 +4109,9 @@ app.get("/api/users/public/:slug", async (req, res) => {
         publicDisplayName: user.publicDisplayName || "",
         publicBio: user.publicBio || "",
         publicSocialUrl: user.publicSocialUrl || "",
+        followersCount: Number(followersCount || 0),
+        viewerFollowing: Boolean(viewerFollow),
+        viewerIsOwner: Boolean(viewerUserId && viewerUserId === user.id),
         createdAt: user.createdAt.toISOString(),
       },
       collections: mappedCollections,
@@ -4101,6 +4122,204 @@ app.get("/api/users/public/:slug", async (req, res) => {
     return res.status(500).json({ error: err?.message || "Unknown server error" });
   }
 });
+
+
+async function findPublicCreatorBySlug(slug) {
+  const s = String(slug || "").trim();
+  if (!s) return null;
+
+  return prisma.user.findFirst({
+    where: {
+      OR: [
+        { publicSlug: s },
+        { id: s },
+      ],
+    },
+    select: {
+      id: true,
+      publicSlug: true,
+      publicDisplayName: true,
+      username: true,
+      avatarUrl: true,
+    },
+  });
+}
+
+app.post("/api/users/public/:slug/follow", requireAuth, async (req, res) => {
+  try {
+    const slug = String(req.params.slug || "").trim();
+    const followerId = req.auth.userId;
+
+    const creator = await findPublicCreatorBySlug(slug);
+    if (!creator) return res.status(404).json({ error: "Creator not found" });
+
+    if (creator.id === followerId) {
+      return res.status(400).json({ error: "Нельзя подписаться на самого себя" });
+    }
+
+    await prisma.follow.upsert({
+      where: {
+        followerId_followingId: {
+          followerId,
+          followingId: creator.id,
+        },
+      },
+      update: {},
+      create: {
+        id: `follow-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        followerId,
+        followingId: creator.id,
+      },
+    });
+
+    const followersCount = await prisma.follow.count({
+      where: { followingId: creator.id },
+    });
+
+    prisma.creatorEvent.create({
+      data: {
+        id: `ce-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        creatorUserId: creator.id,
+        actorUserId: followerId,
+        type: "CREATOR_FOLLOW",
+        creatorSlug: creator.publicSlug || creator.id,
+        source: "creator_storefront",
+        pageUrl: normalizeCreatorEventString(req.get("referer"), 1000),
+        userAgent: normalizeCreatorEventString(req.get("user-agent"), 1000),
+        meta: {
+          slug,
+        },
+      },
+    }).catch((e) => {
+      console.warn("[toptry] creator follow event failed", e?.message || String(e));
+    });
+
+    return res.json({
+      ok: true,
+      following: true,
+      followersCount,
+      creator: {
+        id: creator.id,
+        publicSlug: creator.publicSlug || creator.id,
+        publicDisplayName: creator.publicDisplayName || "",
+        username: creator.username || "",
+      },
+    });
+  } catch (err) {
+    console.error("[toptry] POST /api/users/public/:slug/follow error", err);
+    return res.status(500).json({ error: err?.message || "Failed to follow creator" });
+  }
+});
+
+app.delete("/api/users/public/:slug/follow", requireAuth, async (req, res) => {
+  try {
+    const slug = String(req.params.slug || "").trim();
+    const followerId = req.auth.userId;
+
+    const creator = await findPublicCreatorBySlug(slug);
+    if (!creator) return res.status(404).json({ error: "Creator not found" });
+
+    if (creator.id !== followerId) {
+      await prisma.follow.deleteMany({
+        where: {
+          followerId,
+          followingId: creator.id,
+        },
+      });
+
+      prisma.creatorEvent.create({
+        data: {
+          id: `ce-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          creatorUserId: creator.id,
+          actorUserId: followerId,
+          type: "CREATOR_UNFOLLOW",
+          creatorSlug: creator.publicSlug || creator.id,
+          source: "creator_storefront",
+          pageUrl: normalizeCreatorEventString(req.get("referer"), 1000),
+          userAgent: normalizeCreatorEventString(req.get("user-agent"), 1000),
+          meta: {
+            slug,
+          },
+        },
+      }).catch((e) => {
+        console.warn("[toptry] creator unfollow event failed", e?.message || String(e));
+      });
+    }
+
+    const followersCount = await prisma.follow.count({
+      where: { followingId: creator.id },
+    });
+
+    return res.json({
+      ok: true,
+      following: false,
+      followersCount,
+    });
+  } catch (err) {
+    console.error("[toptry] DELETE /api/users/public/:slug/follow error", err);
+    return res.status(500).json({ error: err?.message || "Failed to unfollow creator" });
+  }
+});
+
+app.get("/api/looks/following", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit || "50"), 10) || 50, 1), 100);
+    const offset = Math.max(parseInt(String(req.query.offset || "0"), 10) || 0, 0);
+
+    const follows = await prisma.follow.findMany({
+      where: { followerId: userId },
+      select: { followingId: true },
+    });
+
+    const creatorIds = follows.map((row) => row.followingId).filter(Boolean);
+
+    if (!creatorIds.length) {
+      return res.json({
+        looks: [],
+        total: 0,
+        limit,
+        offset,
+        hasMore: false,
+      });
+    }
+
+    const [rows, total] = await Promise.all([
+      prisma.look.findMany({
+        where: {
+          isPublic: true,
+          userId: { in: creatorIds },
+        },
+        include: {
+          user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.look.count({
+        where: {
+          isPublic: true,
+          userId: { in: creatorIds },
+        },
+      }),
+    ]);
+
+    const looks = await Promise.all(rows.map((row) => mapLookForApi(row, userId)));
+
+    return res.json({
+      looks,
+      total,
+      limit,
+      offset,
+      hasMore: offset + looks.length < total,
+    });
+  } catch (err) {
+    console.error("[toptry] /api/looks/following error", err);
+    return res.status(500).json({ error: err?.message || "Failed to load following feed" });
+  }
+});
+
 
 app.get("/api/looks/public", async (req, res) => {
   try {

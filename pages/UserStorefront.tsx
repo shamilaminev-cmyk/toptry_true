@@ -144,6 +144,10 @@ const UserStorefront: React.FC = () => {
   const [profile, setProfile] = useState<any | null>(null);
   const [collections, setCollections] = useState<any[]>([]);
   const [activeCollectionId, setActiveCollectionId] = useState('');
+  const [followersCount, setFollowersCount] = useState(0);
+  const [viewerFollowing, setViewerFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [followError, setFollowError] = useState('');
   const [profileViewTrackedKey, setProfileViewTrackedKey] = useState('');
   const [looks, setLooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,6 +173,9 @@ const UserStorefront: React.FC = () => {
         if (cancelled) return;
 
         setProfile(data?.user || null);
+        setFollowersCount(Number(data?.user?.followersCount || 0));
+        setViewerFollowing(Boolean(data?.user?.viewerFollowing));
+        setFollowError('');
         setCollections(Array.isArray(data?.collections) ? data.collections : []);
         setActiveCollectionId('');
         setLooks(Array.isArray(data?.looks) ? data.looks : []);
@@ -223,6 +230,46 @@ const UserStorefront: React.FC = () => {
     setProfileViewTrackedKey(key);
     trackCreatorEvent('CREATOR_PROFILE_VIEW');
   }, [profile?.id, profile?.publicSlug, slug, profileViewTrackedKey]);
+
+  const handleFollowToggle = async () => {
+    if (!profile?.id) return;
+
+    const creatorSlug = profile.publicSlug || slug || profile.id;
+    const method = viewerFollowing ? 'DELETE' : 'POST';
+
+    setFollowBusy(true);
+    setFollowError('');
+
+    try {
+      const resp = await fetch(apiUrl(`/api/users/public/${encodeURIComponent(String(creatorSlug))}/follow`), {
+        method,
+        credentials: 'include',
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        navigate('/auth');
+        return;
+      }
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось обновить подписку');
+      }
+
+      setViewerFollowing(Boolean(data?.following));
+      setFollowersCount(Number(data?.followersCount || 0));
+      setProfile((prev: any) => prev ? {
+        ...prev,
+        viewerFollowing: Boolean(data?.following),
+        followersCount: Number(data?.followersCount || 0),
+      } : prev);
+    } catch (e: any) {
+      setFollowError(e?.message || 'Не удалось обновить подписку');
+    } finally {
+      setFollowBusy(false);
+    }
+  };
 
   const handleShare = async () => {
     try {
@@ -366,6 +413,21 @@ const UserStorefront: React.FC = () => {
               )}
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
+                {!profile.viewerIsOwner ? (
+                  <button
+                    type="button"
+                    onClick={handleFollowToggle}
+                    disabled={followBusy}
+                    className={`h-9 px-4 rounded-full text-[10px] font-black uppercase tracking-[0.16em] transition-colors ${
+                      viewerFollowing
+                        ? 'bg-white/10 text-white border border-white/15'
+                        : 'bg-white text-zinc-900'
+                    } ${followBusy ? 'opacity-60 pointer-events-none' : ''}`}
+                  >
+                    {viewerFollowing ? 'Вы подписаны' : 'Подписаться'}
+                  </button>
+                ) : null}
+
                 {profile.publicSocialUrl ? (
                   <a
                     href={profile.publicSocialUrl}
@@ -380,11 +442,15 @@ const UserStorefront: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleShare}
-                  className="h-9 px-4 rounded-full bg-white text-zinc-900 text-[10px] font-black uppercase tracking-[0.16em]"
+                  className="h-9 px-4 rounded-full bg-white/10 text-white border border-white/15 text-[10px] font-black uppercase tracking-[0.16em]"
                 >
                   Поделиться
                 </button>
               </div>
+
+              {followError ? (
+                <p className="mt-2 text-xs text-rose-200">{followError}</p>
+              ) : null}
             </div>
           </div>
 
@@ -398,8 +464,8 @@ const UserStorefront: React.FC = () => {
               <div className="text-[9px] font-black uppercase tracking-[0.16em] text-white/45">подборок</div>
             </div>
             <div className="rounded-2xl bg-white/10 p-3 text-center">
-              <div className="text-2xl font-black">↗</div>
-              <div className="text-[9px] font-black uppercase tracking-[0.16em] text-white/45">примерка</div>
+              <div className="text-2xl font-black">{followersCount}</div>
+              <div className="text-[9px] font-black uppercase tracking-[0.16em] text-white/45">подписчиков</div>
             </div>
           </div>
         </div>
