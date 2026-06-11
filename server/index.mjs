@@ -3717,6 +3717,157 @@ app.post("/api/creator/events", async (req, res) => {
   }
 });
 
+
+app.get("/api/profile/creator-analytics", requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const days = Math.max(1, Math.min(90, Number(req.query.days || 7) || 7));
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const events = await prisma.creatorEvent.findMany({
+      where: {
+        creatorUserId: userId,
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 2000,
+    });
+
+    const totals = {
+      all: events.length,
+      profileViews: 0,
+      collectionOpens: 0,
+      tryonStarts: 0,
+    };
+
+    const byCollection = new Map();
+    const byLook = new Map();
+
+    for (const event of events) {
+      if (event.type === "CREATOR_PROFILE_VIEW") totals.profileViews += 1;
+      if (event.type === "CREATOR_COLLECTION_OPEN") totals.collectionOpens += 1;
+      if (event.type === "CREATOR_LOOK_TRYON_STARTED") totals.tryonStarts += 1;
+
+      if (event.collectionId) {
+        const row = byCollection.get(event.collectionId) || {
+          collectionId: event.collectionId,
+          total: 0,
+          opens: 0,
+          tryonStarts: 0,
+          lastEventAt: null,
+        };
+
+        row.total += 1;
+        if (event.type === "CREATOR_COLLECTION_OPEN") row.opens += 1;
+        if (event.type === "CREATOR_LOOK_TRYON_STARTED") row.tryonStarts += 1;
+        if (!row.lastEventAt || event.createdAt > row.lastEventAt) row.lastEventAt = event.createdAt;
+
+        byCollection.set(event.collectionId, row);
+      }
+
+      if (event.lookId) {
+        const row = byLook.get(event.lookId) || {
+          lookId: event.lookId,
+          total: 0,
+          tryonStarts: 0,
+          lastEventAt: null,
+        };
+
+        row.total += 1;
+        if (event.type === "CREATOR_LOOK_TRYON_STARTED") row.tryonStarts += 1;
+        if (!row.lastEventAt || event.createdAt > row.lastEventAt) row.lastEventAt = event.createdAt;
+
+        byLook.set(event.lookId, row);
+      }
+    }
+
+    const collectionIds = Array.from(byCollection.keys());
+    const lookIds = Array.from(byLook.keys());
+
+    const [collections, looks] = await Promise.all([
+      collectionIds.length
+        ? prisma.lookCollection.findMany({
+            where: {
+              id: { in: collectionIds },
+              userId,
+            },
+            select: {
+              id: true,
+              title: true,
+              description: true,
+            },
+          })
+        : [],
+      lookIds.length
+        ? prisma.look.findMany({
+            where: {
+              id: { in: lookIds },
+              userId,
+            },
+            select: {
+              id: true,
+              title: true,
+              resultImageKey: true,
+              isPublic: true,
+            },
+          })
+        : [],
+    ]);
+
+    const collectionById = new Map(collections.map((collection) => [collection.id, collection]));
+    const lookById = new Map(looks.map((look) => [look.id, look]));
+
+    const popularCollections = Array.from(byCollection.values())
+      .map((row) => {
+        const collection = collectionById.get(row.collectionId);
+        return {
+          ...row,
+          title: collection?.title || row.collectionId,
+          description: collection?.description || "",
+          lastEventAt: row.lastEventAt ? row.lastEventAt.toISOString() : null,
+        };
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 20);
+
+    const popularLooks = Array.from(byLook.values())
+      .map((row) => {
+        const look = lookById.get(row.lookId);
+        return {
+          ...row,
+          title: look?.title || row.lookId,
+          resultImageUrl: look?.resultImageKey ? `/media/${look.resultImageKey}` : "",
+          isPublic: !!look?.isPublic,
+          lastEventAt: row.lastEventAt ? row.lastEventAt.toISOString() : null,
+        };
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 20);
+
+    return res.json({
+      ok: true,
+      days,
+      since: since.toISOString(),
+      totals,
+      popularCollections,
+      popularLooks,
+      recent: events.slice(0, 30).map((event) => ({
+        id: event.id,
+        type: event.type,
+        creatorSlug: event.creatorSlug,
+        collectionId: event.collectionId,
+        lookId: event.lookId,
+        actorUserId: event.actorUserId,
+        source: event.source,
+        createdAt: event.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    console.error("[toptry] /api/profile/creator-analytics error", err);
+    return res.status(500).json({ error: err?.message || "Failed to load creator analytics" });
+  }
+});
+
 app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, async (req, res) => {
   try {
     const days = Math.max(1, Math.min(90, Number(req.query.days || 30) || 30));

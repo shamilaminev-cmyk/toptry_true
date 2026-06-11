@@ -25,6 +25,19 @@ type ReferralInfo = {
   creditsRemaining: number;
 };
 
+type CreatorAnalyticsInfo = {
+  days: number;
+  totals: {
+    all: number;
+    profileViews: number;
+    collectionOpens: number;
+    tryonStarts: number;
+  };
+  popularCollections: any[];
+  popularLooks: any[];
+  recent: any[];
+};
+
 const Profile = () => {
   const { user, actions } = useAppState();
   const navigate = useNavigate();
@@ -61,6 +74,10 @@ const Profile = () => {
   const [publishedLooksLoading, setPublishedLooksLoading] = React.useState(false);
   const [activeCollectionId, setActiveCollectionId] = React.useState('');
   const [addingLookIds, setAddingLookIds] = React.useState<Record<string, boolean>>({});
+
+  const [creatorAnalytics, setCreatorAnalytics] = React.useState<CreatorAnalyticsInfo | null>(null);
+  const [creatorAnalyticsLoading, setCreatorAnalyticsLoading] = React.useState(false);
+  const [creatorAnalyticsError, setCreatorAnalyticsError] = React.useState('');
 
   useEffect(() => {
     if (!avatarOpen) return;
@@ -108,6 +125,7 @@ const Profile = () => {
     if (user?.id) {
       loadCollections();
       loadPublishedLooks();
+      loadCreatorAnalytics();
     }
   }, [user?.id]);
 
@@ -332,6 +350,34 @@ const Profile = () => {
     }
   };
 
+  const loadCreatorAnalytics = async () => {
+    setCreatorAnalyticsLoading(true);
+    setCreatorAnalyticsError('');
+
+    try {
+      const resp = await fetch('/api/profile/creator-analytics?days=7', {
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        navigate('/auth');
+        return;
+      }
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось загрузить статистику витрины');
+      }
+
+      setCreatorAnalytics(data || null);
+    } catch (e: any) {
+      setCreatorAnalyticsError(e?.message || 'Не удалось загрузить статистику витрины');
+      setCreatorAnalytics(null);
+    } finally {
+      setCreatorAnalyticsLoading(false);
+    }
+  };
+
   const addLookToCollection = async (collectionId: string, lookId: string) => {
     if (!collectionId || !lookId) return;
 
@@ -374,8 +420,8 @@ const Profile = () => {
         <div className="w-20 h-20 bg-zinc-100 rounded-full mx-auto flex items-center justify-center">
           <ICONS.User className="w-10 h-10 text-zinc-300" />
         </div>
-        <h1 className="text-xl font-bold uppercase tracking-widest">Профиль не доступен</h1>
-        <p className="text-sm text-zinc-400">Войдите в аккаунт, чтобы увидеть свои настройки и лимиты.</p>
+        <h1 className="text-xl font-bold uppercase tracking-widest">Кабинет недоступен</h1>
+        <p className="text-sm text-zinc-400">Войдите в аккаунт, чтобы увидеть кабинет, настройки и лимиты.</p>
         <button onClick={() => navigate('/auth')} className="bg-zinc-900 text-white px-8 py-3 rounded-full font-bold uppercase tracking-widest text-xs">Войти</button>
       </div>
     );
@@ -669,7 +715,149 @@ const Profile = () => {
           </div>
         </div>
 
-        <section className="bg-zinc-900 text-white rounded-[32px] p-6 space-y-5 shadow-sm">
+        <section className="rounded-[32px] border border-zinc-100 bg-white p-4 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-zinc-400">
+                Кабинет
+              </p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-zinc-900">
+                Управление TopTry
+              </h2>
+              <p className="mt-2 text-sm text-zinc-500 leading-relaxed">
+                Данные, витрина автора, подборки, статистика, лимиты и поддержка собраны в одном месте.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate(`/u/${user.publicSlug || user.id}`)}
+              className="h-10 px-4 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.16em]"
+            >
+              Открыть витрину
+            </button>
+          </div>
+
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+            {[
+              ['cabinet-overview', 'Обзор'],
+              ['cabinet-data', 'Данные'],
+              ['cabinet-storefront', 'Витрина'],
+              ['cabinet-collections', 'Подборки'],
+              ['cabinet-stats', 'Статистика'],
+              ['cabinet-support', 'Поддержка'],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="shrink-0 h-10 px-4 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-black uppercase tracking-[0.16em]"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section id="cabinet-stats" className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm scroll-mt-24">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                Статистика
+              </p>
+              <h2 className="mt-1 text-xl font-black tracking-tight">
+                Статистика витрины
+              </h2>
+              <p className="mt-2 text-sm text-zinc-500 leading-relaxed max-w-2xl">
+                Личная аналитика автора за 7 дней: просмотры витрины, открытия подборок и старты примерки.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadCreatorAnalytics}
+              disabled={creatorAnalyticsLoading}
+              className="h-10 px-4 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-black uppercase tracking-[0.16em] disabled:opacity-50"
+            >
+              {creatorAnalyticsLoading ? 'Обновляем...' : 'Обновить'}
+            </button>
+          </div>
+
+          {creatorAnalyticsError ? (
+            <div className="rounded-2xl bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-700">
+              {creatorAnalyticsError}
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Событий</div>
+              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.all || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Просмотры</div>
+              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.profileViews || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Подборки</div>
+              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.collectionOpens || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Примерки</div>
+              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.tryonStarts || 0}</div>
+            </div>
+          </div>
+
+          {(creatorAnalytics?.popularCollections || []).length ? (
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-[0.18em] text-zinc-900">
+                Популярные подборки
+              </h3>
+              <div className="mt-3 grid gap-2">
+                {(creatorAnalytics?.popularCollections || []).slice(0, 5).map((collection: any) => (
+                  <div key={collection.collectionId} className="rounded-2xl bg-zinc-50 border border-zinc-100 p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black">{collection.title}</div>
+                      <div className="mt-1 text-[11px] text-zinc-400">
+                        открытий: {collection.opens || 0} · событий: {collection.total || 0}
+                      </div>
+                    </div>
+                    <div className="text-xl font-black">{collection.total || 0}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {(creatorAnalytics?.popularLooks || []).length ? (
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-[0.18em] text-zinc-900">
+                Самые примеряемые образы
+              </h3>
+              <div className="mt-3 grid gap-2">
+                {(creatorAnalytics?.popularLooks || []).slice(0, 5).map((look: any) => (
+                  <div key={look.lookId} className="rounded-2xl bg-zinc-50 border border-zinc-100 p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black">{look.title}</div>
+                      <div className="mt-1 text-[11px] text-zinc-400">
+                        стартов примерки: {look.tryonStarts || 0}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/look/${look.lookId}`)}
+                      className="h-9 px-3 rounded-full bg-white border border-zinc-100 text-[10px] font-black uppercase tracking-[0.14em]"
+                    >
+                      Смотреть
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
+
+        <section id="cabinet-plan" id="cabinet-overview" className="scroll-mt-24 bg-zinc-900 text-white rounded-[32px] p-6 space-y-5 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/50">
@@ -877,7 +1065,7 @@ const Profile = () => {
             {publicProfileSaving ? 'Сохраняем...' : 'Сохранить витрину'}
           </button>
         </div>
-        <div className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
+        <div id="cabinet-collections" className="bg-white rounded-[32px] scroll-mt-24 p-6 space-y-5 border border-zinc-100 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
@@ -1132,7 +1320,7 @@ const Profile = () => {
 
 
 
-        <form onSubmit={submitSupportRequest} className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
+        <form id="cabinet-support" onSubmit={submitSupportRequest} className="bg-white scroll-mt-24 rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
           <div>
             <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
               Связаться с TopTry
@@ -1329,7 +1517,8 @@ const Profile = () => {
           )}
         </div>
 
-        <div id="profile-sizes" className="bg-white rounded-[32px] p-6 space-y-4 border border-zinc-100 scroll-mt-24">
+        <div id="cabinet-data"
+        data-profile-sizes-anchor="1" className="bg-white rounded-[32px] p-6 space-y-4 border border-zinc-100 scroll-mt-24">
           <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
             Ваши размеры
           </p>

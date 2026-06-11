@@ -89,7 +89,7 @@ const Header = () => {
             <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 overflow-hidden">
               {(user.avatarUrl || user.selfieUrl) ? (<img src={withApiOrigin(user.avatarUrl || user.selfieUrl)} alt="" className="w-full h-full object-cover object-top object-top" />) : null}
             </div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-900">Профиль</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-900">Кабинет</span>
           </Link>
         ) : (
           <Link
