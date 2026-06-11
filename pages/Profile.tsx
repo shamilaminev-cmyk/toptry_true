@@ -1641,19 +1641,13 @@ const Profile = () => {
         </div>
 
         <div className={cabinetSectionClass('data', 'space-y-2')}>
-          <button className="w-full flex items-center justify-between p-5 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-colors">
-            <span className="text-sm font-bold uppercase tracking-widest">Мои покупки</span>
-            <ICONS.ArrowRight className="w-4 h-4" />
+          <button
+            type="button"
+            onClick={() => actions.logout()}
+            className="w-full p-5 rounded-2xl bg-red-50 text-red-600 text-sm font-bold uppercase tracking-widest text-center hover:bg-red-100 transition-colors"
+          >
+            Выйти из системы
           </button>
-          <button className="w-full flex items-center justify-between p-5 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-colors">
-            <span className="text-sm font-bold uppercase tracking-widest">Настройки приватности</span>
-            <ICONS.ArrowRight className="w-4 h-4" />
-          </button>
-          <button className="w-full flex items-center justify-between p-5 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-colors">
-            <span className="text-sm font-bold uppercase tracking-widest">Удалить мои данные</span>
-            <ICONS.ArrowRight className="w-4 h-4" />
-          </button>
-          <button onClick={() => actions.logout()} className="w-full p-5 text-red-500 text-sm font-bold uppercase tracking-widest text-center mt-4">Выйти из системы</button>
         </div>
       </div>
 
