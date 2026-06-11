@@ -20,7 +20,7 @@ interface AppState {
     register: (email: string, username: string, password: string) => Promise<void>;
     startPhoneAuth: (phone: string) => Promise<void>;
     verifyPhoneAuth: (phone: string, code: string, referralCode?: string) => Promise<any>;
-    updateProfileSizes: (sizeTop: string, sizeBottom: string, sizeShoes: string) => Promise<void>;
+    updateProfileSizes: (sizeTop: string, sizeBottom: string, sizeShoes: string, catalogGenderPreference?: string) => Promise<void>;
     updatePublicProfile: (publicSlug: string, publicDisplayName: string, publicBio: string, publicSocialUrl: string) => Promise<void>;
     refreshMe: () => Promise<User | null>;
     logout: () => Promise<void>;
@@ -239,6 +239,7 @@ return () => clearTimeout(t);
           sizeTop: u.sizeTop || undefined,
           sizeBottom: u.sizeBottom || undefined,
           sizeShoes: u.sizeShoes || undefined,
+          catalogGenderPreference: u.catalogGenderPreference || undefined,
           tier: prev?.tier || SubscriptionTier.FREE,
           limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
           isPublic: !!u.isPublic,
@@ -502,12 +503,12 @@ register: async (email: string, username: string, password: string) => {
   console.log('[auth] register done');
 },
 
-    updateProfileSizes: async (sizeTop: string, sizeBottom: string, sizeShoes: string) => {
+    updateProfileSizes: async (sizeTop: string, sizeBottom: string, sizeShoes: string, catalogGenderPreference?: string) => {
       const resp = await fetch('/api/profile/update', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sizeTop, sizeBottom, sizeShoes }),
+        body: JSON.stringify({ sizeTop, sizeBottom, sizeShoes, catalogGenderPreference: catalogGenderPreference || user?.catalogGenderPreference || 'ALL' }),
       });
 
       const data = await resp.json().catch(() => ({}));
@@ -530,6 +531,7 @@ register: async (email: string, username: string, password: string) => {
               sizeTop: data?.user?.sizeTop || undefined,
               sizeBottom: data?.user?.sizeBottom || undefined,
               sizeShoes: data?.user?.sizeShoes || undefined,
+              catalogGenderPreference: data?.user?.catalogGenderPreference || undefined,
               publicSlug: data?.user?.publicSlug || undefined,
               publicDisplayName: data?.user?.publicDisplayName || undefined,
               publicBio: data?.user?.publicBio || undefined,
@@ -548,6 +550,7 @@ register: async (email: string, username: string, password: string) => {
           sizeTop: user?.sizeTop || '',
           sizeBottom: user?.sizeBottom || '',
           sizeShoes: user?.sizeShoes || '',
+          catalogGenderPreference: user?.catalogGenderPreference || 'ALL',
           publicSlug,
           publicDisplayName,
           publicBio,

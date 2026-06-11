@@ -18,6 +18,7 @@ model User {
   sizeTop         String?
   sizeBottom      String?
   sizeShoes       String?
+  catalogGenderPreference String?
   isPublic        Boolean   @default(false)
   publicSlug        String?   @unique
   publicDisplayName String?

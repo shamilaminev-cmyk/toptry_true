@@ -759,6 +759,7 @@ app.post("/api/auth/phone/verify", async (req, res) => {
         sizeTop: user.sizeTop || null,
         sizeBottom: user.sizeBottom || null,
         sizeShoes: user.sizeShoes || null,
+        catalogGenderPreference: user.catalogGenderPreference || null,
         isPublic: !!user.isPublic,
         createdAt: user.createdAt,
       },
@@ -800,6 +801,7 @@ app.get("/api/auth/me", async (req, res) => {
         sizeTop: true,
         sizeBottom: true,
         sizeShoes: true,
+        catalogGenderPreference: true,
         isPublic: true,
         publicSlug: true,
         publicDisplayName: true,
@@ -819,7 +821,7 @@ app.get("/api/auth/me", async (req, res) => {
 app.post("/api/profile/update", requireAuth, async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const { sizeTop, sizeBottom, sizeShoes, publicSlug, publicDisplayName, publicBio, publicSocialUrl } = req.body || {};
+    const { sizeTop, sizeBottom, sizeShoes, catalogGenderPreference, publicSlug, publicDisplayName, publicBio, publicSocialUrl } = req.body || {};
 
     const p = getPrisma();
     if (!p) return res.status(500).json({ error: "Database is not configured" });
@@ -835,6 +837,13 @@ app.post("/api/profile/update", requireAuth, async (req, res) => {
       const s = String(v || "").trim().replace(",", ".");
       if (!s) return null;
       const allowed = new Set(["35","36","37","38","39","40","41","42","43","44","45","46"]);
+      return allowed.has(s) ? s : null;
+    };
+
+    const normalizeCatalogGenderPreference = (v) => {
+      const s = String(v || "").trim().toUpperCase();
+      if (!s) return null;
+      const allowed = new Set(["MALE", "FEMALE", "UNISEX", "ALL"]);
       return allowed.has(s) ? s : null;
     };
 
@@ -886,6 +895,7 @@ app.post("/api/profile/update", requireAuth, async (req, res) => {
         sizeTop: normalizeSize(sizeTop),
         sizeBottom: normalizeSize(sizeBottom),
         sizeShoes: normalizeShoeSize(sizeShoes),
+        catalogGenderPreference: normalizeCatalogGenderPreference(catalogGenderPreference),
         publicSlug: nextPublicSlug,
         publicDisplayName: normalizeText(publicDisplayName, 80),
         publicBio: normalizeText(publicBio, 280),
@@ -896,6 +906,7 @@ app.post("/api/profile/update", requireAuth, async (req, res) => {
         sizeTop: true,
         sizeBottom: true,
         sizeShoes: true,
+        catalogGenderPreference: true,
         publicSlug: true,
         publicDisplayName: true,
         publicBio: true,

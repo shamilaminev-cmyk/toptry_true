@@ -50,7 +50,7 @@ const CABINET_TABS: { id: CabinetTabId; label: string }[] = [
 ];
 
 const Profile = () => {
-  const { user, actions } = useAppState();
+  const { user, wardrobe, looks, actions } = useAppState();
   const navigate = useNavigate();
 
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -59,6 +59,7 @@ const Profile = () => {
   const [sizeTop, setSizeTop] = useState(user?.sizeTop || '');
   const [sizeBottom, setSizeBottom] = useState(user?.sizeBottom || '');
   const [sizeShoes, setSizeShoes] = useState(user?.sizeShoes || '');
+  const [catalogGenderPreference, setCatalogGenderPreference] = useState(user?.catalogGenderPreference || 'ALL');
   const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
   const [referralCopied, setReferralCopied] = useState(false);
   const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
@@ -124,7 +125,8 @@ const Profile = () => {
     setSizeTop(user?.sizeTop || '');
     setSizeBottom(user?.sizeBottom || '');
     setSizeShoes(user?.sizeShoes || '');
-  }, [user?.sizeTop, user?.sizeBottom, user?.sizeShoes]);
+    setCatalogGenderPreference(user?.catalogGenderPreference || 'ALL');
+  }, [user?.sizeTop, user?.sizeBottom, user?.sizeShoes, user?.catalogGenderPreference]);
 
   useEffect(() => {
     setPublicSlug(user?.publicSlug || '');
@@ -442,6 +444,9 @@ const Profile = () => {
   const bigSrc = withApiOrigin(user.avatarUrl || user.selfieUrl || "");
   const hasTryOnPhoto = Boolean(user.avatarUrl || user.selfieUrl);
   const hasSizes = Boolean(user.sizeTop || user.sizeBottom || user.sizeShoes);
+  const hasWardrobeItems = Array.isArray(wardrobe) && wardrobe.length > 0;
+  const hasCreatedLooks = Array.isArray(looks) && looks.length > 0;
+
   const onboardingSteps = [
     {
       id: 'photo',
@@ -471,23 +476,28 @@ const Profile = () => {
     {
       id: 'catalog',
       title: 'Выберите товары',
-      description: 'Откройте каталог, добавьте вещи в шкаф или сразу соберите образ.',
-      done: false,
-      action: 'Перейти в каталог',
-      onClick: () => navigate('/catalog'),
+      description: hasWardrobeItems
+        ? 'В шкафу уже есть товары. Можно собирать образы быстрее.'
+        : 'Откройте каталог, добавьте вещи в шкаф или сразу соберите образ.',
+      done: hasWardrobeItems,
+      action: hasWardrobeItems ? 'Открыть шкаф' : 'Перейти в каталог',
+      onClick: () => navigate(hasWardrobeItems ? '/wardrobe' : '/catalog'),
     },
     {
       id: 'create',
       title: 'Создайте первый образ',
-      description: 'Выберите до 5 вещей и посмотрите, как они будут выглядеть на вас.',
-      done: false,
-      action: 'Создать образ',
-      onClick: () => navigate('/create-look'),
+      description: hasCreatedLooks
+        ? 'Первый образ уже создан. Можно продолжать примерять новые сочетания.'
+        : 'Выберите до 5 вещей и посмотрите, как они будут выглядеть на вас.',
+      done: hasCreatedLooks,
+      action: hasCreatedLooks ? 'Мои образы' : 'Создать образ',
+      onClick: () => navigate(hasCreatedLooks ? '/looks' : '/create-look'),
     },
   ];
 
   const onboardingDoneCount = onboardingSteps.filter((step) => step.done).length;
   const onboardingProgressPct = Math.round((onboardingDoneCount / onboardingSteps.length) * 100);
+  const onboardingAllDone = onboardingDoneCount === onboardingSteps.length;
 
   const planCode = String(usageInfo?.plan || 'FREE').toUpperCase();
   const planTitle = {
@@ -874,91 +884,137 @@ const Profile = () => {
         </section>
 
         <section id="cabinet-overview" className={cabinetSectionClass('overview', 'scroll-mt-24 bg-zinc-900 text-white rounded-[32px] p-6 space-y-5 shadow-sm')}>
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/50">
-                Быстрый старт
-              </p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight">
-                Настройте TopTry за несколько шагов
-              </h2>
-              <p className="mt-2 text-sm text-white/60 leading-relaxed max-w-xl">
-                Загрузите фото, укажите размеры, выберите товары и создайте первый образ.
-              </p>
-            </div>
-
-            <div className="shrink-0 rounded-2xl bg-white/10 px-4 py-3 text-right">
-              <div className="text-2xl font-black">{onboardingDoneCount}/{onboardingSteps.length}</div>
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">
-                готово
-              </div>
-            </div>
-          </div>
-
-          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-white transition-all"
-              style={{ width: `${onboardingProgressPct}%` }}
-            />
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-3">
-            {onboardingSteps.map((step, idx) => (
-              <button
-                key={step.id}
-                type="button"
-                onClick={step.onClick}
-                className="text-left rounded-2xl bg-white/10 hover:bg-white/15 transition-colors p-4 border border-white/10"
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${
-                    step.done ? 'bg-white text-zinc-900' : 'bg-white/10 text-white/70'
-                  }`}>
-                    {step.done ? '✓' : idx + 1}
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-black uppercase tracking-[0.08em]">
-                        {step.title}
-                      </div>
-                      {step.done && (
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-white/60">
-                          готово
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-2 text-xs text-white/60 leading-relaxed">
-                      {step.description}
-                    </p>
-                    <div className="mt-3 text-[10px] font-black uppercase tracking-[0.18em] text-white">
-                      {step.action}
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {onboardingDoneCount >= 2 ? (
-            <div className="rounded-2xl bg-white text-zinc-900 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          {onboardingAllDone ? (
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
               <div>
-                <div className="text-sm font-black tracking-tight">
-                  Можно переходить к примерке
-                </div>
-                <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
-                  Вы уже готовы выбрать вещи и создать первый образ.
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/50">
+                  Обзор
                 </p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight">
+                  Кабинет настроен
+                </h2>
+                <p className="mt-2 text-sm text-white/60 leading-relaxed max-w-xl">
+                  Фото, размеры, шкаф и первый образ готовы. Можно создавать новые образы, развивать витрину и смотреть статистику.
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {onboardingSteps.map((step) => (
+                    <span
+                      key={step.id}
+                      className="rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-white/70"
+                    >
+                      ✓ {step.title}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => navigate('/create-look')}
-                className="h-10 px-4 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
-              >
-                Создать образ
-              </button>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/create-look')}
+                  className="h-11 px-5 rounded-full bg-white text-zinc-900 text-[10px] font-black uppercase tracking-[0.18em]"
+                >
+                  Создать образ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/u/${user.publicSlug || user.id}`)}
+                  className="h-11 px-5 rounded-full bg-white/10 text-white text-[10px] font-black uppercase tracking-[0.18em] border border-white/10"
+                >
+                  Открыть витрину
+                </button>
+              </div>
             </div>
-          ) : null}
+          ) : (
+            <>
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/50">
+                    Быстрый старт
+                  </p>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight">
+                    Настройте TopTry за несколько шагов
+                  </h2>
+                  <p className="mt-2 text-sm text-white/60 leading-relaxed max-w-xl">
+                    Загрузите фото, укажите размеры, выберите товары и создайте первый образ.
+                  </p>
+                </div>
+
+                <div className="shrink-0 rounded-2xl bg-white/10 px-4 py-3 text-right">
+                  <div className="text-2xl font-black">{onboardingDoneCount}/{onboardingSteps.length}</div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/50">
+                    готово
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-white transition-all"
+                  style={{ width: `${onboardingProgressPct}%` }}
+                />
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                {onboardingSteps.map((step, idx) => (
+                  <button
+                    key={step.id}
+                    type="button"
+                    onClick={step.onClick}
+                    className="text-left rounded-2xl bg-white/10 hover:bg-white/15 transition-colors p-4 border border-white/10"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${
+                        step.done ? 'bg-white text-zinc-900' : 'bg-white/10 text-white/70'
+                      }`}>
+                        {step.done ? '✓' : idx + 1}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-black uppercase tracking-[0.08em]">
+                            {step.title}
+                          </div>
+                          {step.done && (
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-white/60">
+                              готово
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-2 text-xs text-white/60 leading-relaxed">
+                          {step.description}
+                        </p>
+                        <div className="mt-3 text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                          {step.action}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {onboardingDoneCount >= 2 ? (
+                <div className="rounded-2xl bg-white text-zinc-900 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-black tracking-tight">
+                      Можно переходить к примерке
+                    </div>
+                    <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                      Вы уже готовы выбрать вещи и создать первый образ.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/create-look')}
+                    className="h-10 px-4 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
+                  >
+                    Создать образ
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
         </section>
         <div id="cabinet-storefront" className={cabinetSectionClass('storefront', 'bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm')}>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -1573,11 +1629,30 @@ const Profile = () => {
             ))}
           </select>
 
+          <label className="block space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+              Для кого подбирать товары
+            </span>
+            <select
+              value={catalogGenderPreference}
+              onChange={(e) => setCatalogGenderPreference(e.target.value)}
+              className="w-full h-12 px-4 rounded-full border border-zinc-200 bg-white text-[10px] font-bold uppercase tracking-widest text-zinc-900"
+            >
+              <option value="ALL">Показывать всё</option>
+              <option value="MALE">Мужское</option>
+              <option value="FEMALE">Женское</option>
+              <option value="UNISEX">Унисекс</option>
+            </select>
+            <span className="block text-[11px] text-zinc-400 leading-relaxed">
+              Это не обязательная анкета, а настройка каталога: её можно будет использовать как стартовый фильтр.
+            </span>
+          </label>
+
           <button
             onClick={async () => {
               setErr(null);
               try {
-                await actions.updateProfileSizes(sizeTop, sizeBottom, sizeShoes);
+                await actions.updateProfileSizes(sizeTop, sizeBottom, sizeShoes, catalogGenderPreference);
                 await actions.refreshMe();
                 setErr('Размеры сохранены');
               } catch (e: any) {

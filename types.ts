@@ -77,6 +77,7 @@ export interface User {
   sizeTop?: string;
   sizeBottom?: string;
   sizeShoes?: string;
+  catalogGenderPreference?: 'MALE' | 'FEMALE' | 'UNISEX' | 'ALL';
   publicSlug?: string;
   publicDisplayName?: string;
   publicBio?: string;
