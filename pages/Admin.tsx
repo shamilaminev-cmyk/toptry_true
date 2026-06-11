@@ -605,7 +605,7 @@ const Admin: React.FC = () => {
               Creator analytics
             </h2>
             <p className="mt-2 text-xs text-zinc-500 leading-relaxed">
-              События по публичным витринам авторов за последние 7 дней: просмотры, открытия подборок и старты примерки.
+              События по публичным витринам авторов за последние 7 дней: просмотры, подписки, примерки и переходы.
             </p>
           </div>
 
@@ -630,11 +630,15 @@ const Admin: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
               <StatCard label="Всего событий" value={creatorSummary?.totals?.all} hint="creator events 7д" />
               <StatCard label="Просмотры витрин" value={creatorSummary?.totals?.profileViews} hint="profile view" />
+              <StatCard label="Подписчики" value={creatorSummary?.totals?.followers} hint="всего сейчас" />
+              <StatCard label="Новые подписки" value={creatorSummary?.totals?.follows} hint="за 7 дней" />
+              <StatCard label="Отписки" value={creatorSummary?.totals?.unfollows} hint="за 7 дней" />
               <StatCard label="Открытия подборок" value={creatorSummary?.totals?.collectionOpens} hint="collection open" />
               <StatCard label="Старты примерки" value={creatorSummary?.totals?.tryonStarts} hint="try-on started" />
+              <StatCard label="Переходы" value={creatorSummary?.totals?.clickouts} hint="creator clickouts" />
             </div>
 
             <div className="mt-4">
@@ -643,13 +647,17 @@ const Admin: React.FC = () => {
                 rows={(creatorSummary?.creators || []).map((c: any) => ({
                   author: c.publicDisplayName || c.username || c.phone || c.creatorUserId,
                   slug: c.publicSlug,
+                  followers: c.followersCount,
+                  follows: c.follows,
+                  unfollows: c.unfollows,
                   profileViews: c.profileViews,
                   collectionOpens: c.collectionOpens,
                   tryonStarts: c.tryonStarts,
+                  clickouts: c.clickouts,
                   total: c.total,
                   lastEventAt: c.lastEventAt ? new Date(c.lastEventAt).toLocaleString('ru-RU') : '',
                 }))}
-                columns={['author', 'slug', 'profileViews', 'collectionOpens', 'tryonStarts', 'total', 'lastEventAt']}
+                columns={['author', 'slug', 'followers', 'follows', 'unfollows', 'profileViews', 'tryonStarts', 'clickouts', 'total', 'lastEventAt']}
               />
             </div>
           </>

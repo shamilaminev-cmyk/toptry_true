@@ -717,6 +717,14 @@ const Profile = () => {
         : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200'
     }`;
 
+  const creatorTotals = creatorAnalytics?.totals || {};
+  const creatorRate = (num: any, den: any) => {
+    const n = Number(num || 0);
+    const d = Number(den || 0);
+    if (!Number.isFinite(n) || !Number.isFinite(d) || d <= 0) return '0%';
+    return `${Math.round((n / d) * 100)}%`;
+  };
+
   return (
     <div className="pb-12">
 
@@ -819,38 +827,83 @@ const Profile = () => {
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Событий</div>
-              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.all || 0}</div>
+              <div className="mt-2 text-2xl font-black">{creatorTotals.all || 0}</div>
             </div>
             <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Просмотры</div>
-              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.profileViews || 0}</div>
-            </div>
-            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Подборки</div>
-              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.collectionOpens || 0}</div>
-            </div>
-            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Примерки</div>
-              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.tryonStarts || 0}</div>
-            </div>
-            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Переходы</div>
-              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.clickouts || 0}</div>
+              <div className="mt-2 text-2xl font-black">{creatorTotals.profileViews || 0}</div>
             </div>
             <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Подписчики</div>
-              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.followersCount || 0}</div>
+              <div className="mt-2 text-2xl font-black">{creatorTotals.followersCount || 0}</div>
             </div>
             <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Новые</div>
-              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.follows || 0}</div>
+              <div className="mt-2 text-2xl font-black">{creatorTotals.follows || 0}</div>
             </div>
             <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Отписки</div>
-              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.unfollows || 0}</div>
+              <div className="mt-2 text-2xl font-black">{creatorTotals.unfollows || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Подборки</div>
+              <div className="mt-2 text-2xl font-black">{creatorTotals.collectionOpens || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Примерки</div>
+              <div className="mt-2 text-2xl font-black">{creatorTotals.tryonStarts || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Переходы</div>
+              <div className="mt-2 text-2xl font-black">{creatorTotals.clickouts || 0}</div>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] bg-zinc-900 text-white p-5 overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/45">
+                  Воронка автора
+                </p>
+                <h3 className="mt-1 text-lg font-black tracking-tight">
+                  От просмотра витрины до перехода к покупке
+                </h3>
+              </div>
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/45">
+                последние {creatorAnalytics?.days || 7} дней
+              </div>
+            </div>
+
+            <div className="mt-5 grid md:grid-cols-4 gap-3">
+              <div className="rounded-2xl bg-white/10 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">1. Просмотры</div>
+                <div className="mt-2 text-3xl font-black">{creatorTotals.profileViews || 0}</div>
+                <div className="mt-1 text-[11px] text-white/45">витрина автора</div>
+              </div>
+              <div className="rounded-2xl bg-white/10 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">2. Подписки</div>
+                <div className="mt-2 text-3xl font-black">{creatorTotals.follows || 0}</div>
+                <div className="mt-1 text-[11px] text-white/45">
+                  {creatorRate(creatorTotals.follows, creatorTotals.profileViews)} от просмотров
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white/10 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">3. Примерки</div>
+                <div className="mt-2 text-3xl font-black">{creatorTotals.tryonStarts || 0}</div>
+                <div className="mt-1 text-[11px] text-white/45">
+                  {creatorRate(creatorTotals.tryonStarts, creatorTotals.profileViews)} от просмотров
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white/10 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">4. Переходы</div>
+                <div className="mt-2 text-3xl font-black">{creatorTotals.clickouts || 0}</div>
+                <div className="mt-1 text-[11px] text-white/45">
+                  {creatorRate(creatorTotals.clickouts, creatorTotals.tryonStarts)} от примерок
+                </div>
+              </div>
             </div>
           </div>
 

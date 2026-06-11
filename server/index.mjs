@@ -1684,6 +1684,11 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
       likesTotal,
       commentsTotal,
       looksToday,
+      creatorEvents7d,
+      creatorFollowersTotal,
+      creatorFollows7d,
+      creatorUnfollows7d,
+      creatorClickouts7d,
       pipelineRuns,
     ] = await Promise.all([
       prisma.user.count(),
@@ -1807,6 +1812,12 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
       prisma.like.count(),
       prisma.comment.count(),
       prisma.look.count({ where: { createdAt: { gte: dayStart } } }),
+
+      prisma.creatorEvent.count({ where: { createdAt: { gte: weekStart } } }).catch(() => 0),
+      prisma.follow.count().catch(() => 0),
+      prisma.creatorEvent.count({ where: { type: "CREATOR_FOLLOW", createdAt: { gte: weekStart } } }).catch(() => 0),
+      prisma.creatorEvent.count({ where: { type: "CREATOR_UNFOLLOW", createdAt: { gte: weekStart } } }).catch(() => 0),
+      prisma.creatorEvent.count({ where: { type: "CREATOR_CLICKOUT", createdAt: { gte: weekStart } } }).catch(() => 0),
 
       prisma.catalogPipelineRun.findMany({
         orderBy: { startedAt: "desc" },
@@ -1983,6 +1994,15 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
         fallbackSevenDays: fallbackClicks7d,
         byMerchantSevenDays: (clickoutsByMerchant7d || []).map((r) => ({ merchant: r.merchant || "unknown", count: n(r.cnt) })),
         byPlacementSevenDays: (clickoutsByPlacement7d || []).map((r) => ({ placement: r.placement || "unknown", count: n(r.cnt) })),
+      },
+      creator: {
+        totals: {
+          all: n(creatorEvents7d),
+          followers: n(creatorFollowersTotal),
+          follows: n(creatorFollows7d),
+          unfollows: n(creatorUnfollows7d),
+          clickouts: n(creatorClickouts7d),
+        },
       },
       social: {
         publicLooks,
@@ -3926,12 +3946,27 @@ app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, as
 
     const creatorById = new Map(creators.map((creator) => [creator.id, creator]));
 
+    const followerCountRows = creatorIds.length
+      ? await prisma.follow.groupBy({
+          by: ["followingId"],
+          where: { followingId: { in: creatorIds } },
+          _count: { _all: true },
+        }).catch(() => [])
+      : [];
+
+    const followersByCreatorId = new Map(
+      (followerCountRows || []).map((row) => [row.followingId, Number(row?._count?._all || 0)])
+    );
+
     const totals = {
       all: events.length,
       profileViews: 0,
       collectionOpens: 0,
       tryonStarts: 0,
       clickouts: 0,
+      follows: 0,
+      unfollows: 0,
+      followers: 0,
     };
 
     const byCreator = new Map();
@@ -3941,6 +3976,8 @@ app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, as
       if (event.type === "CREATOR_COLLECTION_OPEN") totals.collectionOpens += 1;
       if (event.type === "CREATOR_LOOK_TRYON_STARTED") totals.tryonStarts += 1;
       if (event.type === "CREATOR_CLICKOUT") totals.clickouts += 1;
+      if (event.type === "CREATOR_FOLLOW") totals.follows += 1;
+      if (event.type === "CREATOR_UNFOLLOW") totals.unfollows += 1;
 
       const row = byCreator.get(event.creatorUserId) || {
         creatorUserId: event.creatorUserId,
@@ -3949,6 +3986,8 @@ app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, as
         collectionOpens: 0,
         tryonStarts: 0,
         clickouts: 0,
+        follows: 0,
+        unfollows: 0,
         lastEventAt: null,
       };
 
@@ -3957,10 +3996,14 @@ app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, as
       if (event.type === "CREATOR_COLLECTION_OPEN") row.collectionOpens += 1;
       if (event.type === "CREATOR_LOOK_TRYON_STARTED") row.tryonStarts += 1;
       if (event.type === "CREATOR_CLICKOUT") row.clickouts += 1;
+      if (event.type === "CREATOR_FOLLOW") row.follows += 1;
+      if (event.type === "CREATOR_UNFOLLOW") row.unfollows += 1;
       if (!row.lastEventAt || event.createdAt > row.lastEventAt) row.lastEventAt = event.createdAt;
 
       byCreator.set(event.creatorUserId, row);
     }
+
+    totals.followers = Array.from(followersByCreatorId.values()).reduce((sum, value) => sum + Number(value || 0), 0);
 
     const creatorRows = Array.from(byCreator.values())
       .map((row) => {
@@ -3972,6 +4015,7 @@ app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, as
           publicDisplayName: creator?.publicDisplayName || "",
           username: creator?.username || "",
           phone: creator?.phone || "",
+          followersCount: followersByCreatorId.get(row.creatorUserId) || 0,
         };
       })
       .sort((a, b) => b.total - a.total);
