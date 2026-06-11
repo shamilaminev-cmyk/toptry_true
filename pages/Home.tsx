@@ -8,6 +8,7 @@ import { catalogImageSrc } from '../utils/catalogImageSrc';
 const Home: React.FC = () => {
   const { user, looks } = useAppState();
   const [feedLooks, setFeedLooks] = useState<any[]>([]);
+  const [followingLooks, setFollowingLooks] = useState<any[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
   const [dealItems, setDealItems] = useState<any[]>([]);
   const [priceDropItems, setPriceDropItems] = useState<any[]>([]);
@@ -15,7 +16,7 @@ const Home: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch('/api/looks/public?limit=4', { credentials: 'include' });
+        const resp = await fetch(withApiOrigin('/api/looks/public?limit=4'), { credentials: 'include' });
         const data = await resp.json().catch(() => ({}));
         setFeedLooks(Array.isArray(data?.looks) ? data.looks : []);
       } catch {
@@ -23,6 +24,34 @@ const Home: React.FC = () => {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setFollowingLooks([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const resp = await fetch(withApiOrigin('/api/looks/following?limit=6'), {
+          credentials: 'include',
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (cancelled) return;
+
+        setFollowingLooks(Array.isArray(data?.looks) ? data.looks : []);
+      } catch {
+        if (!cancelled) setFollowingLooks([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     (async () => {
@@ -172,6 +201,69 @@ const Home: React.FC = () => {
           <p className="mt-2 text-sm text-zinc-500">Смотрите опубликованные образы и сохраняйте идеи.</p>
         </Link>
       </section>
+
+      {followingLooks.length ? (
+        <section className="px-5 mt-12 md:px-8 md:max-w-6xl md:mx-auto">
+          <div className="rounded-[32px] bg-zinc-900 text-white p-5 md:p-6 overflow-hidden">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/45">
+                  Подписки
+                </p>
+                <h2 className="mt-2 text-2xl font-black uppercase">
+                  Новое от ваших авторов
+                </h2>
+                <p className="mt-2 text-sm text-white/55 leading-relaxed max-w-xl">
+                  Свежие примеряемые образы от людей, на которых вы подписаны.
+                </p>
+              </div>
+
+              <Link
+                to="/looks?tab=following"
+                className="hidden sm:inline-flex text-xs font-black uppercase tracking-[0.2em] text-white/55 hover:text-white"
+              >
+                Смотреть все
+              </Link>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {followingLooks.slice(0, 6).map((look: any) => (
+                <Link
+                  key={look.id}
+                  to={`/look/${look.id}`}
+                  className="rounded-[22px] bg-white/10 border border-white/10 overflow-hidden transition hover:-translate-y-0.5 hover:bg-white/15"
+                >
+                  <div className="aspect-[3/4] bg-white/5">
+                    {look.resultImageUrl ? (
+                      <img
+                        src={withApiOrigin(look.resultImageUrl)}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+
+                  <div className="p-3">
+                    <p className="text-[10px] font-black uppercase truncate">
+                      {look.authorName || 'Автор'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-white/45 font-bold truncate">
+                      {look.likes || 0} ❤️ · {look.comments || 0} 💬
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            <Link
+              to="/looks?tab=following"
+              className="mt-4 sm:hidden h-10 rounded-full bg-white text-zinc-900 text-[10px] font-black uppercase tracking-[0.16em] flex items-center justify-center"
+            >
+              Смотреть все
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       <section className="px-5 mt-12 md:px-8 md:max-w-6xl md:mx-auto">
         <div className="flex items-end justify-between gap-4">
