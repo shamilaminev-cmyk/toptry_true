@@ -25,6 +25,11 @@ const formatPriceRUB = (value: any) => {
   return `${Math.round(n).toLocaleString('ru-RU')} ₽`;
 };
 
+function authorStorefrontRoute(look: any) {
+  const slug = String(look?.authorSlug || look?.userId || '').trim();
+  return slug ? `/u/${encodeURIComponent(slug)}` : '';
+}
+
 
 function sourceItemClickoutUrl(item: any, placement: string, lookId?: string, itemIndex?: number) {
   const id = String(item?.id || '').trim();
@@ -580,6 +585,8 @@ const Looks = () => {
               Number(look.priceBuyNowRUB || 0) ||
               sourceItems.reduce((sum: number, item: any) => sum + (Number(item?.price || 0) || 0), 0);
             const effectiveIsPublic = Boolean(publishedOverrides[String(look.id)] ?? look.isPublic);
+            const authorHref = authorStorefrontRoute(look);
+            const authorLabel = look.authorName || 'Автор';
 
             return (
               <article
@@ -643,18 +650,41 @@ const Looks = () => {
                         {sourceItems.length ? `Образ из ${sourceItems.length} вещей` : (look.title || 'Образ')}
                       </h2>
                       <div className="flex items-center gap-2 mt-3">
-                        {(look.authorAvatar || user?.avatarUrl || user?.selfieUrl) ? (
-                          <img
-                            src={withApiOrigin(look.authorAvatar || user?.avatarUrl || user?.selfieUrl || '')}
-                            alt=""
-                            className="w-5 h-5 rounded-full bg-zinc-100 object-cover object-top"
-                          />
+                        {authorHref ? (
+                          <Link
+                            to={authorHref}
+                            className="flex items-center gap-2 rounded-full hover:bg-zinc-50 transition-colors"
+                            aria-label={`Открыть витрину автора: ${authorLabel}`}
+                          >
+                            {(look.authorAvatar || user?.avatarUrl || user?.selfieUrl) ? (
+                              <img
+                                src={withApiOrigin(look.authorAvatar || user?.avatarUrl || user?.selfieUrl || '')}
+                                alt=""
+                                className="w-5 h-5 rounded-full bg-zinc-100 object-cover object-top"
+                              />
+                            ) : (
+                              <span className="w-5 h-5 rounded-full bg-zinc-100 inline-block" />
+                            )}
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest hover:text-zinc-900">
+                              {authorLabel}
+                            </span>
+                          </Link>
                         ) : (
-                          <span className="w-5 h-5 rounded-full bg-zinc-100 inline-block" />
+                          <>
+                            {(look.authorAvatar || user?.avatarUrl || user?.selfieUrl) ? (
+                              <img
+                                src={withApiOrigin(look.authorAvatar || user?.avatarUrl || user?.selfieUrl || '')}
+                                alt=""
+                                className="w-5 h-5 rounded-full bg-zinc-100 object-cover object-top"
+                              />
+                            ) : (
+                              <span className="w-5 h-5 rounded-full bg-zinc-100 inline-block" />
+                            )}
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
+                              {authorLabel}
+                            </span>
+                          </>
                         )}
-                        <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
-                          {look.authorName || 'Пользователь TopTry'}
-                        </span>
                         {effectiveIsPublic && (
                           <span className="text-[8px] bg-zinc-900 text-white px-2 py-1 rounded-full font-black uppercase tracking-widest">
                             В ленте
@@ -836,9 +866,18 @@ const Looks = () => {
                       {look.title || 'Образ'}
                     </p>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-[9px] text-zinc-400 font-bold uppercase truncate">
-                        {look.authorName || 'Пользователь TopTry'}
-                      </span>
+                      {authorHref ? (
+                        <Link
+                          to={authorHref}
+                          className="text-[9px] text-zinc-400 font-bold uppercase truncate hover:text-zinc-900"
+                        >
+                          {authorLabel}
+                        </Link>
+                      ) : (
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase truncate">
+                          {authorLabel}
+                        </span>
+                      )}
                       <button
                         onClick={() => openComments(String(look.id))}
                         className="text-[9px] text-zinc-400 font-bold uppercase hover:text-zinc-900 transition-colors"

@@ -3303,7 +3303,7 @@ app.delete("/api/wardrobe/item/:id", requireAuth, async (req, res) => {
 // ---------- LOOKS / SOCIAL ----------
 
 function publicAuthorName(user) {
-  return user?.publicDisplayName || user?.username || "Автор TopTry";
+  return user?.publicDisplayName || user?.username || "Автор";
 }
 
 async function mapLookForApi(row, viewerUserId = "") {
@@ -11925,7 +11925,7 @@ app.get("/api/looks/public", async (req, res) => {
           buyLinks: r.buyLinks || [],
           aiDescription: r.aiDescription || null,
           userDescription: r.userDescription || null,
-          authorName: author?.username || author?.name || "toptry",
+          authorName: author?.publicDisplayName || author?.username || author?.name || "Автор",
           authorAvatar: author?.avatarUrl || "",
         };
       })

@@ -660,7 +660,7 @@ const LookDetails = () => {
                 <span className="w-5 h-5 rounded-full bg-zinc-100 inline-block" />
               )}
               <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
-                {look.authorName || 'Пользователь TopTry'}
+                {look.authorName || 'Автор'}
               </span>
               {look.isPublic ? (
                 <span className="text-[9px] bg-zinc-900 text-white px-2 py-1 rounded-full font-bold uppercase tracking-widest">
@@ -921,7 +921,7 @@ const LookDetails = () => {
                 Автор образа
               </p>
               <div className="mt-1 text-sm font-black tracking-tight">
-                {look.authorName || 'Пользователь TopTry'}
+                {look.authorName || 'Автор'}
               </div>
             </div>
             <Link

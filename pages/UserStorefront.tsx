@@ -328,7 +328,7 @@ const UserStorefront: React.FC = () => {
   }
 
   const avatar = profile.avatarUrl ? withApiOrigin(profile.avatarUrl) : '';
-  const displayName = profile.publicDisplayName || profile.username || 'Автор TopTry';
+  const displayName = profile.publicDisplayName || profile.username || 'Автор';
 
   return (
     <div className="px-4 py-6 md:py-10 pb-32 md:pb-36 max-w-6xl mx-auto space-y-8">
