@@ -530,6 +530,24 @@ const Looks = () => {
           </button>
           <button
             onClick={() => {
+              if (!user?.id) {
+                setSocialNotice('Войдите, чтобы смотреть ленту подписок.');
+                window.setTimeout(() => setSocialNotice(''), 3500);
+                return;
+              }
+              setTab('following');
+              navigate('/looks?tab=following', { replace: true });
+            }}
+            className={`px-5 h-10 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${
+              tab === 'following'
+                ? 'bg-zinc-900 text-white border-zinc-900'
+                : 'bg-white text-zinc-500 border-zinc-200'
+            }`}
+          >
+            Подписки
+          </button>
+          <button
+            onClick={() => {
               setTab('mine');
               navigate('/looks?tab=mine', { replace: true });
             }}
