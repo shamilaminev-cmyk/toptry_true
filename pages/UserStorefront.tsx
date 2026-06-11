@@ -292,8 +292,12 @@ const UserStorefront: React.FC = () => {
     }, 80);
   };
 
+  const visibleCollections = collections.filter((collection) => (
+    Array.isArray(collection.looks) && collection.looks.length > 0
+  ));
+
   const activeCollection = activeCollectionId
-    ? collections.find((collection) => String(collection.id) === String(activeCollectionId))
+    ? visibleCollections.find((collection) => String(collection.id) === String(activeCollectionId))
     : null;
 
   const activeCollectionLooks = activeCollection && Array.isArray(activeCollection.looks)
@@ -390,7 +394,7 @@ const UserStorefront: React.FC = () => {
               <div className="text-[9px] font-black uppercase tracking-[0.16em] text-white/45">образов</div>
             </div>
             <div className="rounded-2xl bg-white/10 p-3 text-center">
-              <div className="text-2xl font-black">{collections.length}</div>
+              <div className="text-2xl font-black">{visibleCollections.length}</div>
               <div className="text-[9px] font-black uppercase tracking-[0.16em] text-white/45">подборок</div>
             </div>
             <div className="rounded-2xl bg-white/10 p-3 text-center">
@@ -401,21 +405,21 @@ const UserStorefront: React.FC = () => {
         </div>
       </section>
 
-      <section className="space-y-4">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
-              Подборки
-            </p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight">
-              Коллекции автора
-            </h2>
+      {visibleCollections.length ? (
+        <section className="space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                Подборки
+              </p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight">
+                Коллекции автора
+              </h2>
+            </div>
           </div>
-        </div>
 
-        {collections.length ? (
           <div className="grid md:grid-cols-3 gap-4">
-            {collections.map((collection) => {
+            {visibleCollections.map((collection) => {
               const collectionLooks = Array.isArray(collection.looks) ? collection.looks : [];
               const count = collectionLooks.length;
 
@@ -449,17 +453,8 @@ const UserStorefront: React.FC = () => {
               );
             })}
           </div>
-        ) : (
-          <div className="rounded-[28px] bg-zinc-50 border border-dashed border-zinc-200 p-6">
-            <div className="text-sm font-black tracking-tight">
-              Здесь будут подборки автора
-            </div>
-            <p className="mt-2 text-sm text-zinc-500 leading-relaxed max-w-2xl">
-              Скоро авторы смогут собирать образы в коллекции: офис, вечер, выходные, сезонные капсулы и подборки по стилю.
-            </p>
-          </div>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <section id="storefront-looks" className="space-y-4 scroll-mt-24">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
