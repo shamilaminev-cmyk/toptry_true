@@ -3614,6 +3614,7 @@ const CREATOR_EVENT_TYPES = new Set([
   "CREATOR_PROFILE_VIEW",
   "CREATOR_COLLECTION_OPEN",
   "CREATOR_LOOK_TRYON_STARTED",
+  "CREATOR_CLICKOUT",
 ]);
 
 function normalizeCreatorEventString(value, maxLen = 500) {
@@ -3749,6 +3750,7 @@ app.get("/api/profile/creator-analytics", requireAuth, async (req, res) => {
       profileViews: 0,
       collectionOpens: 0,
       tryonStarts: 0,
+      clickouts: 0,
     };
 
     const byCollection = new Map();
@@ -3758,6 +3760,7 @@ app.get("/api/profile/creator-analytics", requireAuth, async (req, res) => {
       if (event.type === "CREATOR_PROFILE_VIEW") totals.profileViews += 1;
       if (event.type === "CREATOR_COLLECTION_OPEN") totals.collectionOpens += 1;
       if (event.type === "CREATOR_LOOK_TRYON_STARTED") totals.tryonStarts += 1;
+      if (event.type === "CREATOR_CLICKOUT") totals.clickouts += 1;
 
       if (event.collectionId) {
         const row = byCollection.get(event.collectionId) || {
@@ -3781,11 +3784,13 @@ app.get("/api/profile/creator-analytics", requireAuth, async (req, res) => {
           lookId: event.lookId,
           total: 0,
           tryonStarts: 0,
+          clickouts: 0,
           lastEventAt: null,
         };
 
         row.total += 1;
         if (event.type === "CREATOR_LOOK_TRYON_STARTED") row.tryonStarts += 1;
+        if (event.type === "CREATOR_CLICKOUT") row.clickouts += 1;
         if (!row.lastEventAt || event.createdAt > row.lastEventAt) row.lastEventAt = event.createdAt;
 
         byLook.set(event.lookId, row);
@@ -3915,6 +3920,7 @@ app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, as
       profileViews: 0,
       collectionOpens: 0,
       tryonStarts: 0,
+      clickouts: 0,
     };
 
     const byCreator = new Map();
@@ -3923,6 +3929,7 @@ app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, as
       if (event.type === "CREATOR_PROFILE_VIEW") totals.profileViews += 1;
       if (event.type === "CREATOR_COLLECTION_OPEN") totals.collectionOpens += 1;
       if (event.type === "CREATOR_LOOK_TRYON_STARTED") totals.tryonStarts += 1;
+      if (event.type === "CREATOR_CLICKOUT") totals.clickouts += 1;
 
       const row = byCreator.get(event.creatorUserId) || {
         creatorUserId: event.creatorUserId,
@@ -3930,6 +3937,7 @@ app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, as
         profileViews: 0,
         collectionOpens: 0,
         tryonStarts: 0,
+        clickouts: 0,
         lastEventAt: null,
       };
 
@@ -3937,6 +3945,7 @@ app.get("/api/admin/creator/events/summary", requireAuth, requireTopTryAdmin, as
       if (event.type === "CREATOR_PROFILE_VIEW") row.profileViews += 1;
       if (event.type === "CREATOR_COLLECTION_OPEN") row.collectionOpens += 1;
       if (event.type === "CREATOR_LOOK_TRYON_STARTED") row.tryonStarts += 1;
+      if (event.type === "CREATOR_CLICKOUT") row.clickouts += 1;
       if (!row.lastEventAt || event.createdAt > row.lastEventAt) row.lastEventAt = event.createdAt;
 
       byCreator.set(event.creatorUserId, row);
@@ -4773,6 +4782,23 @@ app.get("/api/out/product/:productId", async (req, res) => {
       inactiveProduct?.merchant ||
       null;
 
+    const creatorClickoutLook = lookId
+      ? await prisma.look.findUnique({
+          where: { id: lookId },
+          select: {
+            id: true,
+            userId: true,
+            isPublic: true,
+            user: {
+              select: {
+                id: true,
+                publicSlug: true,
+              },
+            },
+          },
+        }).catch(() => null)
+      : null;
+
     try {
       await prisma.clickout.create({
         data: {
@@ -4809,6 +4835,49 @@ app.get("/api/out/product/:productId", async (req, res) => {
         placement,
         message: e?.message || String(e),
       });
+    }
+
+    if (creatorClickoutLook?.isPublic && creatorClickoutLook?.userId) {
+      try {
+        await prisma.creatorEvent.create({
+          data: {
+            id: `ce-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            creatorUserId: creatorClickoutLook.userId,
+            actorUserId: req.auth?.userId || null,
+            type: "CREATOR_CLICKOUT",
+            creatorSlug: creatorClickoutLook.user?.publicSlug || creatorClickoutLook.userId,
+            collectionId: null,
+            lookId: creatorClickoutLook.id,
+            source: placement || "clickout",
+            pageUrl: normalizeClickoutOptionalString(req.get("referer"), 1000),
+            userAgent: normalizeClickoutOptionalString(req.get("user-agent"), 1000),
+            meta: {
+              merchant,
+              productTitle:
+                product?.title ||
+                snapshotItem?.title ||
+                wardrobeItem?.title ||
+                inactiveProduct?.title ||
+                null,
+              placement,
+              itemIndex,
+              requestedId,
+              resolvedId,
+              resolvedKind,
+              redirectedToFallbackCatalog,
+              targetUrl,
+              actorIsCreator: req.auth?.userId ? req.auth.userId === creatorClickoutLook.userId : false,
+            },
+          },
+        });
+      } catch (e) {
+        console.warn("[toptry] creator clickout event failed", {
+          lookId,
+          requestedId,
+          placement,
+          message: e?.message || String(e),
+        });
+      }
     }
 
     res.setHeader("Cache-Control", "no-store");

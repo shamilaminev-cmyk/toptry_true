@@ -32,6 +32,7 @@ type CreatorAnalyticsInfo = {
     profileViews: number;
     collectionOpens: number;
     tryonStarts: number;
+    clickouts: number;
   };
   popularCollections: any[];
   popularLooks: any[];
@@ -815,7 +816,7 @@ const Profile = () => {
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Событий</div>
               <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.all || 0}</div>
@@ -831,6 +832,10 @@ const Profile = () => {
             <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Примерки</div>
               <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.tryonStarts || 0}</div>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Переходы</div>
+              <div className="mt-2 text-2xl font-black">{creatorAnalytics?.totals?.clickouts || 0}</div>
             </div>
           </div>
 
@@ -866,7 +871,7 @@ const Profile = () => {
                     <div>
                       <div className="text-sm font-black">{look.title}</div>
                       <div className="mt-1 text-[11px] text-zinc-400">
-                        стартов примерки: {look.tryonStarts || 0}
+                        стартов примерки: {look.tryonStarts || 0} · переходов к покупке: {look.clickouts || 0}
                       </div>
                     </div>
                     <button

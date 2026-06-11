@@ -663,6 +663,7 @@ const Admin: React.FC = () => {
         <StatCard label="Активировано/обновлено сегодня" value={data?.catalog?.activeUpdatedToday} hint={`${fmt(data?.catalog?.inactiveUpdatedToday)} inactive updated`} />
         <StatCard label="Генерации сегодня" value={(data?.usage?.today || []).reduce((s: number, r: any) => s + Number(r.count || 0), 0)} hint={`avg ${fmt(data?.usage?.avgDurationMsToday)} ms`} />
         <StatCard label="Clickouts 7д" value={data?.clickouts?.sevenDays} hint={`${fmt(data?.clickouts?.fallbackSevenDays)} fallback`} />
+        <StatCard label="Creator clickouts" value={data?.creator?.totals?.clickouts} hint="переходы из образов авторов" />
         <StatCard label="Публичные образы" value={data?.social?.publicLooks} hint={`${fmt(data?.social?.looksToday)} образов сегодня`} />
         <StatCard label="Лайки" value={data?.social?.likesTotal} />
         <StatCard label="Комментарии" value={data?.social?.commentsTotal} />
