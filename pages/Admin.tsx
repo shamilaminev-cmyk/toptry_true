@@ -77,6 +77,10 @@ const Admin: React.FC = () => {
   const [supportError, setSupportError] = React.useState('');
   const [supportStatusLoading, setSupportStatusLoading] = React.useState('');
 
+  const [creatorSummary, setCreatorSummary] = React.useState<any | null>(null);
+  const [creatorLoading, setCreatorLoading] = React.useState(false);
+  const [creatorError, setCreatorError] = React.useState('');
+
   const load = React.useCallback(async () => {
     setLoading(true);
     setError('');
@@ -125,6 +129,29 @@ const Admin: React.FC = () => {
     }
   }, []);
 
+  const loadCreatorSummary = React.useCallback(async () => {
+    setCreatorLoading(true);
+    setCreatorError('');
+
+    try {
+      const resp = await fetch(adminApiUrl('/api/admin/creator/events/summary?days=7'), {
+        credentials: 'include',
+      });
+      const json = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(json?.error || `Ошибка ${resp.status}`);
+      }
+
+      setCreatorSummary(json);
+    } catch (err: any) {
+      setCreatorError(err?.message || String(err));
+      setCreatorSummary(null);
+    } finally {
+      setCreatorLoading(false);
+    }
+  }, []);
+
   const updateSupportRequestStatus = async (id: string, status: string) => {
     setSupportStatusLoading(id);
     setSupportError('');
@@ -154,7 +181,8 @@ const Admin: React.FC = () => {
   React.useEffect(() => {
     load();
     loadSupportRequests();
-  }, [load, loadSupportRequests]);
+    loadCreatorSummary();
+  }, [load, loadSupportRequests, loadCreatorSummary]);
 
   const submitEntitlement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,6 +320,7 @@ const Admin: React.FC = () => {
           onClick={() => {
             load();
             loadSupportRequests();
+            loadCreatorSummary();
           }}
           className="h-11 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
         >
@@ -566,6 +595,64 @@ const Admin: React.FC = () => {
               </div>
             ))}
           </div>
+        )}
+      </section>
+
+      <section className="rounded-[32px] border border-zinc-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-black uppercase tracking-[0.18em] text-zinc-900">
+              Creator analytics
+            </h2>
+            <p className="mt-2 text-xs text-zinc-500 leading-relaxed">
+              События по публичным витринам авторов за последние 7 дней: просмотры, открытия подборок и старты примерки.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={loadCreatorSummary}
+            className="h-10 px-4 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-black uppercase tracking-[0.18em]"
+          >
+            Обновить creator
+          </button>
+        </div>
+
+        {creatorError && (
+          <div className="mt-4 rounded-2xl bg-rose-50 border border-rose-100 p-4 text-xs text-rose-700">
+            {creatorError}
+          </div>
+        )}
+
+        {creatorLoading ? (
+          <div className="mt-4 rounded-2xl bg-zinc-50 p-4 text-xs text-zinc-400">
+            Загружаем creator analytics…
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <StatCard label="Всего событий" value={creatorSummary?.totals?.all} hint="creator events 7д" />
+              <StatCard label="Просмотры витрин" value={creatorSummary?.totals?.profileViews} hint="profile view" />
+              <StatCard label="Открытия подборок" value={creatorSummary?.totals?.collectionOpens} hint="collection open" />
+              <StatCard label="Старты примерки" value={creatorSummary?.totals?.tryonStarts} hint="try-on started" />
+            </div>
+
+            <div className="mt-4">
+              <DataTable
+                title="Авторы / события 7д"
+                rows={(creatorSummary?.creators || []).map((c: any) => ({
+                  author: c.publicDisplayName || c.username || c.phone || c.creatorUserId,
+                  slug: c.publicSlug,
+                  profileViews: c.profileViews,
+                  collectionOpens: c.collectionOpens,
+                  tryonStarts: c.tryonStarts,
+                  total: c.total,
+                  lastEventAt: c.lastEventAt ? new Date(c.lastEventAt).toLocaleString('ru-RU') : '',
+                }))}
+                columns={['author', 'slug', 'profileViews', 'collectionOpens', 'tryonStarts', 'total', 'lastEventAt']}
+              />
+            </div>
+          </>
         )}
       </section>
 
