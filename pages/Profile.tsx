@@ -38,6 +38,17 @@ type CreatorAnalyticsInfo = {
   recent: any[];
 };
 
+type CabinetTabId = 'overview' | 'data' | 'storefront' | 'collections' | 'stats' | 'support';
+
+const CABINET_TABS: { id: CabinetTabId; label: string }[] = [
+  { id: 'overview', label: 'Обзор' },
+  { id: 'data', label: 'Данные' },
+  { id: 'storefront', label: 'Витрина' },
+  { id: 'collections', label: 'Подборки' },
+  { id: 'stats', label: 'Статистика' },
+  { id: 'support', label: 'Поддержка' },
+];
+
 const Profile = () => {
   const { user, actions } = useAppState();
   const navigate = useNavigate();
@@ -78,6 +89,7 @@ const Profile = () => {
   const [creatorAnalytics, setCreatorAnalytics] = React.useState<CreatorAnalyticsInfo | null>(null);
   const [creatorAnalyticsLoading, setCreatorAnalyticsLoading] = React.useState(false);
   const [creatorAnalyticsError, setCreatorAnalyticsError] = React.useState('');
+  const [activeCabinetTab, setActiveCabinetTab] = React.useState<CabinetTabId>('overview');
 
   useEffect(() => {
     if (!avatarOpen) return;
@@ -681,6 +693,16 @@ const Profile = () => {
     }
   };
 
+  const cabinetSectionClass = (tab: CabinetTabId, className: string) =>
+    `${className} ${activeCabinetTab === tab ? '' : 'hidden'}`;
+
+  const cabinetTabButtonClass = (tab: CabinetTabId) =>
+    `shrink-0 h-10 px-4 rounded-full text-[10px] font-black uppercase tracking-[0.16em] transition-colors ${
+      activeCabinetTab === tab
+        ? 'bg-zinc-900 text-white'
+        : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200'
+    }`;
+
   return (
     <div className="pb-12">
 
@@ -739,27 +761,21 @@ const Profile = () => {
           </div>
 
           <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-            {[
-              ['cabinet-overview', 'Обзор'],
-              ['cabinet-data', 'Данные'],
-              ['cabinet-storefront', 'Витрина'],
-              ['cabinet-collections', 'Подборки'],
-              ['cabinet-stats', 'Статистика'],
-              ['cabinet-support', 'Поддержка'],
-            ].map(([id, label]) => (
+            {CABINET_TABS.map((tab) => (
               <button
-                key={id}
+                key={tab.id}
                 type="button"
-                onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="shrink-0 h-10 px-4 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-black uppercase tracking-[0.16em]"
+                onClick={() => setActiveCabinetTab(tab.id)}
+                className={cabinetTabButtonClass(tab.id)}
+                aria-pressed={activeCabinetTab === tab.id}
               >
-                {label}
+                {tab.label}
               </button>
             ))}
           </div>
         </section>
 
-        <section id="cabinet-stats" className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm scroll-mt-24">
+        <section id="cabinet-stats" className={cabinetSectionClass('stats', 'bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm scroll-mt-24')}>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
@@ -857,7 +873,7 @@ const Profile = () => {
           ) : null}
         </section>
 
-        <section id="cabinet-plan" id="cabinet-overview" className="scroll-mt-24 bg-zinc-900 text-white rounded-[32px] p-6 space-y-5 shadow-sm">
+        <section id="cabinet-overview" className={cabinetSectionClass('overview', 'scroll-mt-24 bg-zinc-900 text-white rounded-[32px] p-6 space-y-5 shadow-sm')}>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/50">
@@ -944,7 +960,7 @@ const Profile = () => {
             </div>
           ) : null}
         </section>
-        <div className="bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
+        <div id="cabinet-storefront" className={cabinetSectionClass('storefront', 'bg-white rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm')}>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
@@ -1065,7 +1081,7 @@ const Profile = () => {
             {publicProfileSaving ? 'Сохраняем...' : 'Сохранить витрину'}
           </button>
         </div>
-        <div id="cabinet-collections" className="bg-white rounded-[32px] scroll-mt-24 p-6 space-y-5 border border-zinc-100 shadow-sm">
+        <div id="cabinet-collections" className={cabinetSectionClass('collections', 'bg-white rounded-[32px] scroll-mt-24 p-6 space-y-5 border border-zinc-100 shadow-sm')}>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
@@ -1320,7 +1336,7 @@ const Profile = () => {
 
 
 
-        <form id="cabinet-support" onSubmit={submitSupportRequest} className="bg-white scroll-mt-24 rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm">
+        <form id="cabinet-support" onSubmit={submitSupportRequest} className={cabinetSectionClass('support', 'bg-white scroll-mt-24 rounded-[32px] p-6 space-y-5 border border-zinc-100 shadow-sm')}>
           <div>
             <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
               Связаться с TopTry
@@ -1386,7 +1402,7 @@ const Profile = () => {
           </button>
         </form>
 
-        <div className="bg-zinc-50 rounded-[32px] p-6 space-y-6 border border-zinc-100">
+        <div id="cabinet-plan" className={cabinetSectionClass('overview', 'bg-zinc-50 rounded-[32px] p-6 space-y-6 border border-zinc-100')}>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div className="space-y-3">
               <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
@@ -1517,8 +1533,7 @@ const Profile = () => {
           )}
         </div>
 
-        <div id="cabinet-data"
-        data-profile-sizes-anchor="1" className="bg-white rounded-[32px] p-6 space-y-4 border border-zinc-100 scroll-mt-24">
+        <div id="cabinet-data" data-profile-sizes-anchor="1" className={cabinetSectionClass('data', 'bg-white rounded-[32px] p-6 space-y-4 border border-zinc-100 scroll-mt-24')}>
           <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-widest">
             Ваши размеры
           </p>
@@ -1580,7 +1595,7 @@ const Profile = () => {
           </button>
         </div>
 
-        <div className="bg-white border border-zinc-100 rounded-[28px] p-5 shadow-sm space-y-4">
+        <div className={cabinetSectionClass('overview', 'bg-white border border-zinc-100 rounded-[28px] p-5 shadow-sm space-y-4')}>
           <div className="space-y-1">
             <div className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
               Приглашения
@@ -1625,7 +1640,7 @@ const Profile = () => {
           )}
         </div>
 
-        <div className="space-y-2">
+        <div className={cabinetSectionClass('data', 'space-y-2')}>
           <button className="w-full flex items-center justify-between p-5 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-colors">
             <span className="text-sm font-bold uppercase tracking-widest">Мои покупки</span>
             <ICONS.ArrowRight className="w-4 h-4" />
