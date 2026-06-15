@@ -2512,14 +2512,17 @@ function normalizeSeedLooksLimit(value, fallback = 12) {
 function seedPublicMediaUrl(url) {
   const s = String(url || "").trim();
   if (!s) return "";
-  if (/^https?:\/\//i.test(s) || /^data:/i.test(s)) return s;
+  if (/^data:/i.test(s)) return s;
+  if (/^https?:\/\//i.test(s)) return s;
+
+  const apiOrigin = getPublicApiOriginForInternalUrls();
 
   if (s.startsWith("/media/")) {
-    return `http://127.0.0.1:${PORT}${s}`;
+    return `${apiOrigin}${s}`;
   }
 
   if (s.startsWith("/")) {
-    return `http://127.0.0.1:${PORT}${s}`;
+    return `${apiOrigin}${s}`;
   }
 
   return s;
@@ -2582,6 +2585,25 @@ function seedProductWhereForRule(rule, gender, usedIds = new Set(), mode = "stri
 
   if (Array.isArray(rule.subgroups) && rule.subgroups.length) {
     and.push({ taxonomySubgroup: { in: rule.subgroups } });
+  }
+
+  if (expectedGroup === "CLOTHING") {
+    and.push({
+      NOT: {
+        OR: [
+          { title: { contains: "кроссов", mode: "insensitive" } },
+          { title: { contains: "кед", mode: "insensitive" } },
+          { title: { contains: "sneaker", mode: "insensitive" } },
+          { title: { contains: "trainer", mode: "insensitive" } },
+          { title: { contains: "trail blazer", mode: "insensitive" } },
+          { title: { contains: "nike blazer", mode: "insensitive" } },
+          { title: { contains: "туфли", mode: "insensitive" } },
+          { title: { contains: "лофер", mode: "insensitive" } },
+          { title: { contains: "ботинки", mode: "insensitive" } },
+          { title: { contains: "сандал", mode: "insensitive" } },
+        ],
+      },
+    });
   }
 
   if (mode === "strict" && Array.isArray(rule.colors) && rule.colors.length) {
