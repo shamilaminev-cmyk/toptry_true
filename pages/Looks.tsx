@@ -724,7 +724,7 @@ const Looks = () => {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h2 className="text-xl md:text-3xl font-black uppercase tracking-tight leading-none">
-                        {sourceItems.length ? `Образ из ${sourceItems.length} вещей` : (look.title || 'Образ')}
+                        {look.title && look.title !== 'Сгенерированный образ' ? look.title : (sourceItems.length ? `Образ из ${sourceItems.length} вещей` : 'Образ')}
                       </h2>
                       <div className="flex items-center gap-2 mt-3">
                         {authorHref ? (
