@@ -2366,7 +2366,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "leo-grant-light-business",
     slug: "leo-grant",
     collectionTitle: "Лёгкая деловая капсула",
-    title: "Белая рубашка, тёмные брюки и коричневые лоферы",
+    title: "Лёгкий деловой образ с белой рубашкой",
     gender: "MALE",
     items: [
       { label: "белая рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["white"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["поло", "фланел", "джинсов"] },
