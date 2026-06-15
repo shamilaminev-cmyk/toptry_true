@@ -2366,12 +2366,12 @@ const TOPTRY_SEED_LOOKS = [
     key: "leo-grant-light-business",
     slug: "leo-grant",
     collectionTitle: "Лёгкая деловая капсула",
-    title: "Голубая рубашка, чёрные брюки и лоферы",
+    title: "Светлый джемпер, тёмные брюки и коричневые лоферы",
     gender: "MALE",
     items: [
-      { label: "рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["blue", "white"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["поло"] },
-      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["black", "gray", "blue"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["спортив", "jogger", "джоггер", "training", "track", "sweat", "basic"] },
-      { label: "лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["black", "brown"], genderStrict: true, rejectTitle: ["женск", "woman", "women", "female", "лодочки", "каблук"] },
+      { label: "светлый джемпер", subgroups: ["SWEATERS", "KNITWEAR"], colors: ["beige", "white", "gray"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["поло", "худи", "толстов", "свитшот", "blue", "синий"] },
+      { label: "тёмные брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["black", "gray", "brown"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["спортив", "jogger", "джоггер", "training", "track", "sweat", "basic"] },
+      { label: "коричневые лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["brown"], genderStrict: true, rejectTitle: ["женск", "woman", "women", "female", "лодочки", "каблук"] },
     ],
   },
   {
