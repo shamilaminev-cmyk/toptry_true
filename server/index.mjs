@@ -2525,12 +2525,53 @@ function seedPublicMediaUrl(url) {
   return s;
 }
 
+
+function seedExpectedTaxonomyGroupForRule(rule) {
+  const subgroups = new Set((rule?.subgroups || []).map((v) => String(v || "").trim().toUpperCase()).filter(Boolean));
+
+  const shoeSubgroups = new Set([
+    "SNEAKERS",
+    "SNEAKERS_CASUAL",
+    "BOOTS",
+    "TALL_BOOTS",
+    "LOAFERS",
+    "SANDALS",
+    "BALLET",
+    "SHOES_CLASSIC",
+  ]);
+
+  const bagSubgroups = new Set([
+    "BAGS",
+    "BAGS_SHOULDER",
+    "BAGS_CROSSBODY",
+    "BAGS_TOTE",
+    "BAGS_SHOPPER",
+    "BAGS_BACKPACK",
+    "BAGS_CLUTCH",
+    "BAGS_BELT",
+    "BAGS_MINI",
+    "BAGS_TRAVEL",
+    "BAGS_WALLET_ACCESSORY",
+    "BAGS_OTHER",
+  ]);
+
+  for (const subgroup of subgroups) {
+    if (shoeSubgroups.has(subgroup)) return "SHOES";
+    if (bagSubgroups.has(subgroup)) return "BAGS";
+  }
+
+  return "CLOTHING";
+}
+
 function seedProductWhereForRule(rule, gender, usedIds = new Set(), mode = "strict") {
+  const expectedGroup = seedExpectedTaxonomyGroupForRule(rule);
+
   const and = [
     { isActive: true },
     { imageUrl: { not: null } },
     { price: { gt: 0 } },
     { id: { notIn: Array.from(usedIds || []) } },
+    { taxonomyGroup: expectedGroup },
     {
       OR: [
         { gender },
