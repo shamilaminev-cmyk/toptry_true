@@ -2346,6 +2346,565 @@ app.post("/api/admin/seed/authors", requireAuth, requireTopTryAdmin, async (req,
 });
 
 
+
+
+const TOPTRY_SEED_LOOKS = [
+  {
+    key: "leo-grant-city-smart",
+    slug: "leo-grant",
+    collectionTitle: "Городской smart casual",
+    title: "Navy-жакет, поло и светлые брюки",
+    gender: "MALE",
+    items: [
+      { label: "жакет", subgroups: ["BLAZERS"], colors: ["blue", "black", "gray"] },
+      { label: "поло / трикотаж", subgroups: ["POLO", "KNITWEAR"], colors: ["white", "beige", "gray"] },
+      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["beige", "gray", "brown"] },
+      { label: "лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["brown", "black"] },
+    ],
+  },
+  {
+    key: "leo-grant-light-business",
+    slug: "leo-grant",
+    collectionTitle: "Лёгкая деловая капсула",
+    title: "Рубашка, жакет и деловые брюки",
+    gender: "MALE",
+    items: [
+      { label: "жакет", subgroups: ["BLAZERS"], colors: ["beige", "blue", "gray"] },
+      { label: "рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["white", "blue"] },
+      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["blue", "gray", "black"] },
+      { label: "классическая обувь", subgroups: ["SHOES_CLASSIC", "LOAFERS"], colors: ["brown", "black"] },
+    ],
+  },
+  {
+    key: "mira-ward-neutral-base",
+    slug: "mira-ward",
+    collectionTitle: "Нейтральная база",
+    title: "Серый жакет, белый топ и графитовые брюки",
+    gender: "FEMALE",
+    items: [
+      { label: "серый жакет", subgroups: ["BLAZERS"], colors: ["gray", "black"] },
+      { label: "белый топ", subgroups: ["TSHIRTS", "TOPS", "KNITWEAR"], colors: ["white", "beige"] },
+      { label: "графитовые брюки", subgroups: ["FORMAL_TROUSERS", "TROUSERS"], colors: ["gray", "black"] },
+      { label: "лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["black", "brown"] },
+    ],
+  },
+  {
+    key: "mira-ward-clean-lines",
+    slug: "mira-ward",
+    collectionTitle: "Чистые линии",
+    title: "Белая рубашка и прямые чёрные брюки",
+    gender: "FEMALE",
+    items: [
+      { label: "рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["white"] },
+      { label: "прямые брюки", subgroups: ["FORMAL_TROUSERS", "TROUSERS"], colors: ["black", "gray"] },
+      { label: "лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC", "BALLET"], colors: ["black", "brown"] },
+    ],
+  },
+  {
+    key: "alma-rue-casual-chic",
+    slug: "alma-rue",
+    collectionTitle: "Casual chic",
+    title: "Светлый жакет, деним и балетки",
+    gender: "FEMALE",
+    items: [
+      { label: "светлый жакет", subgroups: ["BLAZERS"], colors: ["beige", "white", "gray"] },
+      { label: "рубашка / топ", subgroups: ["SHIRTS", "TSHIRTS", "TOPS"], colors: ["white", "beige"] },
+      { label: "джинсы", subgroups: ["DENIM"], colors: ["blue"] },
+      { label: "балетки", subgroups: ["BALLET", "LOAFERS"], colors: ["white", "beige", "black"] },
+    ],
+  },
+  {
+    key: "alma-rue-saturday",
+    slug: "alma-rue",
+    collectionTitle: "Суббота в городе",
+    title: "Кардиган, топ и джинсы",
+    gender: "FEMALE",
+    items: [
+      { label: "кардиган", subgroups: ["CARDIGANS", "KNITWEAR"], colors: ["beige", "gray", "brown"] },
+      { label: "топ", subgroups: ["TSHIRTS", "TOPS"], colors: ["white", "beige"] },
+      { label: "джинсы", subgroups: ["DENIM"], colors: ["blue"] },
+      { label: "мягкая обувь", subgroups: ["LOAFERS", "BALLET", "SNEAKERS_CASUAL"], colors: ["white", "beige", "brown"] },
+    ],
+  },
+  {
+    key: "milan-ash-urban-silhouette",
+    slug: "milan-ash",
+    collectionTitle: "Городской силуэт",
+    title: "Overshirt, футболка и relaxed trousers",
+    gender: "MALE",
+    items: [
+      { label: "overshirt / куртка", subgroups: ["OVERSHIRTS", "BOMBERS", "OUTERWEAR"], colors: ["black", "gray", "green"] },
+      { label: "футболка", subgroups: ["TSHIRTS", "TOPS"], colors: ["white", "black"] },
+      { label: "relaxed брюки", subgroups: ["TROUSERS", "FORMAL_TROUSERS", "CHINOS"], colors: ["gray", "black"] },
+      { label: "кеды", subgroups: ["SNEAKERS", "SNEAKERS_CASUAL"], colors: ["white", "black"] },
+    ],
+  },
+  {
+    key: "milan-ash-athletic-casual",
+    slug: "milan-ash",
+    collectionTitle: "Атлетичный casual",
+    title: "Бомбер, спокойная база и кеды",
+    gender: "MALE",
+    items: [
+      { label: "бомбер", subgroups: ["BOMBERS", "OUTERWEAR"], colors: ["black", "gray", "blue"] },
+      { label: "футболка", subgroups: ["TSHIRTS", "TOPS"], colors: ["black", "white"] },
+      { label: "джоггеры / relaxed брюки", subgroups: ["JOGGERS", "TROUSERS"], colors: ["black", "gray"] },
+      { label: "кеды", subgroups: ["SNEAKERS", "SNEAKERS_CASUAL"], colors: ["white", "black"] },
+    ],
+  },
+  {
+    key: "tess-noir-evening-smart",
+    slug: "tess-noir",
+    collectionTitle: "Вечерний smart",
+    title: "Чёрный жакет, топ и широкие брюки",
+    gender: "FEMALE",
+    items: [
+      { label: "чёрный жакет", subgroups: ["BLAZERS"], colors: ["black"] },
+      { label: "топ", subgroups: ["TOPS", "TSHIRTS", "KNITWEAR"], colors: ["black"] },
+      { label: "широкие брюки", subgroups: ["FORMAL_TROUSERS", "TROUSERS"], colors: ["black", "gray"] },
+      { label: "обувь", subgroups: ["BOOTS", "SHOES_CLASSIC", "LOAFERS"], colors: ["black"] },
+    ],
+  },
+  {
+    key: "tess-noir-after-dark",
+    slug: "tess-noir",
+    collectionTitle: "После заката",
+    title: "Тёмная рубашка и графитовые брюки",
+    gender: "FEMALE",
+    items: [
+      { label: "тёмная рубашка", subgroups: ["SHIRTS", "FORMAL_SHIRTS"], colors: ["black", "blue", "gray"] },
+      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "TROUSERS"], colors: ["black", "gray"] },
+      { label: "вечерняя обувь", subgroups: ["BOOTS", "SHOES_CLASSIC", "LOAFERS"], colors: ["black"] },
+    ],
+  },
+  {
+    key: "lina-moss-soft-casual",
+    slug: "lina-moss",
+    collectionTitle: "Мягкий casual",
+    title: "Трикотаж, светлые брюки и лоферы",
+    gender: "FEMALE",
+    items: [
+      { label: "трикотаж", subgroups: ["SWEATERS", "KNITWEAR", "CARDIGANS"], colors: ["beige", "brown", "gray", "white"] },
+      { label: "светлые брюки", subgroups: ["TROUSERS", "FORMAL_TROUSERS", "CHINOS"], colors: ["white", "beige", "gray"] },
+      { label: "лоферы", subgroups: ["LOAFERS", "BALLET"], colors: ["brown", "beige", "white"] },
+    ],
+  },
+  {
+    key: "lina-moss-warm-neutrals",
+    slug: "lina-moss",
+    collectionTitle: "Тёплые нейтрали",
+    title: "Кардиган, светлый топ и молочные брюки",
+    gender: "FEMALE",
+    items: [
+      { label: "кардиган", subgroups: ["CARDIGANS", "KNITWEAR"], colors: ["beige", "brown", "gray"] },
+      { label: "светлый топ", subgroups: ["TOPS", "TSHIRTS", "KNITWEAR"], colors: ["white", "beige"] },
+      { label: "молочные брюки", subgroups: ["TROUSERS", "FORMAL_TROUSERS"], colors: ["white", "beige"] },
+      { label: "мягкая обувь", subgroups: ["LOAFERS", "BALLET", "SNEAKERS_CASUAL"], colors: ["brown", "white", "beige"] },
+    ],
+  },
+];
+
+function normalizeSeedLooksLimit(value, fallback = 12) {
+  const n = Number(value || fallback);
+  return Number.isFinite(n) ? Math.max(1, Math.min(24, Math.floor(n))) : fallback;
+}
+
+function seedPublicMediaUrl(url) {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s) || /^data:/i.test(s)) return s;
+
+  if (s.startsWith("/media/")) {
+    return `http://127.0.0.1:${PORT}${s}`;
+  }
+
+  if (s.startsWith("/")) {
+    return `http://127.0.0.1:${PORT}${s}`;
+  }
+
+  return s;
+}
+
+function seedProductWhereForRule(rule, gender, usedIds = new Set(), mode = "strict") {
+  const and = [
+    { isActive: true },
+    { imageUrl: { not: null } },
+    { price: { gt: 0 } },
+    { id: { notIn: Array.from(usedIds || []) } },
+    {
+      OR: [
+        { gender },
+        { gender: "UNISEX" },
+      ],
+    },
+  ];
+
+  if (Array.isArray(rule.subgroups) && rule.subgroups.length) {
+    and.push({ taxonomySubgroup: { in: rule.subgroups } });
+  }
+
+  if (mode === "strict" && Array.isArray(rule.colors) && rule.colors.length) {
+    and.push({
+      OR: [
+        { colorFamily: { in: rule.colors } },
+        { colorFamily: null },
+      ],
+    });
+  }
+
+  return { AND: and };
+}
+
+async function findSeedCatalogProduct(rule, gender, usedIds = new Set()) {
+  const attempts = ["strict", "loose"];
+
+  for (const mode of attempts) {
+    const product = await prisma.catalogProduct.findFirst({
+      where: seedProductWhereForRule(rule, gender, usedIds, mode),
+      orderBy: [
+        { updatedAt: "desc" },
+      ],
+      select: {
+        id: true,
+        merchant: true,
+        title: true,
+        brand: true,
+        gender: true,
+        category: true,
+        taxonomyGroup: true,
+        taxonomySubgroup: true,
+        colorFamily: true,
+        price: true,
+        oldPrice: true,
+        currency: true,
+        imageUrl: true,
+        productUrl: true,
+        affiliateUrl: true,
+      },
+    }).catch(() => null);
+
+    if (product?.imageUrl) return product;
+  }
+
+  return null;
+}
+
+function mapSeedCatalogProductToSourceItem(product) {
+  return {
+    id: product.id,
+    title: product.title,
+    price: Number(product.price || 0),
+    currency: product.currency || "RUB",
+    category: product.category || product.taxonomyGroup || "OTHER",
+    gender: product.gender || "UNISEX",
+    images: product.imageUrl ? [product.imageUrl] : [],
+    brand: product.brand || undefined,
+    storeId: product.merchant || "catalog",
+    storeName: product.merchant || undefined,
+    isCatalog: true,
+    affiliateUrl: product.affiliateUrl || undefined,
+    productUrl: product.productUrl || undefined,
+  };
+}
+
+async function selectSeedLookProducts(seedLook, usedIds = new Set()) {
+  const selected = [];
+
+  for (const rule of seedLook.items || []) {
+    const product = await findSeedCatalogProduct(rule, seedLook.gender, usedIds);
+
+    if (!product) {
+      selected.push({
+        ok: false,
+        label: rule.label,
+        rule,
+        product: null,
+      });
+      continue;
+    }
+
+    usedIds.add(product.id);
+
+    selected.push({
+      ok: true,
+      label: rule.label,
+      rule,
+      product,
+    });
+  }
+
+  return selected;
+}
+
+async function createSeedLookThroughProductionPipeline(seedLook, selectedProducts) {
+  const author = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { publicSlug: seedLook.slug },
+        { id: `seed-author-${seedLook.slug}` },
+      ],
+    },
+    select: {
+      id: true,
+      username: true,
+      phone: true,
+      publicSlug: true,
+      publicDisplayName: true,
+      avatarUrl: true,
+    },
+  });
+
+  if (!author) {
+    throw new Error(`Seed author not found: ${seedLook.slug}`);
+  }
+
+  if (!author.avatarUrl) {
+    throw new Error(`Seed author has no avatarUrl: ${seedLook.slug}`);
+  }
+
+  const collection = await prisma.lookCollection.findFirst({
+    where: {
+      userId: author.id,
+      title: seedLook.collectionTitle,
+    },
+    select: { id: true, title: true },
+  });
+
+  if (!collection) {
+    throw new Error(`Seed collection not found: ${seedLook.slug} / ${seedLook.collectionTitle}`);
+  }
+
+  const seedMarker = `seed:${seedLook.slug}:${seedLook.key}`;
+
+  const existing = await prisma.look.findFirst({
+    where: {
+      userId: author.id,
+      userDescription: seedMarker,
+    },
+    include: {
+      user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
+    },
+  });
+
+  if (existing) {
+    const existingItem = await prisma.lookCollectionItem.findFirst({
+      where: {
+        collectionId: collection.id,
+        lookId: existing.id,
+      },
+      select: { id: true },
+    });
+
+    if (!existingItem) {
+      await prisma.lookCollectionItem.create({
+        data: {
+          id: `lci-${seedLook.key}-${Math.random().toString(16).slice(2, 8)}`,
+          collectionId: collection.id,
+          lookId: existing.id,
+          sortOrder: 0,
+        },
+      });
+    }
+
+    return {
+      skipped: true,
+      reason: "already_exists",
+      look: await mapLookForApi(existing, author.id),
+      collection,
+    };
+  }
+
+  const products = selectedProducts.map((item) => item.product).filter(Boolean);
+  const sourceItems = products.map(mapSeedCatalogProductToSourceItem);
+  const itemIds = products.map((product) => product.id);
+  const itemImageUrls = products
+    .map((product) => toAiGatewayStableImageUrl(product.imageUrl))
+    .filter(Boolean);
+
+  if (!itemImageUrls.length) {
+    throw new Error(`No usable item images for seed look ${seedLook.key}`);
+  }
+
+  const priceBuyNowRUB = products.reduce((sum, product) => sum + Number(product.price || 0), 0);
+
+  const { cookieName } = getAuthConfig();
+  const token = signSession(author);
+
+  const resp = await fetch(`http://127.0.0.1:${PORT}/api/looks/create`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "accept": "application/json",
+      "cookie": `${cookieName}=${token}`,
+    },
+    body: JSON.stringify({
+      selfieDataUrl: seedPublicMediaUrl(author.avatarUrl),
+      itemImageUrls,
+      itemIds,
+      sourceItems,
+      aspectRatio: "3:4",
+      qualityMode: "quality",
+      priceBuyNowRUB,
+    }),
+  });
+
+  const data = await resp.json().catch(() => ({}));
+
+  if (!resp.ok || !data?.look?.id) {
+    throw new Error(data?.error || `looks/create failed: ${resp.status}`);
+  }
+
+  const updated = await prisma.look.update({
+    where: { id: data.look.id },
+    data: {
+      title: seedLook.title,
+      isPublic: true,
+      userDescription: seedMarker,
+    },
+    include: {
+      user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
+    },
+  });
+
+  const existingItem = await prisma.lookCollectionItem.findFirst({
+    where: {
+      collectionId: collection.id,
+      lookId: updated.id,
+    },
+    select: { id: true },
+  });
+
+  if (!existingItem) {
+    await prisma.lookCollectionItem.create({
+      data: {
+        id: `lci-${seedLook.key}-${Math.random().toString(16).slice(2, 8)}`,
+        collectionId: collection.id,
+        lookId: updated.id,
+        sortOrder: 0,
+      },
+    });
+  }
+
+  return {
+    skipped: false,
+    look: await mapLookForApi(updated, author.id),
+    collection,
+  };
+}
+
+
+app.post("/api/admin/seed/looks", requireAuth, requireTopTryAdmin, async (req, res) => {
+  try {
+    const dryRun = String(req.query.dryRun ?? req.body?.dryRun ?? "1") !== "0";
+    const limit = normalizeSeedLooksLimit(req.query.limit ?? req.body?.limit ?? 12, 12);
+
+    const requestedSlug = String(req.query.slug || req.body?.slug || "").trim().toLowerCase();
+    const requestedKey = String(req.query.key || req.body?.key || "").trim();
+
+    const usedIds = new Set();
+    const plan = TOPTRY_SEED_LOOKS
+      .filter((look) => !requestedSlug || look.slug === requestedSlug)
+      .filter((look) => !requestedKey || look.key === requestedKey)
+      .slice(0, limit);
+
+    const results = [];
+
+    for (const seedLook of plan) {
+      try {
+        const selected = await selectSeedLookProducts(seedLook, usedIds);
+        const missing = selected.filter((item) => !item.ok);
+
+        const preview = {
+          key: seedLook.key,
+          slug: seedLook.slug,
+          title: seedLook.title,
+          collectionTitle: seedLook.collectionTitle,
+          gender: seedLook.gender,
+          items: selected.map((item) => ({
+            ok: item.ok,
+            label: item.label,
+            product: item.product
+              ? {
+                  id: item.product.id,
+                  merchant: item.product.merchant,
+                  title: item.product.title,
+                  brand: item.product.brand || "",
+                  price: Number(item.product.price || 0),
+                  gender: item.product.gender || "",
+                  taxonomyGroup: item.product.taxonomyGroup || "",
+                  taxonomySubgroup: item.product.taxonomySubgroup || "",
+                  colorFamily: item.product.colorFamily || "",
+                  imageUrl: item.product.imageUrl || "",
+                }
+              : null,
+          })),
+        };
+
+        if (missing.length) {
+          results.push({
+            ok: false,
+            dryRun,
+            ...preview,
+            error: `Missing catalog products: ${missing.map((item) => item.label).join(", ")}`,
+          });
+          continue;
+        }
+
+        if (dryRun) {
+          results.push({
+            ok: true,
+            dryRun,
+            ...preview,
+          });
+          continue;
+        }
+
+        const created = await createSeedLookThroughProductionPipeline(seedLook, selected);
+
+        results.push({
+          ok: true,
+          dryRun,
+          ...preview,
+          skipped: !!created.skipped,
+          reason: created.reason || null,
+          look: created.look,
+          collection: created.collection,
+        });
+      } catch (err) {
+        results.push({
+          ok: false,
+          dryRun,
+          key: seedLook.key,
+          slug: seedLook.slug,
+          title: seedLook.title,
+          collectionTitle: seedLook.collectionTitle,
+          error: err?.message || String(err),
+        });
+      }
+    }
+
+    const failed = results.filter((item) => !item.ok);
+
+    return res.status(failed.length ? 207 : 200).json({
+      ok: failed.length === 0,
+      dryRun,
+      requested: {
+        limit,
+        slug: requestedSlug || null,
+        key: requestedKey || null,
+      },
+      totalPlanned: plan.length,
+      succeeded: results.length - failed.length,
+      failed: failed.length,
+      results,
+    });
+  } catch (err) {
+    console.error("[toptry] /api/admin/seed/looks error", err);
+    return res.status(500).json({ error: err?.message || "Failed to seed looks" });
+  }
+});
+
+
 app.post("/api/support/request", requireAuth, async (req, res) => {
   try {
     const userId = req.auth?.userId;
