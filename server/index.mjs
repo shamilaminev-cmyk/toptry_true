@@ -217,6 +217,59 @@ const TOPTRY_SEED_AUTHORS = [
   },
 ];
 
+
+
+const TOPTRY_SEED_EXTRA_COLLECTIONS_BY_SLUG = {
+  "leo-grant": [
+    { title: "Выходной в городе", description: "Непринуждённый smart casual для прогулок, встреч и выходных." },
+    { title: "Тёплая база", description: "Мягкий трикотаж, спокойные оттенки и удобные городские сочетания." },
+    { title: "Летний smart", description: "Лёгкие рубашки, поло, светлые брюки и аккуратная летняя база." },
+  ],
+  "mira-ward": [
+    { title: "Clean office", description: "Минималистичные офисные образы без лишней формальности." },
+    { title: "Weekend minimal", description: "Спокойные минималистичные сочетания для выходного дня." },
+    { title: "Soft monochrome", description: "Мягкие монохромные образы в светлой нейтральной гамме." },
+  ],
+  "alma-rue": [
+    { title: "Городская прогулка", description: "Лёгкие городские сочетания для прогулок, кафе и встреч." },
+    { title: "Мягкая женственность", description: "Юбки, блузы, трикотаж и аккуратные повседневные силуэты." },
+    { title: "Летний город", description: "Светлые образы, лёгкие ткани и женственная городская база." },
+  ],
+  "milan-ash": [
+    { title: "Street clean", description: "Чистый street casual без лишнего шума и логотипов." },
+    { title: "Active weekend", description: "Удобные городские образы для активного выходного дня." },
+    { title: "Summer urban", description: "Летний городской casual: футболки, рубашки, кеды и relaxed-силуэты." },
+  ],
+  "tess-noir": [
+    { title: "Dark office", description: "Строгие тёмные сочетания для офиса и вечерних встреч." },
+    { title: "Total black", description: "Структурные чёрные образы с выразительным силуэтом." },
+    { title: "Minimal evening", description: "Минималистичные вечерние комплекты в тёмной палитре." },
+  ],
+  "lina-moss": [
+    { title: "Cozy city", description: "Уютные городские образы с трикотажем и мягкими фактурами." },
+    { title: "Everyday comfort", description: "Комфортные повседневные сочетания для спокойного дня." },
+    { title: "Natural palette", description: "Молочные, песочные и природные оттенки в мягких образах." },
+  ],
+};
+
+function toptrySeedAuthorCollections(author) {
+  const base = Array.isArray(author?.collections) ? author.collections : [];
+  const extra = TOPTRY_SEED_EXTRA_COLLECTIONS_BY_SLUG[author?.slug] || [];
+
+  const seen = new Set();
+  const result = [];
+
+  for (const item of [...base, ...extra]) {
+    const title = String(item?.title || "").trim();
+    if (!title || seen.has(title)) continue;
+    seen.add(title);
+    result.push(item);
+  }
+
+  return result;
+}
+
+
 function toptrySeedAvatarDir() {
   return path.join(process.cwd(), "seed", "authors", "avatars");
 }
@@ -308,9 +361,10 @@ async function ensureToptrySeedAuthor(author, { processAvatar = true } = {}) {
   }
 
   const collections = [];
+  const authorCollections = toptrySeedAuthorCollections(author);
 
-  for (let i = 0; i < (author.collections || []).length; i += 1) {
-    const item = author.collections[i];
+  for (let i = 0; i < authorCollections.length; i += 1) {
+    const item = authorCollections[i];
     const title = String(item.title || "").trim().slice(0, 80);
     const description = String(item.description || "").trim().slice(0, 220);
 
@@ -2348,160 +2402,374 @@ app.post("/api/admin/seed/authors", requireAuth, requireTopTryAdmin, async (req,
 
 
 
+const SEED_SMART_MERCHANTS = {
+  preferredMerchants: ["finnflare", "thecultt"],
+  excludedMerchants: ["sportmaster"],
+};
+
+const SEED_NO_SPORT_PANTS = ["спортив", "jogger", "джоггер", "training", "track", "sweat", "basic"];
+const SEED_NO_POLO_SHIRT = ["поло"];
+const SEED_NO_WOMEN_SHOES = ["женск", "woman", "women", "female", "лодочки", "каблук"];
+
+function seedRule(label, subgroups, colors = [], extra = {}) {
+  return {
+    label,
+    subgroups,
+    colors,
+    ...extra,
+  };
+}
+
+function seedLook(key, slug, collectionTitle, title, gender, items, seedRank = 50) {
+  return {
+    key,
+    slug,
+    collectionTitle,
+    title,
+    gender,
+    items,
+    seedRank,
+    active: true,
+  };
+}
+
 const TOPTRY_SEED_LOOKS = [
-  {
-    key: "leo-grant-city-smart",
-    slug: "leo-grant",
-    collectionTitle: "Городской smart casual",
-    title: "Синий пиджак, поло и графитовые брюки",
-    gender: "MALE",
-    items: [
-      { label: "пиджак", subgroups: ["BLAZERS"], colors: ["blue", "black", "gray"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"] },
-      { label: "поло / трикотаж", subgroups: ["POLO", "KNITWEAR"], colors: ["white", "beige", "gray"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"] },
-      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["beige", "gray", "brown"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["спортив", "jogger", "джоггер", "training", "track", "sweat", "basic"] },
-      { label: "лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["brown", "black"], genderStrict: true, rejectTitle: ["женск", "woman", "women", "female", "лодочки", "каблук"] },
-    ],
-  },
-  {
-    key: "leo-grant-light-business",
-    slug: "leo-grant",
-    collectionTitle: "Лёгкая деловая капсула",
-    title: "Лёгкий деловой образ с белой рубашкой",
-    gender: "MALE",
-    items: [
-      { label: "белая рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["white"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["поло", "фланел", "джинсов"] },
-      { label: "тёмные брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["black", "gray", "brown"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["спортив", "jogger", "джоггер", "training", "track", "sweat", "basic"] },
-      { label: "коричневые лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["brown"], genderStrict: true, rejectTitle: ["женск", "woman", "women", "female", "лодочки", "каблук"] },
-    ],
-  },
-  {
-    key: "mira-ward-neutral-base",
-    slug: "mira-ward",
-    collectionTitle: "Нейтральная база",
-    title: "Минималистичный образ с серым жакетом",
-    gender: "FEMALE",
-    items: [
-      { label: "серый жакет", subgroups: ["BLAZERS"], colors: ["gray", "black"] },
-      { label: "белый топ", subgroups: ["TSHIRTS", "TOPS", "KNITWEAR"], colors: ["white", "beige"] },
-      { label: "графитовые брюки", subgroups: ["FORMAL_TROUSERS", "TROUSERS"], colors: ["gray", "black"] },
-      { label: "лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["black", "brown"] },
-    ],
-  },
-  {
-    key: "mira-ward-clean-lines",
-    slug: "mira-ward",
-    collectionTitle: "Чистые линии",
-    title: "Белая рубашка и чёрные брюки",
-    gender: "FEMALE",
-    items: [
-      { label: "рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["white"] },
-      { label: "прямые брюки", subgroups: ["FORMAL_TROUSERS", "TROUSERS"], colors: ["black", "gray"] },
-      { label: "лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC", "BALLET"], colors: ["black", "brown"] },
-    ],
-  },
-  {
-    key: "alma-rue-casual-chic",
-    slug: "alma-rue",
-    collectionTitle: "Casual chic",
-    title: "Светлый жакет и деним",
-    gender: "FEMALE",
-    items: [
-      { label: "светлый жакет", subgroups: ["BLAZERS"], colors: ["beige", "white", "gray"] },
-      { label: "рубашка / топ", subgroups: ["SHIRTS", "TSHIRTS", "TOPS"], colors: ["white", "beige"] },
-      { label: "джинсы", subgroups: ["DENIM"], colors: ["blue"] },
-      { label: "балетки", subgroups: ["BALLET", "LOAFERS"], colors: ["white", "beige", "black"] },
-    ],
-  },
-  {
-    key: "alma-rue-saturday",
-    slug: "alma-rue",
-    collectionTitle: "Суббота в городе",
-    title: "Расслабленный образ с кардиганом",
-    gender: "FEMALE",
-    items: [
-      { label: "кардиган", subgroups: ["CARDIGANS", "KNITWEAR"], colors: ["beige", "gray", "brown"] },
-      { label: "топ", subgroups: ["TSHIRTS", "TOPS"], colors: ["white", "beige"] },
-      { label: "джинсы", subgroups: ["DENIM"], colors: ["blue"] },
-      { label: "мягкая обувь", subgroups: ["LOAFERS", "BALLET", "SNEAKERS_CASUAL"], colors: ["white", "beige", "brown"] },
-    ],
-  },
-  {
-    key: "milan-ash-urban-silhouette",
-    slug: "milan-ash",
-    collectionTitle: "Городской силуэт",
-    title: "Городской образ с рубашкой-курткой",
-    gender: "MALE",
-    items: [
-      { label: "overshirt / куртка", subgroups: ["OVERSHIRTS", "BOMBERS", "OUTERWEAR"], colors: ["black", "gray", "green"] },
-      { label: "футболка", subgroups: ["TSHIRTS", "TOPS"], colors: ["white", "black"] },
-      { label: "relaxed брюки", subgroups: ["TROUSERS", "FORMAL_TROUSERS", "CHINOS"], colors: ["gray", "black"] },
-      { label: "кеды", subgroups: ["SNEAKERS", "SNEAKERS_CASUAL"], colors: ["white", "black"] },
-    ],
-  },
-  {
-    key: "milan-ash-athletic-casual",
-    slug: "milan-ash",
-    collectionTitle: "Атлетичный casual",
-    title: "Бомбер и спокойная база",
-    gender: "MALE",
-    items: [
-      { label: "бомбер", subgroups: ["BOMBERS", "OUTERWEAR"], colors: ["black", "gray", "blue"] },
-      { label: "футболка", subgroups: ["TSHIRTS", "TOPS"], colors: ["black", "white"] },
-      { label: "джоггеры / relaxed брюки", subgroups: ["JOGGERS", "TROUSERS"], colors: ["black", "gray"] },
-      { label: "кеды", subgroups: ["SNEAKERS", "SNEAKERS_CASUAL"], colors: ["white", "black"] },
-    ],
-  },
-  {
-    key: "tess-noir-evening-smart",
-    slug: "tess-noir",
-    collectionTitle: "Вечерний smart",
-    title: "Вечерний total black",
-    gender: "FEMALE",
-    items: [
-      { label: "чёрный жакет", subgroups: ["BLAZERS"], colors: ["black"] },
-      { label: "топ", subgroups: ["TOPS", "TSHIRTS", "KNITWEAR"], colors: ["black"] },
-      { label: "широкие брюки", subgroups: ["FORMAL_TROUSERS", "TROUSERS"], colors: ["black", "gray"] },
-      { label: "обувь", subgroups: ["BOOTS", "SHOES_CLASSIC", "LOAFERS"], colors: ["black"] },
-    ],
-  },
-  {
-    key: "tess-noir-after-dark",
-    slug: "tess-noir",
-    collectionTitle: "После заката",
-    title: "Тёмная рубашка и графитовые брюки",
-    gender: "FEMALE",
-    items: [
-      { label: "тёмная рубашка", subgroups: ["SHIRTS", "FORMAL_SHIRTS"], colors: ["black", "blue", "gray"] },
-      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "TROUSERS"], colors: ["black", "gray"] },
-      { label: "вечерняя обувь", subgroups: ["BOOTS", "SHOES_CLASSIC", "LOAFERS"], colors: ["black"] },
-    ],
-  },
-  {
-    key: "lina-moss-soft-casual",
-    slug: "lina-moss",
-    collectionTitle: "Мягкий casual",
-    title: "Мягкий casual с трикотажем",
-    gender: "FEMALE",
-    items: [
-      { label: "трикотаж", subgroups: ["SWEATERS", "KNITWEAR", "CARDIGANS"], colors: ["beige", "brown", "gray", "white"] },
-      { label: "светлые брюки", subgroups: ["TROUSERS", "FORMAL_TROUSERS", "CHINOS"], colors: ["white", "beige", "gray"] },
-      { label: "лоферы", subgroups: ["LOAFERS", "BALLET"], colors: ["brown", "beige", "white"] },
-    ],
-  },
-  {
-    key: "lina-moss-warm-neutrals",
-    slug: "lina-moss",
-    collectionTitle: "Тёплые нейтрали",
-    title: "Светлый образ в тёплой гамме",
-    gender: "FEMALE",
-    items: [
-      { label: "кардиган", subgroups: ["CARDIGANS", "KNITWEAR"], colors: ["beige", "brown", "gray"] },
-      { label: "светлый топ", subgroups: ["TOPS", "TSHIRTS", "KNITWEAR"], colors: ["white", "beige"] },
-      { label: "молочные брюки", subgroups: ["TROUSERS", "FORMAL_TROUSERS"], colors: ["white", "beige"] },
-      { label: "мягкая обувь", subgroups: ["LOAFERS", "BALLET", "SNEAKERS_CASUAL"], colors: ["brown", "white", "beige"] },
-    ],
-  },
+  // Leo Grant — 10
+  seedLook("leo-grant-city-smart", "leo-grant", "Городской smart casual", "Синий пиджак, поло и графитовые брюки", "MALE", [
+    seedRule("синий пиджак", ["BLAZERS"], ["blue", "gray"], SEED_SMART_MERCHANTS),
+    seedRule("светлое поло", ["POLO", "KNITWEAR"], ["white", "beige", "gray"], SEED_SMART_MERCHANTS),
+    seedRule("графитовые брюки", ["FORMAL_TROUSERS", "TROUSERS"], ["gray", "black"], { ...SEED_SMART_MERCHANTS, rejectTitle: SEED_NO_SPORT_PANTS }),
+    seedRule("классическая обувь", ["LOAFERS", "SHOES_CLASSIC"], ["black", "brown"], { genderStrict: true, rejectTitle: SEED_NO_WOMEN_SHOES }),
+  ], 100),
+  seedLook("leo-grant-light-business", "leo-grant", "Лёгкая деловая капсула", "Лёгкий деловой образ с белой рубашкой", "MALE", [
+    seedRule("белая рубашка", ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], ["white"], { ...SEED_SMART_MERCHANTS, rejectTitle: SEED_NO_POLO_SHIRT }),
+    seedRule("тёмные брюки", ["FORMAL_TROUSERS", "TROUSERS", "CHINOS"], ["black", "gray", "brown"], { ...SEED_SMART_MERCHANTS, rejectTitle: SEED_NO_SPORT_PANTS }),
+    seedRule("классическая обувь", ["LOAFERS", "SHOES_CLASSIC"], ["brown", "black"], { genderStrict: true, rejectTitle: SEED_NO_WOMEN_SHOES }),
+  ], 98),
+  seedLook("leo-grant-weekend-overshirt", "leo-grant", "Выходной в городе", "Городской casual с рубашкой-курткой", "MALE", [
+    seedRule("рубашка-куртка", ["SHIRTS", "OUTERWEAR", "BLAZERS"], ["gray", "blue", "green", "black"], { rejectTitle: ["поло"] }),
+    seedRule("базовая футболка", ["TSHIRTS", "POLO"], ["white", "black", "gray"]),
+    seedRule("тёмный деним", ["DENIM", "TROUSERS"], ["blue", "black", "gray"], { rejectTitle: SEED_NO_SPORT_PANTS }),
+    seedRule("кеды", ["SNEAKERS"], ["white", "black", "gray"], { genderStrict: true }),
+  ], 90),
+  seedLook("leo-grant-knit-weekend", "leo-grant", "Выходной в городе", "Трикотажный образ для выходного дня", "MALE", [
+    seedRule("трикотаж", ["KNITWEAR", "POLO"], ["beige", "white", "gray", "brown"], SEED_SMART_MERCHANTS),
+    seedRule("прямые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["gray", "brown", "black"], { ...SEED_SMART_MERCHANTS, rejectTitle: SEED_NO_SPORT_PANTS }),
+    seedRule("мягкая обувь", ["LOAFERS", "SNEAKERS", "SHOES_CLASSIC"], ["brown", "white", "black"], { genderStrict: true }),
+  ], 88),
+  seedLook("leo-grant-warm-office", "leo-grant", "Тёплая база", "Спокойный офисный образ в тёплых тонах", "MALE", [
+    seedRule("кардиган или пиджак", ["KNITWEAR", "BLAZERS"], ["beige", "brown", "gray"], SEED_SMART_MERCHANTS),
+    seedRule("светлый трикотаж", ["KNITWEAR", "POLO"], ["white", "beige", "gray"], SEED_SMART_MERCHANTS),
+    seedRule("спокойные брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["beige", "gray", "brown"], { ...SEED_SMART_MERCHANTS, rejectTitle: SEED_NO_SPORT_PANTS }),
+    seedRule("аккуратная обувь", ["LOAFERS", "SHOES_CLASSIC"], ["brown", "black"], { genderStrict: true }),
+  ], 86),
+  seedLook("leo-grant-summer-smart", "leo-grant", "Летний smart", "Летний smart casual со светлой рубашкой", "MALE", [
+    seedRule("светлая рубашка", ["SHIRTS", "FORMAL_SHIRTS", "CASUAL_SHIRTS"], ["white", "beige", "blue"], { ...SEED_SMART_MERCHANTS, rejectTitle: SEED_NO_POLO_SHIRT }),
+    seedRule("светлые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["beige", "white", "gray"], { ...SEED_SMART_MERCHANTS, rejectTitle: SEED_NO_SPORT_PANTS }),
+    seedRule("лёгкая обувь", ["LOAFERS", "SHOES_CLASSIC", "SNEAKERS"], ["brown", "white", "beige"], { genderStrict: true }),
+  ], 84),
+  seedLook("leo-grant-friday-denim", "leo-grant", "Городской smart casual", "Непринуждённый образ на конец недели", "MALE", [
+    seedRule("поло или рубашка", ["POLO", "SHIRTS"], ["white", "blue", "gray"], SEED_SMART_MERCHANTS),
+    seedRule("тёмный деним", ["DENIM", "TROUSERS"], ["blue", "black"]),
+    seedRule("мягкий пиджак", ["BLAZERS", "OUTERWEAR"], ["blue", "gray", "beige"], SEED_SMART_MERCHANTS),
+    seedRule("casual обувь", ["LOAFERS", "SNEAKERS", "SHOES_CLASSIC"], ["brown", "black", "white"], { genderStrict: true }),
+  ], 82),
+  seedLook("leo-grant-clean-minimal", "leo-grant", "Тёплая база", "Минималистичный образ с мягким трикотажем", "MALE", [
+    seedRule("светлый трикотаж", ["KNITWEAR", "POLO"], ["white", "beige", "gray"], SEED_SMART_MERCHANTS),
+    seedRule("тёмные брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["black", "gray"], { ...SEED_SMART_MERCHANTS, rejectTitle: SEED_NO_SPORT_PANTS }),
+    seedRule("лаконичная обувь", ["LOAFERS", "SHOES_CLASSIC", "SNEAKERS"], ["black", "brown", "white"], { genderStrict: true }),
+  ], 80),
+  seedLook("leo-grant-city-movement", "leo-grant", "Выходной в городе", "Удобный городской образ для дня в движении", "MALE", [
+    seedRule("лёгкий верхний слой", ["OUTERWEAR", "SHIRTS", "BLAZERS"], ["gray", "blue", "green", "black"]),
+    seedRule("базовый топ", ["TSHIRTS", "POLO"], ["white", "black", "gray"]),
+    seedRule("удобные брюки", ["TROUSERS", "DENIM"], ["gray", "black", "blue"], { rejectTitle: ["спортивные брюки"] }),
+    seedRule("clean sneakers", ["SNEAKERS"], ["white", "black", "gray"], { genderStrict: true }),
+  ], 78),
+  seedLook("leo-grant-evening-casual", "leo-grant", "Лёгкая деловая капсула", "Неброский вечерний smart casual", "MALE", [
+    seedRule("тёмный верх", ["SHIRTS", "POLO", "KNITWEAR"], ["black", "blue", "gray"]),
+    seedRule("спокойные брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["black", "gray"], { rejectTitle: SEED_NO_SPORT_PANTS }),
+    seedRule("аккуратная обувь", ["LOAFERS", "SHOES_CLASSIC"], ["black", "brown"], { genderStrict: true }),
+  ], 76),
+
+  // Mira Ward — 10
+  seedLook("mira-ward-neutral-base", "mira-ward", "Нейтральная база", "Минималистичный образ с серым жакетом", "FEMALE", [
+    seedRule("серый жакет", ["BLAZERS"], ["gray", "black"]),
+    seedRule("белый топ", ["TOPS", "TSHIRTS", "KNITWEAR"], ["white", "beige"]),
+    seedRule("графитовые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["gray", "black"]),
+    seedRule("лаконичная обувь", ["LOAFERS", "BALLET", "SHOES_CLASSIC"], ["black", "brown"]),
+  ], 100),
+  seedLook("mira-ward-clean-lines", "mira-ward", "Чистые линии", "Белая рубашка и чёрные брюки", "FEMALE", [
+    seedRule("белая рубашка", ["SHIRTS", "FORMAL_SHIRTS"], ["white"], { rejectTitle: SEED_NO_POLO_SHIRT }),
+    seedRule("чёрные брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["black", "gray"]),
+    seedRule("минималистичная обувь", ["LOAFERS", "BALLET", "SHOES_CLASSIC"], ["black"]),
+  ], 98),
+  seedLook("mira-ward-soft-office", "mira-ward", "Clean office", "Спокойный офисный образ в светлой гамме", "FEMALE", [
+    seedRule("светлый топ или блуза", ["TOPS", "SHIRTS", "KNITWEAR"], ["white", "beige"]),
+    seedRule("бежевые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["beige", "white", "gray"]),
+    seedRule("структурный жакет", ["BLAZERS"], ["beige", "gray", "white"]),
+    seedRule("clean shoes", ["LOAFERS", "BALLET", "SHOES_CLASSIC"], ["black", "white", "beige"]),
+  ], 92),
+  seedLook("mira-ward-monochrome-beige", "mira-ward", "Soft monochrome", "Мягкий монохром в бежевых тонах", "FEMALE", [
+    seedRule("молочный верх", ["TOPS", "KNITWEAR", "TSHIRTS"], ["white", "beige"]),
+    seedRule("светлый низ", ["TROUSERS", "SKIRTS", "DENIM"], ["beige", "white", "gray"]),
+    seedRule("мягкая обувь", ["BALLET", "LOAFERS", "SNEAKERS"], ["beige", "white", "brown"]),
+  ], 90),
+  seedLook("mira-ward-weekend-minimal", "mira-ward", "Weekend minimal", "Минималистичный образ для выходного дня", "FEMALE", [
+    seedRule("лонгслив или трикотаж", ["KNITWEAR", "TSHIRTS", "TOPS"], ["white", "gray", "beige"]),
+    seedRule("светлый деним", ["DENIM", "TROUSERS"], ["blue", "white", "gray"]),
+    seedRule("кеды или лоферы", ["SNEAKERS", "LOAFERS", "BALLET"], ["white", "black", "beige"]),
+  ], 88),
+  seedLook("mira-ward-shirt-oversize", "mira-ward", "Quiet city", "Городской образ с oversize рубашкой", "FEMALE", [
+    seedRule("oversize рубашка", ["SHIRTS", "CASUAL_SHIRTS"], ["white", "blue", "gray"]),
+    seedRule("прямые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["black", "gray", "beige"]),
+    seedRule("минималистичная обувь", ["SNEAKERS", "LOAFERS", "BALLET"], ["white", "black"]),
+  ], 86),
+  seedLook("mira-ward-knit-vest", "mira-ward", "Quiet city", "Лаконичный образ с жилетом и рубашкой", "FEMALE", [
+    seedRule("трикотажный жилет", ["KNITWEAR"], ["beige", "gray", "black"]),
+    seedRule("рубашка", ["SHIRTS", "FORMAL_SHIRTS"], ["white", "blue"]),
+    seedRule("прямые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["gray", "black"]),
+    seedRule("clean shoes", ["LOAFERS", "BALLET", "SHOES_CLASSIC"], ["black", "brown"]),
+  ], 84),
+  seedLook("mira-ward-soft-skirt", "mira-ward", "Soft monochrome", "Светлый образ с юбкой миди", "FEMALE", [
+    seedRule("светлый топ", ["TOPS", "KNITWEAR", "TSHIRTS"], ["white", "beige"]),
+    seedRule("юбка миди", ["SKIRTS"], ["beige", "gray", "black"]),
+    seedRule("балетки или лоферы", ["BALLET", "LOAFERS"], ["black", "beige", "brown"]),
+  ], 82),
+  seedLook("mira-ward-cardigan-base", "mira-ward", "Нейтральная база", "Базовый комплект с кардиганом", "FEMALE", [
+    seedRule("кардиган", ["KNITWEAR"], ["beige", "gray", "white"]),
+    seedRule("светлый топ", ["TOPS", "TSHIRTS"], ["white", "beige"]),
+    seedRule("прямые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["gray", "black", "beige"]),
+    seedRule("спокойная обувь", ["LOAFERS", "BALLET", "SNEAKERS"], ["white", "black", "beige"]),
+  ], 80),
+  seedLook("mira-ward-city-essentials", "mira-ward", "Clean office", "Городская база на каждый день", "FEMALE", [
+    seedRule("рубашка или трикотаж", ["SHIRTS", "KNITWEAR", "TOPS"], ["white", "gray", "beige"]),
+    seedRule("прямые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["black", "gray"]),
+    seedRule("clean shoes", ["LOAFERS", "BALLET", "SNEAKERS"], ["black", "white"]),
+  ], 78),
+
+  // Alma Rue — 10
+  seedLook("alma-rue-casual-chic", "alma-rue", "Casual chic", "Светлый жакет и деним", "FEMALE", [
+    seedRule("светлый жакет", ["BLAZERS"], ["beige", "white", "gray"]),
+    seedRule("базовый топ", ["TOPS", "TSHIRTS", "KNITWEAR"], ["white", "beige"]),
+    seedRule("деним", ["DENIM"], ["blue"]),
+    seedRule("балетки", ["BALLET", "LOAFERS"], ["black", "white", "beige"]),
+  ], 100),
+  seedLook("alma-rue-saturday", "alma-rue", "Суббота в городе", "Расслабленный образ с кардиганом", "FEMALE", [
+    seedRule("кардиган", ["KNITWEAR"], ["beige", "gray", "brown"]),
+    seedRule("топ", ["TOPS", "TSHIRTS"], ["white", "beige"]),
+    seedRule("джинсы", ["DENIM"], ["blue"]),
+    seedRule("лёгкая обувь", ["BALLET", "LOAFERS", "SNEAKERS"], ["white", "beige", "brown"]),
+  ], 98),
+  seedLook("alma-rue-city-walk", "alma-rue", "Городская прогулка", "Непринуждённый образ для прогулки по городу", "FEMALE", [
+    seedRule("рубашка", ["SHIRTS", "CASUAL_SHIRTS"], ["white", "blue", "beige"]),
+    seedRule("прямые джинсы", ["DENIM"], ["blue"]),
+    seedRule("лоферы или балетки", ["LOAFERS", "BALLET"], ["black", "brown", "beige"]),
+  ], 92),
+  seedLook("alma-rue-light-trench", "alma-rue", "Городская прогулка", "Лёгкий городской образ с верхним слоем", "FEMALE", [
+    seedRule("тренч или лёгкий жакет", ["OUTERWEAR", "BLAZERS"], ["beige", "white", "gray"]),
+    seedRule("футболка", ["TSHIRTS", "TOPS"], ["white", "beige"]),
+    seedRule("светлые брюки", ["TROUSERS", "DENIM"], ["white", "beige", "blue"]),
+    seedRule("балетки или кеды", ["BALLET", "SNEAKERS"], ["white", "beige", "black"]),
+  ], 90),
+  seedLook("alma-rue-soft-femininity", "alma-rue", "Мягкая женственность", "Мягкий образ с юбкой миди", "FEMALE", [
+    seedRule("юбка миди", ["SKIRTS"], ["beige", "black", "gray"]),
+    seedRule("трикотажный верх", ["KNITWEAR", "TOPS"], ["white", "beige", "pink"]),
+    seedRule("балетки", ["BALLET"], ["black", "beige", "white"]),
+  ], 88),
+  seedLook("alma-rue-blouse-denim", "alma-rue", "Мягкая женственность", "Нежный городской образ с блузой и денимом", "FEMALE", [
+    seedRule("блуза", ["SHIRTS", "TOPS"], ["white", "beige", "pink"]),
+    seedRule("джинсы", ["DENIM"], ["blue"]),
+    seedRule("повседневная обувь", ["BALLET", "LOAFERS", "SNEAKERS"], ["white", "black", "beige"]),
+  ], 86),
+  seedLook("alma-rue-skirt-weekend", "alma-rue", "Суббота в городе", "Лёгкий выходной образ с юбкой", "FEMALE", [
+    seedRule("кардиган", ["KNITWEAR"], ["beige", "gray", "white"]),
+    seedRule("юбка", ["SKIRTS"], ["beige", "blue", "black"]),
+    seedRule("кеды или балетки", ["SNEAKERS", "BALLET"], ["white", "beige", "black"]),
+  ], 84),
+  seedLook("alma-rue-relaxed-denim", "alma-rue", "Casual chic", "Relaxed denim с городским акцентом", "FEMALE", [
+    seedRule("жакет", ["BLAZERS"], ["beige", "white", "gray"]),
+    seedRule("топ", ["TOPS", "TSHIRTS"], ["white", "beige"]),
+    seedRule("relaxed denim", ["DENIM"], ["blue"]),
+    seedRule("женственная обувь", ["BALLET", "LOAFERS"], ["black", "beige"]),
+  ], 82),
+  seedLook("alma-rue-summer-city", "alma-rue", "Летний город", "Летний городской образ в светлой гамме", "FEMALE", [
+    seedRule("лёгкая рубашка", ["SHIRTS", "CASUAL_SHIRTS"], ["white", "blue", "beige"]),
+    seedRule("светлые брюки", ["TROUSERS", "DENIM"], ["white", "beige", "blue"]),
+    seedRule("балетки", ["BALLET"], ["white", "beige", "black"]),
+  ], 80),
+  seedLook("alma-rue-top-jacket", "alma-rue", "Летний город", "Лёгкий образ с топом и укороченным жакетом", "FEMALE", [
+    seedRule("топ", ["TOPS", "TSHIRTS"], ["white", "beige"]),
+    seedRule("деним или светлые брюки", ["DENIM", "TROUSERS"], ["blue", "white", "beige"]),
+    seedRule("укороченный жакет", ["BLAZERS", "OUTERWEAR"], ["beige", "white", "gray"]),
+    seedRule("лёгкая обувь", ["BALLET", "SNEAKERS", "LOAFERS"], ["white", "beige", "black"]),
+  ], 78),
+
+  // Milan Ash — 10
+  seedLook("milan-ash-urban-silhouette", "milan-ash", "Городской силуэт", "Городской образ с рубашкой-курткой", "MALE", [
+    seedRule("overshirt", ["SHIRTS", "OUTERWEAR"], ["gray", "black", "green"]),
+    seedRule("футболка", ["TSHIRTS"], ["white", "black"]),
+    seedRule("relaxed trousers", ["TROUSERS", "DENIM"], ["gray", "black"]),
+    seedRule("кеды", ["SNEAKERS"], ["white", "black"], { genderStrict: true }),
+  ], 100),
+  seedLook("milan-ash-athletic-casual", "milan-ash", "Атлетичный casual", "Бомбер и спокойная база", "MALE", [
+    seedRule("бомбер или куртка", ["OUTERWEAR", "BLAZERS", "HOODIES"], ["black", "gray", "blue"]),
+    seedRule("базовый верх", ["TSHIRTS", "HOODIES"], ["black", "white", "gray"]),
+    seedRule("комфортные брюки", ["TROUSERS", "JOGGERS", "DENIM"], ["black", "gray"]),
+    seedRule("кеды", ["SNEAKERS"], ["white", "black"], { genderStrict: true }),
+  ], 98),
+  seedLook("milan-ash-hoodie-cargo", "milan-ash", "Атлетичный casual", "Городской образ с худи и карго", "MALE", [
+    seedRule("худи", ["HOODIES", "KNITWEAR"], ["gray", "black", "blue"]),
+    seedRule("карго или relaxed брюки", ["TROUSERS", "JOGGERS"], ["black", "gray", "green"]),
+    seedRule("кроссовки", ["SNEAKERS"], ["white", "black", "gray"], { genderStrict: true }),
+  ], 92),
+  seedLook("milan-ash-sweatshirt-clean", "milan-ash", "Street clean", "Чистый street casual со свитшотом", "MALE", [
+    seedRule("свитшот или трикотаж", ["HOODIES", "KNITWEAR"], ["gray", "black", "white"]),
+    seedRule("прямые брюки", ["TROUSERS", "DENIM"], ["black", "gray"]),
+    seedRule("минималистичные кеды", ["SNEAKERS"], ["white", "black"], { genderStrict: true }),
+  ], 90),
+  seedLook("milan-ash-windbreaker-active", "milan-ash", "Active weekend", "Активный образ на выходной день", "MALE", [
+    seedRule("ветровка или лёгкая куртка", ["OUTERWEAR", "HOODIES"], ["black", "gray", "blue", "green"]),
+    seedRule("футболка", ["TSHIRTS"], ["white", "black", "gray"]),
+    seedRule("мягкие брюки", ["TROUSERS", "JOGGERS"], ["black", "gray"]),
+    seedRule("удобные кроссовки", ["SNEAKERS"], ["white", "black", "gray"], { genderStrict: true }),
+  ], 88),
+  seedLook("milan-ash-longsleeve-cargo", "milan-ash", "Active weekend", "Простой образ с лонгсливом и карго", "MALE", [
+    seedRule("лонгслив", ["TSHIRTS", "KNITWEAR"], ["white", "gray", "black"]),
+    seedRule("карго или relaxed pants", ["TROUSERS", "JOGGERS"], ["black", "gray", "green"]),
+    seedRule("кроссовки", ["SNEAKERS"], ["white", "black"], { genderStrict: true }),
+  ], 86),
+  seedLook("milan-ash-summer-layer", "milan-ash", "Summer urban", "Летний urban look с лёгкой рубашкой", "MALE", [
+    seedRule("футболка", ["TSHIRTS"], ["white", "black"]),
+    seedRule("лёгкая рубашка", ["SHIRTS", "CASUAL_SHIRTS"], ["white", "blue", "gray"]),
+    seedRule("светлые брюки", ["TROUSERS", "DENIM"], ["white", "beige", "gray"]),
+    seedRule("кеды", ["SNEAKERS"], ["white", "black"], { genderStrict: true }),
+  ], 84),
+  seedLook("milan-ash-polo-relaxed", "milan-ash", "Summer urban", "Расслабленный городской образ с поло", "MALE", [
+    seedRule("поло", ["POLO"], ["white", "black", "blue"]),
+    seedRule("relaxed denim или trousers", ["DENIM", "TROUSERS"], ["blue", "black", "gray"]),
+    seedRule("clean sneakers", ["SNEAKERS"], ["white", "black"], { genderStrict: true }),
+  ], 82),
+  seedLook("milan-ash-minimal-black", "milan-ash", "Street clean", "Минималистичный образ в тёмной палитре", "MALE", [
+    seedRule("тёмный верх", ["TSHIRTS", "HOODIES", "KNITWEAR"], ["black", "gray"]),
+    seedRule("простые брюки", ["TROUSERS", "DENIM", "JOGGERS"], ["black", "gray"]),
+    seedRule("clean sneakers", ["SNEAKERS"], ["white", "black"], { genderStrict: true }),
+  ], 80),
+  seedLook("milan-ash-city-bomber-light", "milan-ash", "Городской силуэт", "Лёгкий городской образ с бомбером", "MALE", [
+    seedRule("лёгкий бомбер", ["OUTERWEAR", "BLAZERS", "HOODIES"], ["gray", "blue", "green"]),
+    seedRule("базовый топ", ["TSHIRTS"], ["white", "black"]),
+    seedRule("светлые брюки или джоггеры", ["TROUSERS", "JOGGERS", "DENIM"], ["beige", "gray", "white"]),
+    seedRule("кеды", ["SNEAKERS"], ["white", "black"], { genderStrict: true }),
+  ], 78),
+
+  // Tess Noir — 10
+  seedLook("tess-noir-evening-smart", "tess-noir", "Вечерний smart", "Вечерний total black", "FEMALE", [
+    seedRule("чёрный жакет", ["BLAZERS"], ["black"]),
+    seedRule("топ", ["TOPS", "TSHIRTS", "KNITWEAR"], ["black"]),
+    seedRule("широкие брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["black", "gray"]),
+    seedRule("тёмная обувь", ["BOOTS", "LOAFERS", "SHOES_CLASSIC"], ["black"]),
+  ], 100),
+  seedLook("tess-noir-after-dark", "tess-noir", "После заката", "Тёмная рубашка и графитовая база", "FEMALE", [
+    seedRule("тёмная рубашка", ["SHIRTS", "FORMAL_SHIRTS"], ["black", "blue", "gray"]),
+    seedRule("графитовые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["gray", "black"]),
+    seedRule("тёмная обувь", ["BOOTS", "LOAFERS", "SHOES_CLASSIC"], ["black"]),
+  ], 98),
+  seedLook("tess-noir-dark-knit", "tess-noir", "После заката", "Тёмный трикотажный образ", "FEMALE", [
+    seedRule("тёмный трикотаж", ["KNITWEAR", "TOPS"], ["black", "gray"]),
+    seedRule("юбка миди или брюки", ["SKIRTS", "TROUSERS"], ["black", "gray"]),
+    seedRule("тёмная обувь", ["BOOTS", "LOAFERS"], ["black"]),
+  ], 92),
+  seedLook("tess-noir-dark-office", "tess-noir", "Dark office", "Сдержанный офисный образ в тёмной гамме", "FEMALE", [
+    seedRule("чёрная блуза", ["SHIRTS", "TOPS"], ["black"]),
+    seedRule("строгие брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["black", "gray"]),
+    seedRule("clean dark shoes", ["LOAFERS", "SHOES_CLASSIC", "BOOTS"], ["black"]),
+  ], 90),
+  seedLook("tess-noir-vest-skirt", "tess-noir", "Dark office", "Жилет и длинная юбка в тёмной палитре", "FEMALE", [
+    seedRule("тёмный жилет или топ", ["KNITWEAR", "TOPS", "BLAZERS"], ["black", "gray"]),
+    seedRule("длинная юбка", ["SKIRTS"], ["black", "gray"]),
+    seedRule("лаконичная обувь", ["BOOTS", "LOAFERS", "SHOES_CLASSIC"], ["black"]),
+  ], 88),
+  seedLook("tess-noir-minimal-evening", "tess-noir", "Minimal evening", "Минималистичный вечерний образ", "FEMALE", [
+    seedRule("монохромный тёмный верх", ["TOPS", "KNITWEAR", "BLAZERS"], ["black", "gray"]),
+    seedRule("тёмный низ", ["TROUSERS", "SKIRTS"], ["black", "gray"]),
+    seedRule("clean shoes", ["BOOTS", "LOAFERS", "SHOES_CLASSIC"], ["black"]),
+  ], 86),
+  seedLook("tess-noir-soft-graphite", "tess-noir", "Minimal evening", "Мягкий графитовый образ", "FEMALE", [
+    seedRule("графитовый верх", ["KNITWEAR", "TOPS", "SHIRTS"], ["gray", "black"]),
+    seedRule("брюки или юбка", ["TROUSERS", "SKIRTS"], ["gray", "black"]),
+    seedRule("clean shoes", ["BOOTS", "LOAFERS"], ["black"]),
+  ], 84),
+  seedLook("tess-noir-black-tailoring", "tess-noir", "Total black", "Структурный total black", "FEMALE", [
+    seedRule("tailoring верх", ["BLAZERS", "SHIRTS"], ["black"]),
+    seedRule("тёмный низ", ["TROUSERS", "SKIRTS"], ["black"]),
+    seedRule("тёмная обувь", ["BOOTS", "LOAFERS", "SHOES_CLASSIC"], ["black"]),
+  ], 82),
+  seedLook("tess-noir-night-city", "tess-noir", "После заката", "Тёмный городской образ на вечер", "FEMALE", [
+    seedRule("тёмный верх", ["TOPS", "SHIRTS", "KNITWEAR"], ["black", "gray", "blue"]),
+    seedRule("прямые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["black", "gray"]),
+    seedRule("ботинки или dark shoes", ["BOOTS", "LOAFERS", "SHOES_CLASSIC"], ["black"]),
+  ], 80),
+  seedLook("tess-noir-elegant-monochrome", "tess-noir", "Вечерний smart", "Элегантный монохромный образ", "FEMALE", [
+    seedRule("тёмный верх", ["TOPS", "KNITWEAR", "BLAZERS"], ["black", "gray"]),
+    seedRule("тёмный низ", ["TROUSERS", "SKIRTS"], ["black", "gray"]),
+    seedRule("лаконичная обувь", ["BOOTS", "LOAFERS"], ["black"]),
+  ], 78),
+
+  // Lina Moss — 10
+  seedLook("lina-moss-soft-casual", "lina-moss", "Мягкий casual", "Мягкий casual с трикотажем", "FEMALE", [
+    seedRule("трикотаж", ["KNITWEAR"], ["beige", "white", "gray", "brown"]),
+    seedRule("светлые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["white", "beige", "gray"]),
+    seedRule("лоферы", ["LOAFERS", "BALLET"], ["brown", "beige", "white"]),
+  ], 100),
+  seedLook("lina-moss-warm-neutrals", "lina-moss", "Тёплые нейтрали", "Светлый образ в тёплой гамме", "FEMALE", [
+    seedRule("кардиган", ["KNITWEAR"], ["beige", "brown", "gray"]),
+    seedRule("светлый топ", ["TOPS", "TSHIRTS", "KNITWEAR"], ["white", "beige"]),
+    seedRule("молочные брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["white", "beige"]),
+    seedRule("мягкая обувь", ["LOAFERS", "BALLET", "SNEAKERS"], ["brown", "white", "beige"]),
+  ], 98),
+  seedLook("lina-moss-knit-loafers", "lina-moss", "Мягкий casual", "Трикотажный образ на каждый день", "FEMALE", [
+    seedRule("мягкий верх", ["KNITWEAR", "TOPS"], ["beige", "white", "gray"]),
+    seedRule("светлый низ", ["TROUSERS", "SKIRTS"], ["beige", "white", "gray"]),
+    seedRule("лоферы", ["LOAFERS", "BALLET"], ["brown", "beige"]),
+  ], 92),
+  seedLook("lina-moss-overshirt-denim", "lina-moss", "Everyday comfort", "Непринуждённый образ с рубашкой oversize", "FEMALE", [
+    seedRule("oversize рубашка", ["SHIRTS", "CASUAL_SHIRTS"], ["white", "beige", "blue"]),
+    seedRule("молочный топ", ["TOPS", "TSHIRTS"], ["white", "beige"]),
+    seedRule("прямые джинсы", ["DENIM"], ["blue"]),
+    seedRule("кеды", ["SNEAKERS", "LOAFERS"], ["white", "beige"]),
+  ], 90),
+  seedLook("lina-moss-knit-vest", "lina-moss", "Cozy city", "Уютный городской образ с жилетом", "FEMALE", [
+    seedRule("трикотажный жилет", ["KNITWEAR"], ["beige", "gray", "brown"]),
+    seedRule("рубашка", ["SHIRTS"], ["white", "beige"]),
+    seedRule("relaxed trousers", ["TROUSERS", "FORMAL_TROUSERS"], ["beige", "gray"]),
+    seedRule("мягкая обувь", ["LOAFERS", "BALLET"], ["brown", "beige"]),
+  ], 88),
+  seedLook("lina-moss-cardigan-beige", "lina-moss", "Cozy city", "Бежевый повседневный образ с кардиганом", "FEMALE", [
+    seedRule("светлый кардиган", ["KNITWEAR"], ["beige", "white", "gray"]),
+    seedRule("бежевые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["beige", "white"]),
+    seedRule("спокойная обувь", ["LOAFERS", "BALLET", "SNEAKERS"], ["brown", "beige", "white"]),
+  ], 86),
+  seedLook("lina-moss-longsleeve-sneakers", "lina-moss", "Everyday comfort", "Простой образ с лонгсливом и кедами", "FEMALE", [
+    seedRule("лонгслив", ["TSHIRTS", "KNITWEAR", "TOPS"], ["white", "beige", "gray"]),
+    seedRule("мягкие джинсы или брюки", ["DENIM", "TROUSERS"], ["blue", "beige", "gray"]),
+    seedRule("белые кеды", ["SNEAKERS"], ["white"]),
+  ], 84),
+  seedLook("lina-moss-shopper-look", "lina-moss", "Everyday comfort", "Комфортный городской образ с мягким свитером", "FEMALE", [
+    seedRule("светлый свитер", ["KNITWEAR"], ["white", "beige", "gray"]),
+    seedRule("прямые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["beige", "gray", "black"]),
+    seedRule("мягкая обувь", ["LOAFERS", "BALLET", "SNEAKERS"], ["brown", "white", "beige"]),
+  ], 82),
+  seedLook("lina-moss-natural-skirt", "lina-moss", "Natural palette", "Светлый образ с юбкой миди", "FEMALE", [
+    seedRule("молочный топ", ["TOPS", "TSHIRTS", "KNITWEAR"], ["white", "beige"]),
+    seedRule("юбка миди", ["SKIRTS"], ["beige", "white", "brown"]),
+    seedRule("балетки", ["BALLET"], ["beige", "white", "brown"]),
+  ], 80),
+  seedLook("lina-moss-sand-shirt", "lina-moss", "Natural palette", "Песочная база на каждый день", "FEMALE", [
+    seedRule("песочная рубашка", ["SHIRTS", "CASUAL_SHIRTS"], ["beige", "brown", "white"]),
+    seedRule("светлые брюки", ["TROUSERS", "FORMAL_TROUSERS"], ["white", "beige"]),
+    seedRule("лоферы", ["LOAFERS", "BALLET"], ["brown", "beige"]),
+  ], 78),
 ];
+
 
 function normalizeSeedLooksLimit(value, fallback = 12) {
   const n = Number(value || fallback);
@@ -2886,6 +3154,7 @@ app.post("/api/admin/seed/looks", requireAuth, requireTopTryAdmin, async (req, r
 
     const usedIds = new Set();
     const plan = TOPTRY_SEED_LOOKS
+      .filter((look) => look.active !== false)
       .filter((look) => !requestedSlug || look.slug === requestedSlug)
       .filter((look) => !requestedKey || look.key === requestedKey)
       .slice(0, limit);
