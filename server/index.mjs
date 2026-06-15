@@ -98,6 +98,273 @@ async function bgRemoveToPng(srcBuf) {
   const ab = await resp.arrayBuffer();
   return Buffer.from(ab);
 }
+
+
+const TOPTRY_SEED_AUTHORS = [
+  {
+    slug: "leo-grant",
+    displayName: "Leo Grant",
+    username: "leo_grant",
+    genderPreference: "MALE",
+    bio: "Мужской smart casual: жакеты, рубашки, поло и спокойные городские капсулы.",
+    avatarFiles: ["Leo-Grant.png", "leo-grant.png", "Leo Grant.png"],
+    collections: [
+      {
+        title: "Городской smart casual",
+        description: "Жакеты, рубашки, поло, брюки и аккуратные мужские образы для города.",
+      },
+      {
+        title: "Лёгкая деловая капсула",
+        description: "Спокойные деловые сочетания для встреч, офиса и повседневной работы.",
+      },
+    ],
+  },
+  {
+    slug: "mira-ward",
+    displayName: "Mira Ward",
+    username: "mira_ward",
+    genderPreference: "FEMALE",
+    bio: "Минимализм, нейтральная база и чистые линии для повседневного гардероба.",
+    avatarFiles: ["Mira-Ward.png", "Mira_Ward.png", "mira-ward.png", "Mira Ward.png"],
+    collections: [
+      {
+        title: "Нейтральная база",
+        description: "Бежевый, серый, белый и чёрный: простые сочетания без визуального шума.",
+      },
+      {
+        title: "Чистые линии",
+        description: "Лаконичные силуэты, прямые брюки, жакеты, рубашки и спокойная графика.",
+      },
+    ],
+  },
+  {
+    slug: "alma-rue",
+    displayName: "Alma Rue",
+    username: "alma_rue",
+    genderPreference: "FEMALE",
+    bio: "Casual chic, городская женственность и лёгкие образы без лишней формальности.",
+    avatarFiles: ["Alma-Rue.png", "alma-rue.png", "Alma Rue.png"],
+    collections: [
+      {
+        title: "Casual chic",
+        description: "Жакеты, деним, балетки и лёгкая городская женственность на каждый день.",
+      },
+      {
+        title: "Суббота в городе",
+        description: "Расслабленные образы для прогулок, кафе и спокойных выходных.",
+      },
+    ],
+  },
+  {
+    slug: "milan-ash",
+    displayName: "Milan Ash",
+    username: "milan_ash",
+    genderPreference: "MALE",
+    bio: "Молодой городской стиль, спортивная пластика и современные casual-силуэты.",
+    avatarFiles: ["Milan-Ash.png", "milan-ash.png", "Milan Ash.png"],
+    collections: [
+      {
+        title: "Городской силуэт",
+        description: "Современные пропорции, куртки, overshirt, широкие брюки и чистый городской casual.",
+      },
+      {
+        title: "Атлетичный casual",
+        description: "Спортивная пластика без спортзала: бомберы, кеды, relaxed trousers и спокойная база.",
+      },
+    ],
+  },
+  {
+    slug: "tess-noir",
+    displayName: "Tess Noir",
+    username: "tess_noir",
+    genderPreference: "FEMALE",
+    bio: "Вечерний smart, тёмная эстетика и выразительная минималистичная элегантность.",
+    avatarFiles: ["Tess-Noir.png", "tess-noir.png", "Tess Noir.png"],
+    collections: [
+      {
+        title: "Вечерний smart",
+        description: "Тёмные жакеты, широкие брюки, шелковистые фактуры и собранные вечерние образы.",
+      },
+      {
+        title: "После заката",
+        description: "Графит, чёрный, глубокие оттенки и выразительные сочетания без лишней декоративности.",
+      },
+    ],
+  },
+  {
+    slug: "lina-moss",
+    displayName: "Lina Moss",
+    username: "lina_moss",
+    genderPreference: "FEMALE",
+    bio: "Мягкий casual, уютные фактуры и спокойные нейтральные сочетания.",
+    avatarFiles: ["Lina-Moss.png", "lina-moss.png", "Lina Moss.png"],
+    collections: [
+      {
+        title: "Мягкий casual",
+        description: "Трикотаж, свободные брюки, мягкие рубашки и комфортные городские образы.",
+      },
+      {
+        title: "Тёплые нейтрали",
+        description: "Молочный, бежевый, песочный, оливковый и мягкие природные оттенки.",
+      },
+    ],
+  },
+];
+
+function toptrySeedAvatarDir() {
+  return path.join(process.cwd(), "seed", "authors", "avatars");
+}
+
+async function findToptrySeedAvatarFile(author) {
+  const dir = toptrySeedAvatarDir();
+
+  for (const fileName of author.avatarFiles || []) {
+    const filePath = path.join(dir, fileName);
+    try {
+      const st = await fs.stat(filePath);
+      if (st.isFile()) return { fileName, filePath };
+    } catch {}
+  }
+
+  return null;
+}
+
+async function toptrySeedProcessAvatarViaExistingEndpoint({ user, filePath }) {
+  const buf = await fs.readFile(filePath);
+  const photoDataUrl = `data:image/png;base64,${buf.toString("base64")}`;
+
+  const { cookieName } = getAuthConfig();
+  const token = signSession(user);
+
+  const resp = await fetch(`http://127.0.0.1:${PORT}/api/avatar/process`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "accept": "application/json",
+      "cookie": `${cookieName}=${token}`,
+    },
+    body: JSON.stringify({ photoDataUrl }),
+  });
+
+  const data = await resp.json().catch(() => ({}));
+
+  if (!resp.ok) {
+    throw new Error(data?.error || `avatar/process failed: ${resp.status}`);
+  }
+
+  return data;
+}
+
+async function ensureToptrySeedAuthor(author, { processAvatar = true } = {}) {
+  const existing = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { id: `seed-author-${author.slug}` },
+        { publicSlug: author.slug },
+        { username: author.username },
+      ],
+    },
+  });
+
+  const userData = {
+    username: author.username,
+    isPublic: true,
+    publicSlug: author.slug,
+    publicDisplayName: author.displayName,
+    publicBio: author.bio,
+    publicSocialUrl: null,
+    catalogGenderPreference: author.genderPreference || "ALL",
+  };
+
+  const user = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: userData,
+      })
+    : await prisma.user.create({
+        data: {
+          id: `seed-author-${author.slug}`,
+          ...userData,
+        },
+      });
+
+  let avatar = null;
+  let avatarFile = await findToptrySeedAvatarFile(author);
+
+  if (processAvatar && avatarFile) {
+    avatar = await toptrySeedProcessAvatarViaExistingEndpoint({
+      user,
+      filePath: avatarFile.filePath,
+    });
+  }
+
+  const collections = [];
+
+  for (let i = 0; i < (author.collections || []).length; i += 1) {
+    const item = author.collections[i];
+    const title = String(item.title || "").trim().slice(0, 80);
+    const description = String(item.description || "").trim().slice(0, 220);
+
+    if (!title) continue;
+
+    const existingCollection = await prisma.lookCollection.findFirst({
+      where: {
+        userId: user.id,
+        title,
+      },
+    });
+
+    const collection = existingCollection
+      ? await prisma.lookCollection.update({
+          where: { id: existingCollection.id },
+          data: {
+            description: description || null,
+            isPublic: true,
+            sortOrder: i,
+          },
+        })
+      : await prisma.lookCollection.create({
+          data: {
+            id: `lc-seed-${author.slug}-${i + 1}`,
+            userId: user.id,
+            title,
+            description: description || null,
+            isPublic: true,
+            sortOrder: i,
+          },
+        });
+
+    collections.push(collection);
+  }
+
+  const freshUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      id: true,
+      username: true,
+      publicSlug: true,
+      publicDisplayName: true,
+      publicBio: true,
+      avatarUrl: true,
+      catalogGenderPreference: true,
+    },
+  });
+
+  return {
+    user: freshUser,
+    avatarFile: avatarFile?.fileName || null,
+    avatarUrl: avatar?.avatarUrl || freshUser?.avatarUrl || null,
+    collections: collections.map((collection) => ({
+      id: collection.id,
+      title: collection.title,
+      description: collection.description || "",
+      isPublic: collection.isPublic,
+      sortOrder: collection.sortOrder || 0,
+    })),
+  };
+}
+
+
 function normalizeBaseUrl(v) {
   if (!v) return "";
   const s = String(v).trim();
@@ -2022,6 +2289,50 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
   } catch (e) {
     console.error("[toptry] /api/admin/dashboard/summary error", e);
     return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+
+
+
+app.post("/api/admin/seed/authors", requireAuth, requireTopTryAdmin, async (req, res) => {
+  try {
+    const processAvatars = String(req.query.processAvatars ?? req.body?.processAvatars ?? "1") !== "0";
+
+    const results = [];
+
+    for (const author of TOPTRY_SEED_AUTHORS) {
+      try {
+        const result = await ensureToptrySeedAuthor(author, { processAvatar: processAvatars });
+        results.push({
+          ok: true,
+          slug: author.slug,
+          displayName: author.displayName,
+          ...result,
+        });
+      } catch (err) {
+        results.push({
+          ok: false,
+          slug: author.slug,
+          displayName: author.displayName,
+          error: err?.message || String(err),
+        });
+      }
+    }
+
+    const failed = results.filter((item) => !item.ok);
+
+    return res.status(failed.length ? 207 : 200).json({
+      ok: failed.length === 0,
+      processAvatars,
+      authorsTotal: TOPTRY_SEED_AUTHORS.length,
+      succeeded: results.length - failed.length,
+      failed: failed.length,
+      results,
+    });
+  } catch (err) {
+    console.error("[toptry] /api/admin/seed/authors error", err);
+    return res.status(500).json({ error: err?.message || "Failed to seed authors" });
   }
 });
 
