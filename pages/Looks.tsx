@@ -237,6 +237,7 @@ const Looks = () => {
   const [publishedOverrides, setPublishedOverrides] = React.useState<Record<string, boolean>>({});
   const [savedOverrides, setSavedOverrides] = React.useState<Record<string, boolean>>({});
   const [saveBusyIds, setSaveBusyIds] = React.useState<Record<string, boolean>>({});
+  const [adminBusyIds, setAdminBusyIds] = React.useState<Record<string, boolean>>({});
   const [socialNotice, setSocialNotice] = React.useState('');
 
   React.useEffect(() => {
@@ -334,6 +335,46 @@ const Looks = () => {
       window.setTimeout(() => setSocialNotice(''), 2500);
     } finally {
       setPublishBusyIds((prev) => ({ ...prev, [lookId]: false }));
+    }
+  };
+
+  const handleAdminUnpublishLook = async (look: any) => {
+    if (!user?.isAdmin) return;
+
+    const lookId = String(look?.id || '');
+    if (!lookId) return;
+
+    const ok = window.confirm('Скрыть этот образ из публичной ленты и витрины автора? Сам образ не будет удалён.');
+    if (!ok) return;
+
+    setAdminBusyIds((prev) => ({ ...prev, [lookId]: true }));
+
+    try {
+      const resp = await fetch(`/api/admin/looks/${encodeURIComponent(lookId)}/unpublish`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        setSocialNotice(data?.error || 'Не удалось скрыть образ');
+        window.setTimeout(() => setSocialNotice(''), 3500);
+        return;
+      }
+
+      setPublishedOverrides((prev) => ({ ...prev, [lookId]: false }));
+      setFeedLooks((prev) => prev.filter((l) => String(l.id) !== lookId));
+      setFollowingLooks((prev) => prev.filter((l) => String(l.id) !== lookId));
+      setSavedLooks((prev) => prev.map((l) => String(l.id) === lookId ? { ...l, isPublic: false } : l));
+
+      setSocialNotice('Образ скрыт из публичной ленты');
+      window.setTimeout(() => setSocialNotice(''), 2500);
+    } catch (e: any) {
+      setSocialNotice(e?.message || 'Не удалось скрыть образ');
+      window.setTimeout(() => setSocialNotice(''), 3500);
+    } finally {
+      setAdminBusyIds((prev) => ({ ...prev, [lookId]: false }));
     }
   };
 
@@ -753,6 +794,29 @@ const Looks = () => {
                       </button>
                     </div>
                   </div>
+
+                  {user?.isAdmin && (tab === 'feed' || tab === 'following') && (
+                    <section className="rounded-3xl border border-red-100 bg-red-50 p-4 space-y-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-400">
+                          Модерация
+                        </p>
+                        <p className="mt-1 text-xs text-red-500 leading-relaxed">
+                          Администратор может скрыть неудачный или нежелательный образ из публичной ленты и витрины автора.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAdminUnpublishLook(look)}
+                        disabled={!!adminBusyIds[String(look.id)]}
+                        className={`h-10 px-4 rounded-full bg-white border border-red-200 text-red-600 text-[10px] font-black uppercase tracking-[0.18em] transition-colors ${
+                          adminBusyIds[String(look.id)] ? 'opacity-60 pointer-events-none' : 'hover:border-red-400'
+                        }`}
+                      >
+                        Скрыть из ленты
+                      </button>
+                    </section>
+                  )}
 
                   {tab === 'mine' && (
                     <section className="rounded-3xl border border-zinc-100 bg-zinc-50 p-4 space-y-3">

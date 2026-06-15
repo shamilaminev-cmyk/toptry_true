@@ -88,6 +88,7 @@ export interface User {
     looksRemaining: number;
   };
   isPublic: boolean;
+  isAdmin?: boolean;
 }
 
 export interface Look {

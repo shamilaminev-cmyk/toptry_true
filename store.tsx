@@ -266,6 +266,7 @@ return () => clearTimeout(t);
           tier: prev?.tier || SubscriptionTier.FREE,
           limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
           isPublic: !!u.isPublic,
+          isAdmin: !!u.isAdmin,
         }));
       } catch {
         // Network errors should not forcibly log the user out.
@@ -426,6 +427,7 @@ return () => clearTimeout(t);
         tier: SubscriptionTier.FREE,
         limits: { hdTryOnRemaining: 5, looksRemaining: 10 },
         isPublic: u.isPublic ?? false,
+        isAdmin: !!u.isAdmin,
       });
 
       return data;
@@ -477,6 +479,7 @@ login: async (emailOrUsername: string, password: string) => {
     tier: prev?.tier || SubscriptionTier.FREE,
     limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
     isPublic: u.isPublic ?? true,
+    isAdmin: !!u.isAdmin,
   }));
 
   console.log('[auth] login done');
@@ -529,6 +532,7 @@ register: async (email: string, username: string, password: string) => {
     tier: prev?.tier || SubscriptionTier.FREE,
     limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
     isPublic: u.isPublic ?? true,
+    isAdmin: !!u.isAdmin,
   }));
 
   console.log('[auth] register done');
@@ -672,6 +676,7 @@ register: async (email: string, username: string, password: string) => {
           tier: user?.tier || SubscriptionTier.FREE,
           limits: user?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
           isPublic: !!u.isPublic,
+          isAdmin: !!u.isAdmin,
         };
 
         setUser(nextUser);

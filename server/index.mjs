@@ -1142,7 +1142,20 @@ app.get("/api/auth/me", async (req, res) => {
       },
     });
 
-    res.json({ user: user || null });
+    if (!user) return res.json({ user: null });
+
+    const entitlement = await p.userEntitlement.findUnique({
+      where: { userId: user.id },
+      select: { isAdmin: true, plan: true },
+    }).catch(() => null);
+
+    res.json({
+      user: {
+        ...user,
+        isAdmin: !!entitlement?.isAdmin,
+        plan: entitlement?.plan || null,
+      },
+    });
   } catch (e) {
     res.status(500).json({ error: String(e?.message || e) });
   }
@@ -5773,6 +5786,97 @@ app.post("/api/looks/:id/unpublish", requireAuth, async (req, res) => {
   }
 });
 
+
+
+app.post("/api/admin/looks/:id/unpublish", requireAuth, requireTopTryAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "look id is required" });
+
+    const existing = await prisma.look.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            avatarUrl: true,
+            publicSlug: true,
+            publicDisplayName: true,
+          },
+        },
+      },
+    });
+
+    if (!existing) return res.status(404).json({ error: "Look not found" });
+
+    const row = existing.isPublic
+      ? await prisma.look.update({
+          where: { id },
+          data: { isPublic: false },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+                publicSlug: true,
+                publicDisplayName: true,
+              },
+            },
+          },
+        })
+      : existing;
+
+    return res.json({
+      ok: true,
+      action: "unpublish",
+      look: await mapLookForApi(row, req.auth.userId),
+    });
+  } catch (err) {
+    console.error("[toptry] /api/admin/looks/:id/unpublish error", err);
+    return res.status(500).json({ error: err?.message || "Failed to unpublish look" });
+  }
+});
+
+app.post("/api/admin/looks/:id/publish", requireAuth, requireTopTryAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "look id is required" });
+
+    const existing = await prisma.look.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!existing) return res.status(404).json({ error: "Look not found" });
+
+    const row = await prisma.look.update({
+      where: { id },
+      data: { isPublic: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            avatarUrl: true,
+            publicSlug: true,
+            publicDisplayName: true,
+          },
+        },
+      },
+    });
+
+    return res.json({
+      ok: true,
+      action: "publish",
+      look: await mapLookForApi(row, req.auth.userId),
+    });
+  } catch (err) {
+    console.error("[toptry] /api/admin/looks/:id/publish error", err);
+    return res.status(500).json({ error: err?.message || "Failed to publish look" });
+  }
+});
 
 app.delete("/api/looks/:id", requireAuth, async (req, res) => {
   try {
