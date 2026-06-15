@@ -2366,10 +2366,10 @@ const TOPTRY_SEED_LOOKS = [
     key: "leo-grant-light-business",
     slug: "leo-grant",
     collectionTitle: "Лёгкая деловая капсула",
-    title: "Светлый джемпер, тёмные брюки и коричневые лоферы",
+    title: "Белая рубашка, тёмные брюки и коричневые лоферы",
     gender: "MALE",
     items: [
-      { label: "светлый джемпер", subgroups: ["SWEATERS", "KNITWEAR"], colors: ["beige", "white", "gray"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["поло", "худи", "толстов", "свитшот", "blue", "синий"] },
+      { label: "белая рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["white"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["поло", "фланел", "джинсов"] },
       { label: "тёмные брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["black", "gray", "brown"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["спортив", "jogger", "джоггер", "training", "track", "sweat", "basic"] },
       { label: "коричневые лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["brown"], genderStrict: true, rejectTitle: ["женск", "woman", "women", "female", "лодочки", "каблук"] },
     ],
