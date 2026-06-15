@@ -229,6 +229,7 @@ const TOPTRY_SEED_EXTRA_COLLECTIONS_BY_SLUG = {
     { title: "Clean office", description: "Минималистичные офисные образы без лишней формальности." },
     { title: "Weekend minimal", description: "Спокойные минималистичные сочетания для выходного дня." },
     { title: "Soft monochrome", description: "Мягкие монохромные образы в светлой нейтральной гамме." },
+    { title: "Quiet city", description: "Лаконичные городские образы с рубашками, жилетами и прямыми брюками." },
   ],
   "alma-rue": [
     { title: "Городская прогулка", description: "Лёгкие городские сочетания для прогулок, кафе и встреч." },
