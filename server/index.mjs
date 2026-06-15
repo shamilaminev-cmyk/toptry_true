@@ -2356,10 +2356,10 @@ const TOPTRY_SEED_LOOKS = [
     title: "Navy-жакет, поло и светлые брюки",
     gender: "MALE",
     items: [
-      { label: "жакет", subgroups: ["BLAZERS"], colors: ["blue", "black", "gray"] },
-      { label: "поло / трикотаж", subgroups: ["POLO", "KNITWEAR"], colors: ["white", "beige", "gray"] },
-      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["beige", "gray", "brown"] },
-      { label: "лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["brown", "black"] },
+      { label: "жакет", subgroups: ["BLAZERS"], colors: ["blue", "black", "gray"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"] },
+      { label: "поло / трикотаж", subgroups: ["POLO", "KNITWEAR"], colors: ["white", "beige", "gray"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"] },
+      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["beige", "gray", "brown"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["спортив", "jogger", "джоггер", "training", "track", "sweat", "basic"] },
+      { label: "лоферы", subgroups: ["LOAFERS", "SHOES_CLASSIC"], colors: ["brown", "black"], genderStrict: true, rejectTitle: ["женск", "woman", "women", "female", "лодочки", "каблук"] },
     ],
   },
   {
@@ -2369,10 +2369,10 @@ const TOPTRY_SEED_LOOKS = [
     title: "Рубашка, жакет и деловые брюки",
     gender: "MALE",
     items: [
-      { label: "жакет", subgroups: ["BLAZERS"], colors: ["beige", "blue", "gray"] },
-      { label: "рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["white", "blue"] },
-      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["blue", "gray", "black"] },
-      { label: "классическая обувь", subgroups: ["SHOES_CLASSIC", "LOAFERS"], colors: ["brown", "black"] },
+      { label: "жакет", subgroups: ["BLAZERS"], colors: ["beige", "blue", "gray"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"] },
+      { label: "рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["white", "blue"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["поло"] },
+      { label: "брюки", subgroups: ["FORMAL_TROUSERS", "CHINOS", "TROUSERS"], colors: ["blue", "gray", "black"], preferredMerchants: ["finnflare", "thecultt"], excludedMerchants: ["sportmaster"], rejectTitle: ["спортив", "jogger", "джоггер", "training", "track", "sweat", "basic"] },
+      { label: "классическая обувь", subgroups: ["SHOES_CLASSIC", "LOAFERS"], colors: ["brown", "black"], genderStrict: true, rejectTitle: ["женск", "woman", "women", "female", "лодочки", "каблук"] },
     ],
   },
   {
@@ -2575,16 +2575,37 @@ function seedProductWhereForRule(rule, gender, usedIds = new Set(), mode = "stri
     { price: { gt: 0 } },
     { id: { notIn: Array.from(usedIds || []) } },
     { taxonomyGroup: expectedGroup },
-    {
-      OR: [
-        { gender },
-        { gender: "UNISEX" },
-      ],
-    },
+    rule?.genderStrict
+      ? { gender }
+      : {
+          OR: [
+            { gender },
+            { gender: "UNISEX" },
+          ],
+        },
   ];
 
   if (Array.isArray(rule.subgroups) && rule.subgroups.length) {
     and.push({ taxonomySubgroup: { in: rule.subgroups } });
+  }
+
+  if (Array.isArray(rule.preferredMerchants) && rule.preferredMerchants.length) {
+    and.push({ merchant: { in: rule.preferredMerchants } });
+  }
+
+  if (Array.isArray(rule.excludedMerchants) && rule.excludedMerchants.length) {
+    and.push({ merchant: { notIn: rule.excludedMerchants } });
+  }
+
+  if (Array.isArray(rule.rejectTitle) && rule.rejectTitle.length) {
+    and.push({
+      NOT: {
+        OR: rule.rejectTitle
+          .map((word) => String(word || "").trim())
+          .filter(Boolean)
+          .map((word) => ({ title: { contains: word, mode: "insensitive" } })),
+      },
+    });
   }
 
   if (expectedGroup === "CLOTHING") {
