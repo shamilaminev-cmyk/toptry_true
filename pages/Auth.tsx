@@ -32,6 +32,14 @@ const Auth = () => {
     return s.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32);
   };
 
+  const resetBrokenSession = () => {
+    actions.resetSession();
+    setStep('phone');
+    setCode('');
+    setError(null);
+    window.location.hash = '#/auth';
+  };
+
   const submit = async () => {
     setError(null);
     setBusy(true);
@@ -46,7 +54,7 @@ const Auth = () => {
     } catch (e: any) {
       const msg = e?.message || 'Ошибка';
       if (msg === 'Failed to fetch') {
-        setError('Не удалось связаться с сервером. Попробуйте обновить страницу или открыть сайт в новой вкладке.');
+        setError('Не удалось отправить запрос. Сбросьте сессию или откройте сайт в обычном браузере.');
       } else {
         setError(msg);
       }
@@ -71,7 +79,7 @@ const Auth = () => {
         <h1 className="hidden text-5xl font-black uppercase tracking-tighter">toptry</h1>
 
         <p className="text-xs text-zinc-400 uppercase tracking-[0.3em] font-black">
-          AI Virtual Fitting
+          Виртуальная примерочная
         </p>
       </div>
 
@@ -94,8 +102,15 @@ const Auth = () => {
         )}
 
         {error && (
-          <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-700">
-            {error}
+          <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-700 space-y-3">
+            <div>{error}</div>
+            <button
+              type="button"
+              onClick={resetBrokenSession}
+              className="w-full rounded-full bg-white border border-zinc-200 px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-700"
+            >
+              Сбросить сессию
+            </button>
           </div>
         )}
 
@@ -142,6 +157,7 @@ const Auth = () => {
         </div>
 
         <button
+          type="button"
           onClick={submit}
           disabled={busy}
           className={`w-full bg-zinc-900 text-white py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:scale-[0.98] transition-all shadow-lg active:scale-95 ${

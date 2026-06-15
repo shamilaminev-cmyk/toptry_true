@@ -24,6 +24,7 @@ interface AppState {
     updatePublicProfile: (publicSlug: string, publicDisplayName: string, publicBio: string, publicSocialUrl: string) => Promise<void>;
     refreshMe: () => Promise<User | null>;
     logout: () => Promise<void>;
+    resetSession: () => void;
     toggleHomeLayout: () => void;
     addToWardrobe: (product: Product) => void;
     addMultipleToWardrobe: (products: Product[]) => void;
@@ -124,6 +125,26 @@ async function urlToDataUrlIfMock(url: string): Promise<string> {
 
 const STORAGE_KEY = "toptry_state_v1";
 
+const TOPTRY_CLIENT_STORAGE_KEYS = [
+  STORAGE_KEY,
+  "toptry-state",
+  "toptry_state",
+  "toptry_state_v1",
+];
+
+function clearTopTryClientStorage() {
+  if (typeof window === "undefined") return;
+
+  for (const key of TOPTRY_CLIENT_STORAGE_KEYS) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -211,6 +232,7 @@ return () => clearTimeout(t);
 
         if (!resp.ok) {
           if (resp.status === 401) {
+            clearTopTryClientStorage();
             setUser(null);
             setWardrobe([]);
             setLooks([]);
@@ -221,6 +243,7 @@ return () => clearTimeout(t);
         const data = await resp.json().catch(() => null);
 
         if (!data?.user) {
+          clearTopTryClientStorage();
           setUser(null);
           setWardrobe([]);
           setLooks([]);
@@ -325,12 +348,20 @@ return () => clearTimeout(t);
 
   const actions = useMemo(() => ({
     startPhoneAuth: async (phone: string) => {
-  const r = await fetch('/api/auth/phone/start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ phone })
-  });
+  let r: Response;
+
+  try {
+    r = await fetch(`/api/auth/phone/start?t=${Date.now()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      cache: 'no-store',
+      body: JSON.stringify({ phone })
+    });
+  } catch (e: any) {
+    console.warn('[auth] phone start failed before response', e);
+    throw new Error('Не удалось отправить запрос. Сбросьте сессию или откройте сайт в обычном браузере.');
+  }
 
   let text = '';
   try {
@@ -586,6 +617,14 @@ register: async (email: string, username: string, password: string) => {
 
     logout: async () => {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
+      clearTopTryClientStorage();
+      setUser(null);
+      setWardrobe([]);
+      setLooks([]);
+    },
+
+    resetSession: () => {
+      clearTopTryClientStorage();
       setUser(null);
       setWardrobe([]);
       setLooks([]);
@@ -597,6 +636,7 @@ register: async (email: string, username: string, password: string) => {
 
         if (!resp.ok) {
           if (resp.status === 401) {
+            clearTopTryClientStorage();
             setUser(null);
             setWardrobe([]);
             setLooks([]);

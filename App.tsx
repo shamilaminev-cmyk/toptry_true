@@ -69,7 +69,12 @@ const NavItem: React.FC<{ to: string; icon: React.FC<any>; label: string; highli
 };
 
 const Header = () => {
-  const { user } = useAppState();
+  const { user, actions } = useAppState();
+  const [avatarFailed, setAvatarFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setAvatarFailed(false);
+  }, [user?.avatarUrl, user?.selfieUrl]);
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-zinc-100 px-4 py-4 flex items-center justify-between">
       <Link to="/" className="flex items-center gap-2">
@@ -82,15 +87,36 @@ const Header = () => {
 
       <div className="flex items-center gap-4">
         {user ? (
-          <Link
-            to="/profile"
-            className="flex items-center gap-2 px-3 py-2 rounded-full border border-zinc-200 hover:border-zinc-900 transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 overflow-hidden">
-              {(user.avatarUrl || user.selfieUrl) ? (<img src={withApiOrigin(user.avatarUrl || user.selfieUrl)} alt="" className="w-full h-full object-cover object-top object-top" />) : null}
+          <>
+            <Link
+              to="/profile"
+              className="flex items-center gap-2 px-3 py-2 rounded-full border border-zinc-200 hover:border-zinc-900 transition-colors"
+            >
+            <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 overflow-hidden flex items-center justify-center text-[11px] font-black text-zinc-400">
+              {(user.avatarUrl || user.selfieUrl) && !avatarFailed ? (
+                <img
+                  src={withApiOrigin(user.avatarUrl || user.selfieUrl)}
+                  alt=""
+                  className="w-full h-full object-cover object-top"
+                  onError={() => setAvatarFailed(true)}
+                />
+              ) : (
+                <span>{(user.name || user.username || user.phone || 'T').slice(0, 1).toUpperCase()}</span>
+              )}
             </div>
             <span className="text-xs font-semibold uppercase tracking-wide text-zinc-900">Кабинет</span>
-          </Link>
+            </Link>
+            <button
+              type="button"
+              onClick={async () => {
+                await actions.logout();
+                window.location.hash = '#/auth';
+              }}
+              className="inline-flex text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400 hover:text-zinc-900"
+            >
+              Выйти
+            </button>
+          </>
         ) : (
           <Link
             to="/auth"
