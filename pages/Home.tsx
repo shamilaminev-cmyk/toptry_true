@@ -16,7 +16,7 @@ const Home: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch(withApiOrigin('/api/looks/public?limit=4'), { credentials: 'include' });
+        const resp = await fetch(withApiOrigin('/api/looks/public?limit=16'), { credentials: 'include' });
         const data = await resp.json().catch(() => ({}));
         setFeedLooks(Array.isArray(data?.looks) ? data.looks : []);
       } catch {
@@ -91,8 +91,44 @@ const Home: React.FC = () => {
   }, []);
 
   const previewLooks = useMemo(() => {
-    return feedLooks.length ? feedLooks : looks.slice(0, 4);
-  }, [feedLooks, looks]);
+    const source = feedLooks.length ? feedLooks : looks;
+
+    const preference = String(user?.catalogGenderPreference || '').toUpperCase();
+    const targetGender =
+      preference === 'MALE' || preference === 'FEMALE'
+        ? preference
+        : '';
+
+    const lookGender = (look: any) => {
+      const genders = Array.isArray(look?.sourceItems)
+        ? look.sourceItems
+            .map((item: any) => String(item?.gender || '').toUpperCase())
+            .filter(Boolean)
+        : [];
+
+      if (genders.includes('MALE')) return 'MALE';
+      if (genders.includes('FEMALE')) return 'FEMALE';
+      if (genders.includes('UNISEX')) return 'UNISEX';
+
+      const authorSlug = String(look?.authorSlug || '').toLowerCase();
+
+      if (authorSlug === 'leo-grant' || authorSlug === 'milan-ash') return 'MALE';
+      if (['mira-ward', 'alma-rue', 'tess-noir', 'lina-moss'].includes(authorSlug)) return 'FEMALE';
+
+      return '';
+    };
+
+    if (!targetGender) return source.slice(0, 4);
+
+    const preferred = source.filter((look: any) => {
+      const gender = lookGender(look);
+      return gender === targetGender || gender === 'UNISEX';
+    });
+
+    const fallback = source.filter((look: any) => !preferred.some((item: any) => item.id === look.id));
+
+    return [...preferred, ...fallback].slice(0, 4);
+  }, [feedLooks, looks, user?.catalogGenderPreference]);
 
   return (
     <div className="pb-56">

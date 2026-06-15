@@ -2378,7 +2378,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "mira-ward-neutral-base",
     slug: "mira-ward",
     collectionTitle: "Нейтральная база",
-    title: "Серый жакет, белый топ и графитовые брюки",
+    title: "Минималистичный образ с серым жакетом",
     gender: "FEMALE",
     items: [
       { label: "серый жакет", subgroups: ["BLAZERS"], colors: ["gray", "black"] },
@@ -2391,7 +2391,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "mira-ward-clean-lines",
     slug: "mira-ward",
     collectionTitle: "Чистые линии",
-    title: "Белая рубашка и прямые чёрные брюки",
+    title: "Белая рубашка и чёрные брюки",
     gender: "FEMALE",
     items: [
       { label: "рубашка", subgroups: ["FORMAL_SHIRTS", "SHIRTS", "CASUAL_SHIRTS"], colors: ["white"] },
@@ -2403,7 +2403,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "alma-rue-casual-chic",
     slug: "alma-rue",
     collectionTitle: "Casual chic",
-    title: "Светлый жакет, деним и балетки",
+    title: "Светлый жакет и деним",
     gender: "FEMALE",
     items: [
       { label: "светлый жакет", subgroups: ["BLAZERS"], colors: ["beige", "white", "gray"] },
@@ -2416,7 +2416,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "alma-rue-saturday",
     slug: "alma-rue",
     collectionTitle: "Суббота в городе",
-    title: "Кардиган, топ и джинсы",
+    title: "Расслабленный образ с кардиганом",
     gender: "FEMALE",
     items: [
       { label: "кардиган", subgroups: ["CARDIGANS", "KNITWEAR"], colors: ["beige", "gray", "brown"] },
@@ -2429,7 +2429,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "milan-ash-urban-silhouette",
     slug: "milan-ash",
     collectionTitle: "Городской силуэт",
-    title: "Overshirt, футболка и relaxed trousers",
+    title: "Городской образ с рубашкой-курткой",
     gender: "MALE",
     items: [
       { label: "overshirt / куртка", subgroups: ["OVERSHIRTS", "BOMBERS", "OUTERWEAR"], colors: ["black", "gray", "green"] },
@@ -2442,7 +2442,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "milan-ash-athletic-casual",
     slug: "milan-ash",
     collectionTitle: "Атлетичный casual",
-    title: "Бомбер, спокойная база и кеды",
+    title: "Бомбер и спокойная база",
     gender: "MALE",
     items: [
       { label: "бомбер", subgroups: ["BOMBERS", "OUTERWEAR"], colors: ["black", "gray", "blue"] },
@@ -2455,7 +2455,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "tess-noir-evening-smart",
     slug: "tess-noir",
     collectionTitle: "Вечерний smart",
-    title: "Чёрный жакет, топ и широкие брюки",
+    title: "Вечерний total black",
     gender: "FEMALE",
     items: [
       { label: "чёрный жакет", subgroups: ["BLAZERS"], colors: ["black"] },
@@ -2480,7 +2480,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "lina-moss-soft-casual",
     slug: "lina-moss",
     collectionTitle: "Мягкий casual",
-    title: "Трикотаж, светлые брюки и лоферы",
+    title: "Мягкий casual с трикотажем",
     gender: "FEMALE",
     items: [
       { label: "трикотаж", subgroups: ["SWEATERS", "KNITWEAR", "CARDIGANS"], colors: ["beige", "brown", "gray", "white"] },
@@ -2492,7 +2492,7 @@ const TOPTRY_SEED_LOOKS = [
     key: "lina-moss-warm-neutrals",
     slug: "lina-moss",
     collectionTitle: "Тёплые нейтрали",
-    title: "Кардиган, светлый топ и молочные брюки",
+    title: "Светлый образ в тёплой гамме",
     gender: "FEMALE",
     items: [
       { label: "кардиган", subgroups: ["CARDIGANS", "KNITWEAR"], colors: ["beige", "brown", "gray"] },
