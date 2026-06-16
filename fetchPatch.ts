@@ -129,6 +129,39 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function mergeAbortSignals(a?: AbortSignal | null, b?: AbortSignal | null) {
+  if (!a) return b || undefined;
+  if (!b) return a || undefined;
+
+  const controller = new AbortController();
+
+  const abort = () => {
+    if (!controller.signal.aborted) controller.abort();
+  };
+
+  if (a.aborted || b.aborted) {
+    abort();
+    return controller.signal;
+  }
+
+  a.addEventListener("abort", abort, { once: true });
+  b.addEventListener("abort", abort, { once: true });
+
+  return controller.signal;
+}
+
+function createApiTimeoutSignal(ms: number) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, ms);
+
+  return {
+    signal: controller.signal,
+    clear: () => window.clearTimeout(timeoutId),
+  };
+}
+
 export function patchFetchForApi() {
   if (typeof window === "undefined" || typeof window.fetch !== "function") return;
 
@@ -178,8 +211,17 @@ export function patchFetchForApi() {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const attemptUrl = apiGet ? addCacheBuster(String(rewrittenUrl), attempt + 1) : rewrittenUrl;
 
+      const apiTimeout = apiGet ? createApiTimeoutSignal(10000) : null;
+      const attemptInit: RequestInit = apiTimeout
+        ? {
+            ...nextInit,
+            signal: mergeAbortSignals((nextInit as any).signal, apiTimeout.signal),
+          }
+        : nextInit;
+
       try {
-        const resp = await originalFetch(attemptUrl as any, nextInit);
+        const resp = await originalFetch(attemptUrl as any, attemptInit);
+        apiTimeout?.clear();
 
         if (apiGet && shouldRetryApiResponse(resp) && attempt < maxAttempts - 1) {
           console.warn("[toptry][fetchPatch] retrying api response", {
@@ -198,6 +240,7 @@ export function patchFetchForApi() {
 
         return resp;
       } catch (err) {
+        apiTimeout?.clear();
         lastError = err;
 
         if (apiGet && attempt < maxAttempts - 1) {
