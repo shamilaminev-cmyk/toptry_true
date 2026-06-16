@@ -27,7 +27,19 @@ function makeClientSessionId() {
 window.__toptryClientSessionId = makeClientSessionId();
 window.__toptryRawFetch = window.fetch.bind(window);
 
+function isToptryClientLogEnabled() {
+  try {
+    const qs = new URLSearchParams(window.location.search || "");
+    if (qs.get("clientLog") === "1") return true;
+    return window.localStorage.getItem("toptry_client_log") === "1";
+  } catch {
+    return false;
+  }
+}
+
 window.__toptryClientLog = (event: string, payload: any = {}) => {
+  if (!isToptryClientLogEnabled()) return;
+
   try {
     const body = {
       event,

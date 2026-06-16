@@ -786,6 +786,10 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.post("/api/client-log", (req, res) => {
+  if (String(process.env.CLIENT_LOG_ENABLED || "") !== "1") {
+    return res.json({ ok: true, disabled: true });
+  }
+
   try {
     const body = req.body || {};
     const event = String(body.event || "").slice(0, 120);
