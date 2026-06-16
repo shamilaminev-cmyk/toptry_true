@@ -256,10 +256,10 @@ const Looks = () => {
       try {
         const endpoint =
           tab === 'saved'
-            ? '/api/looks/saved?limit=50'
+            ? '/api/looks/saved?limit=16'
             : tab === 'following'
-              ? '/api/looks/following?limit=50'
-              : '/api/looks/public?limit=50';
+              ? '/api/looks/following?limit=16'
+              : '/api/looks/public?limit=16';
         const resp = await fetch(endpoint, { credentials: 'include' });
         const data = await resp.json().catch(() => ({}));
 
@@ -655,7 +655,7 @@ const Looks = () => {
 
       {visibleLooks.length > 0 && (
         <div className="toptry-feed-list px-4 py-5 space-y-8 md:px-6 md:py-8 md:max-w-6xl md:mx-auto">
-          {visibleLooks.map((look: any) => {
+          {visibleLooks.map((look: any, lookIndex: number) => {
             const sourceItems = Array.isArray(look.sourceItems) ? look.sourceItems : [];
             const totalPrice =
               Number(look.priceBuyNowRUB || 0) ||
@@ -677,6 +677,9 @@ const Looks = () => {
                   <img
                     src={withApiOrigin(look.resultImageUrl)}
                     alt=""
+                    loading={lookIndex === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    fetchPriority={lookIndex === 0 ? 'high' : 'auto'}
                     className="toptry-feed-image w-full h-full object-cover md:object-contain transition-all duration-700"
                   />
                   <div className="absolute top-4 right-4 hidden md:flex flex-col gap-2 md:flex-row">
@@ -737,6 +740,8 @@ const Looks = () => {
                               <img
                                 src={withApiOrigin(look.authorAvatar || user?.avatarUrl || user?.selfieUrl || '')}
                                 alt=""
+                                loading="lazy"
+                                decoding="async"
                                 className="w-5 h-5 rounded-full bg-zinc-100 object-cover object-top"
                               />
                             ) : (
@@ -912,6 +917,8 @@ const Looks = () => {
                                   <img
                                     src={withApiOrigin(imageUrl)}
                                     alt=""
+                                    loading="lazy"
+                                    decoding="async"
                                     className="w-full h-full object-contain mix-blend-multiply"
                                   />
                                 ) : null}
