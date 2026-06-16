@@ -101,11 +101,31 @@ export function patchFetchForApi() {
         }
       }
 
-      const nextInit: RequestInit = shouldForceCredentials
-        ? { ...(init || {}), credentials: "include" }
+      const isApiRequest = shouldForceCredentials || String(rewrittenUrl || "").startsWith("/api");
+
+      const nextInit: RequestInit = isApiRequest
+        ? {
+            ...(init || {}),
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              ...(((init || {}) as RequestInit).headers || {}),
+              "Cache-Control": "no-cache",
+              "Pragma": "no-cache",
+            },
+          }
         : (init || {});
 
-      return await originalFetch(rewrittenUrl as any, nextInit);
+      const resp = await originalFetch(rewrittenUrl as any, nextInit);
+
+      if (isApiRequest && resp.status === 304) {
+        console.error("[toptry][fetchPatch] API returned unexpected 304", {
+          url: String(rewrittenUrl || ""),
+        });
+        throw new Error(`API returned unexpected 304: ${String(rewrittenUrl || "")}`);
+      }
+
+      return resp;
     } catch (err) {
       // The fetch patch must never break the app.
       // Fall back to the browser's original fetch.
