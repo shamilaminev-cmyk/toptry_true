@@ -679,7 +679,7 @@ const Looks = () => {
                     alt=""
                     className="toptry-feed-image w-full h-full object-cover md:object-contain transition-all duration-700"
                   />
-                  <div className="absolute top-4 right-4 flex flex-col gap-2 md:flex-row">
+                  <div className="absolute top-4 right-4 hidden md:flex flex-col gap-2 md:flex-row">
                     <button
                       onClick={(e) => {
                         e.preventDefault();
@@ -723,7 +723,7 @@ const Looks = () => {
                 <div className="toptry-feed-side pt-4 md:pt-2 md:sticky md:top-28 md:space-y-8">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-xl md:text-3xl font-black uppercase tracking-tight leading-none">
+                      <h2 className="text-[28px] md:text-3xl font-black uppercase tracking-[-0.04em] leading-[0.95]">
                         {look.title && look.title !== 'Сгенерированный образ' ? look.title : (sourceItems.length ? `Образ из ${sourceItems.length} вещей` : 'Образ')}
                       </h2>
                       <div className="flex items-center gap-2 mt-3">
@@ -961,11 +961,8 @@ const Looks = () => {
                     </Link>
                   </div>
 
-                  <div className="toptry-feed-mobile-meta md:hidden px-1 mt-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider truncate">
-                      {look.title || 'Образ'}
-                    </p>
-                    <div className="flex items-center justify-between mt-1">
+                  <div className="toptry-feed-mobile-meta md:hidden px-1 mt-3">
+                    <div className="flex items-center justify-between">
                       {authorHref ? (
                         <Link
                           to={authorHref}
