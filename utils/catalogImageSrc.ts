@@ -21,15 +21,7 @@ export function catalogImageSrc(
     params.set("w", String(Math.round(width)));
   }
 
-  const path = `/api/catalog/image?${params.toString()}`;
-
-  if (typeof window === "undefined") return path;
-
-  const host = window.location.hostname.toLowerCase();
-
-  if (host === "toptry.ru" || host === "www.toptry.ru") {
-    return `https://api.toptry.ru${path}`;
-  }
-
-  return path;
+  // Keep catalog images same-origin on toptry.ru.
+  // nginx proxies /api/catalog/image to backend, so we avoid mobile cross-origin quirks.
+  return `/api/catalog/image?${params.toString()}`;
 }
