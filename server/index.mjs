@@ -785,6 +785,29 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/client-log", (req, res) => {
+  try {
+    const body = req.body || {};
+    const event = String(body.event || "").slice(0, 120);
+    const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
+    const sessionId = String(body.sessionId || "").slice(0, 80);
+
+    console.log("[client-log]", JSON.stringify({
+      event,
+      sessionId,
+      at: new Date().toISOString(),
+      ua: String(req.headers["user-agent"] || "").slice(0, 300),
+      referer: String(req.headers.referer || "").slice(0, 300),
+      ip: String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").slice(0, 120),
+      payload,
+    }));
+  } catch (e) {
+    console.warn("[client-log] failed", e?.message || e);
+  }
+
+  res.json({ ok: true });
+});
+
 
 // ---------- PHONE AUTH HELPERS ----------
 const SMSRU_API_ID = process.env.SMSRU_API_ID || "";

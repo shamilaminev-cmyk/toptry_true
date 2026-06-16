@@ -147,6 +147,10 @@ function clearTopTryClientStorage() {
 
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  useEffect(() => {
+    window.__toptryClientLog?.("app_provider_mounted");
+  }, []);
+
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
@@ -184,8 +188,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     (async () => {
       try {
         console.info('[toptry][catalog] loading initial products');
+        window.__toptryClientLog?.("catalog_initial_fetch_start");
 
         const resp = await fetch('/api/catalog/products', { credentials: 'include' });
+        window.__toptryClientLog?.("catalog_initial_fetch_response", {
+          status: resp.status,
+          contentType: resp.headers.get('content-type') || '',
+        });
         const contentType = resp.headers.get('content-type') || '';
 
         if (!resp.ok) {
@@ -231,7 +240,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     (async () => {
       try {
+        window.__toptryClientLog?.("auth_me_fetch_start");
         const resp = await fetch('/api/auth/me', { credentials: 'include' });
+        window.__toptryClientLog?.("auth_me_fetch_response", {
+          status: resp.status,
+          contentType: resp.headers.get('content-type') || '',
+        });
 
         if (!resp.ok) {
           if (resp.status === 401) {
@@ -640,7 +654,12 @@ register: async (email: string, username: string, password: string) => {
 
     refreshMe: async () => {
       try {
+        window.__toptryClientLog?.("auth_me_fetch_start");
         const resp = await fetch('/api/auth/me', { credentials: 'include' });
+        window.__toptryClientLog?.("auth_me_fetch_response", {
+          status: resp.status,
+          contentType: resp.headers.get('content-type') || '',
+        });
 
         if (!resp.ok) {
           if (resp.status === 401) {

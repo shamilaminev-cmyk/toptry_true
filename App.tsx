@@ -27,6 +27,11 @@ class TopTryErrorBoundary extends React.Component<{ children: React.ReactNode },
 
   componentDidCatch(error: any, info: any) {
     console.error("[toptry][ErrorBoundary]", error, info);
+    window.__toptryClientLog?.("react_error_boundary", {
+      message: error?.message || String(error || ""),
+      stack: error?.stack ? String(error.stack).slice(0, 1000) : "",
+      componentStack: info?.componentStack ? String(info.componentStack).slice(0, 1000) : "",
+    });
   }
 
   render() {
@@ -175,6 +180,12 @@ const AppRoutes = () => {
 };
 
 const App = () => {
+  React.useEffect(() => {
+    window.__toptryClientLog?.("app_mounted");
+  }, []);
+
+  window.__toptryClientLog?.("app_render");
+
   return (
     <TopTryErrorBoundary>
       <AppProvider>
