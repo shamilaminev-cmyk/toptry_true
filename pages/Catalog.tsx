@@ -531,6 +531,7 @@ const Catalog = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogReloadKey, setCatalogReloadKey] = useState(0);
+  const [catalogLoadStuck, setCatalogLoadStuck] = useState(false);
 
   const hasProfileSize = Boolean(user?.sizeTop || user?.sizeBottom || user?.sizeShoes);
 
@@ -867,6 +868,8 @@ const Catalog = () => {
 
     const run = async () => {
       setLoading(true);
+      setCatalogLoadStuck(false);
+      setCatalogError(null);
       try {
         const params = new URLSearchParams();
         params.set('limit', String(PAGE_SIZE));
@@ -898,6 +901,7 @@ const Catalog = () => {
 
         const products = Array.isArray(data?.products) ? data.products : [];
         setCatalogError(null);
+        setCatalogLoadStuck(false);
         setItems(products);
         setFallbackInfo(data?.fallback?.active ? data.fallback : null);
         setTotal(Number(data?.total || 0));
@@ -906,6 +910,7 @@ const Catalog = () => {
       } catch (e) {
         if (!cancelled) {
           console.error('[catalog] fetch error', e);
+          setCatalogLoadStuck(false);
           setCatalogError('Не удалось загрузить каталог. Проверьте соединение и повторите.');
           setFallbackInfo(null);
           setOffset(0);
@@ -921,6 +926,19 @@ const Catalog = () => {
       cancelled = true;
     };
   }, [gender, displayCategory, clothingType, shoeType, bagType, accessoryType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode, catalogReloadKey]);
+
+  useEffect(() => {
+    if (!loading || items.length > 0) {
+      setCatalogLoadStuck(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCatalogLoadStuck(true);
+    }, 9000);
+
+    return () => window.clearTimeout(timer);
+  }, [loading, items.length, catalogReloadKey]);
 
   useEffect(() => {
     try {
@@ -1253,7 +1271,11 @@ const Catalog = () => {
 
       <div className="px-4 mt-4 flex items-center justify-between">
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-          {catalogError && items.length === 0 ? 'Каталог не загружен' : `Найдено: ${filteredCountLabel}`}
+          {loading && items.length === 0
+            ? 'Загружаем каталог'
+            : catalogError && items.length === 0
+              ? 'Каталог не загружен'
+              : `Найдено: ${filteredCountLabel}`}
         </p>
         {(gender || displayCategory || clothingType || shoeType || bagType || accessoryType || search || discountOnly || brand || priceMin || priceMax || sort || size || colorFamily || unavailableMode || (size === 'MY' && sizeLoose)) && (
           <button
@@ -1719,8 +1741,23 @@ const Catalog = () => {
       )}
 
       {loading && items.length === 0 ? (
-        <div className="py-24 text-center">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Загружаем каталог...</p>
+        <div className="py-24 text-center space-y-4 px-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">
+            {catalogLoadStuck ? 'Загрузка заняла больше обычного' : 'Загружаем каталог...'}
+          </p>
+
+          {catalogLoadStuck && (
+            <button
+              onClick={() => {
+                setCatalogLoadStuck(false);
+                setCatalogError(null);
+                setCatalogReloadKey((v) => v + 1);
+              }}
+              className="inline-flex items-center justify-center h-11 px-6 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] active:scale-95"
+            >
+              Повторить
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -1848,7 +1885,11 @@ const Catalog = () => {
               </div>
               <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">{catalogError}</p>
               <button
-                onClick={() => setCatalogReloadKey((v) => v + 1)}
+                onClick={() => {
+                  setCatalogError(null);
+                  setCatalogLoadStuck(false);
+                  setCatalogReloadKey((v) => v + 1);
+                }}
                 className="inline-flex items-center justify-center h-11 px-6 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] active:scale-95"
               >
                 Повторить
