@@ -639,6 +639,19 @@ function absUrlFromReq(req, url) {
 // behind nginx
 app.set("trust proxy", 1);
 
+// API responses must never be browser-cached.
+// Mobile browsers may otherwise return 304 for JSON endpoints, which leaves
+// React data loaders with empty state (catalog total=0, feed empty, auth stale).
+app.set("etag", false);
+
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+  next();
+});
+
 /**
  * CORS
  * Для cross-origin cookie (toptry.ru -> api.toptry.ru):
