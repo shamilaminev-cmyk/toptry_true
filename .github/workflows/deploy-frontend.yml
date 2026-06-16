@@ -12,6 +12,7 @@ on:
       - 'index.css'
       - 'App.tsx'
       - 'store.tsx'
+      - 'fetchPatch.ts'
       - 'types.ts'
       - 'package.json'
       - 'package-lock.json'
