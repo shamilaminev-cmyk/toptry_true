@@ -251,6 +251,17 @@ const ACCESSORY_TABS: Array<{ id: AccessoryType; label: string }> = [
 
 const IMG_FALLBACK = "";
 const PAGE_SIZE = 24;
+
+function hardRefreshCatalogDocument() {
+  if (typeof window === 'undefined') return;
+
+  const fresh = Date.now();
+  const hash = window.location.hash || '#/catalog';
+
+  // Mobile Yandex Browser can get stuck in a saved/offline document snapshot
+  // after clearing site data. A fresh document URL reliably breaks that state.
+  window.location.replace(`/?fresh=${fresh}${hash}`);
+}
 const CATALOG_FILTERS_STORAGE_KEY = 'toptry.catalog.filters.v1';
 
 type CatalogFallbackInfo = {
@@ -1749,13 +1760,11 @@ const Catalog = () => {
           {catalogLoadStuck && (
             <button
               onClick={() => {
-                setCatalogLoadStuck(false);
-                setCatalogError(null);
-                setCatalogReloadKey((v) => v + 1);
+                hardRefreshCatalogDocument();
               }}
               className="inline-flex items-center justify-center h-11 px-6 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] active:scale-95"
             >
-              Повторить
+              Обновить страницу
             </button>
           )}
         </div>
@@ -1893,6 +1902,15 @@ const Catalog = () => {
                 className="inline-flex items-center justify-center h-11 px-6 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] active:scale-95"
               >
                 Повторить
+              </button>
+
+              <button
+                onClick={() => {
+                  hardRefreshCatalogDocument();
+                }}
+                className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 underline underline-offset-4"
+              >
+                Обновить страницу
               </button>
             </div>
           )}
