@@ -1,12 +1,32 @@
 const TOPTRY_FETCH_PATCH_FLAG = "__toptry_fetch_patched__";
 
-// fetchPatch.ts
-// Monkeypatch window.fetch so that relative /api/* and /media/* calls
-// go to the API origin and always include cookies.
-//
-// Production guard:
-// if VITE_API_ORIGIN is missing in a stale/mobile/static bundle, toptry.ru must still
-// not fetch /api/* from the web origin. Runtime fallback prevents silent HTML-as-JSON failures.
+// Safe fetch patch:
+// - on production web hosts, keep /api and /media same-origin;
+// - nginx proxies /api and /media to backend;
+// - this avoids mobile cross-origin/CORS/preflight issues;
+// - diagnostics must never be able to break app boot.
+
+function isApiOrMediaLike(url: string) {
+  return (
+    url === "/api" ||
+    url.startsWith("/api/") ||
+    url.startsWith("/api?") ||
+    url === "api" ||
+    url.startsWith("api/") ||
+    url.startsWith("api?") ||
+    url === "/media" ||
+    url.startsWith("/media/") ||
+    url.startsWith("/media?") ||
+    url === "media" ||
+    url.startsWith("media/") ||
+    url.startsWith("media?")
+  );
+}
+
+function normalizeRelativeApiOrMedia(url: string) {
+  if (!isApiOrMediaLike(url)) return "";
+  return url.startsWith("/") ? url : `/${url}`;
+}
 
 function normalizeOrigin(origin?: string | null) {
   const s = (origin || "").toString().trim();
@@ -14,55 +34,27 @@ function normalizeOrigin(origin?: string | null) {
   return s.replace(/\/+$/g, "");
 }
 
-function runtimeApiOrigin() {
+function isToptryWebHost() {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.toLowerCase();
+  return (
+    host === "toptry.ru" ||
+    host === "www.toptry.ru" ||
+    host === "staging.toptry.ru"
+  );
+}
+
+function explicitApiOriginForNonToptryHost() {
   if (typeof window === "undefined") return "";
 
-  const metaOrigin =
-    (document.querySelector('meta[name="toptry-api-origin"]') as HTMLMetaElement | null)
-      ?.content
-      ?.toString?.() || "";
+  // For local/dev/preview builds only: respect VITE_API_ORIGIN if provided.
+  // On toptry.ru itself, same-origin /api is safer and already proxied by nginx.
+  if (isToptryWebHost()) return "";
 
-  const meta = normalizeOrigin(metaOrigin);
-  if (meta && !meta.includes("%VITE_API_ORIGIN%")) return meta;
-
-  const host = window.location.hostname.toLowerCase();
-
-  if (host === "toptry.ru" || host === "www.toptry.ru") {
-    return "https://api.toptry.ru";
-  }
-
-  if (host === "staging.toptry.ru") {
-    return "https://staging-api.toptry.ru";
-  }
-
-  return "";
-}
-
-function getApiOrigin() {
   const envOrigin = normalizeOrigin(import.meta.env.VITE_API_ORIGIN as string | undefined);
-  return envOrigin || runtimeApiOrigin();
-}
-
-function pathFromApiLikeUrl(url: string) {
-  if (
-    url.startsWith("/api/") || url === "/api" || url.startsWith("/api?") ||
-    url.startsWith("api/") || url === "api" || url.startsWith("api?")
-  ) {
-    return url.startsWith("/") ? url : `/${url}`;
-  }
-
-  if (
-    url.startsWith("/media/") || url === "/media" || url.startsWith("/media?") ||
-    url.startsWith("media/") || url === "media" || url.startsWith("media?")
-  ) {
-    return url.startsWith("/") ? url : `/${url}`;
-  }
+  if (envOrigin) return envOrigin;
 
   return "";
-}
-
-function isApiPath(path: string) {
-  return path === "/api" || path.startsWith("/api/") || path.startsWith("/api?");
 }
 
 export function patchFetchForApi() {
@@ -75,58 +67,50 @@ export function patchFetchForApi() {
   const originalFetch = window.fetch.bind(window);
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const originalUrl =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
+    try {
+      const originalUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
 
-    const origin = getApiOrigin();
-    let rewrittenUrl = originalUrl;
-    let shouldForceCredentials = false;
-    let apiPath = "";
+      let rewrittenUrl = originalUrl;
+      let shouldForceCredentials = false;
 
-    const relativePath = pathFromApiLikeUrl(originalUrl);
+      const relativePath = normalizeRelativeApiOrMedia(originalUrl);
 
-    if (relativePath) {
-      shouldForceCredentials = true;
-      apiPath = isApiPath(relativePath) ? relativePath : "";
-      rewrittenUrl = origin ? `${origin}${relativePath}` : originalUrl;
-    } else if (origin && /^https?:\/\//i.test(originalUrl)) {
-      try {
-        const u = new URL(originalUrl);
-        const isApiOrMedia =
-          u.pathname === "/api" || u.pathname.startsWith("/api/") ||
-          u.pathname === "/media" || u.pathname.startsWith("/media/");
-        if (isApiOrMedia) {
-          shouldForceCredentials = true;
-          apiPath = isApiPath(u.pathname) ? u.pathname : "";
-          rewrittenUrl = `${origin}${u.pathname}${u.search}${u.hash}`;
+      if (relativePath) {
+        shouldForceCredentials = true;
+
+        const explicitOrigin = explicitApiOriginForNonToptryHost();
+        rewrittenUrl = explicitOrigin ? `${explicitOrigin}${relativePath}` : relativePath;
+      } else if (/^https?:\/\//i.test(originalUrl)) {
+        try {
+          const u = new URL(originalUrl);
+          const p = u.pathname;
+          const isApiOrMedia =
+            p === "/api" || p.startsWith("/api/") ||
+            p === "/media" || p.startsWith("/media/");
+
+          if (isApiOrMedia) {
+            shouldForceCredentials = true;
+          }
+        } catch {
+          // keep original
         }
-      } catch {
-        // keep original
       }
+
+      const nextInit: RequestInit = shouldForceCredentials
+        ? { ...(init || {}), credentials: "include" }
+        : (init || {});
+
+      return await originalFetch(rewrittenUrl as any, nextInit);
+    } catch (err) {
+      // The fetch patch must never break the app.
+      // Fall back to the browser's original fetch.
+      console.error("[toptry][fetchPatch] patched fetch failed; falling back", err);
+      return originalFetch(input as any, init);
     }
-
-    const nextInit: RequestInit = shouldForceCredentials
-      ? { ...(init || {}), credentials: "include" }
-      : (init || {});
-
-    const resp = await originalFetch(rewrittenUrl as any, nextInit);
-
-    if (apiPath) {
-      const contentType = resp.headers?.get?.("content-type") || "";
-      if (resp.ok && contentType.includes("text/html")) {
-        console.error("[toptry][api-origin] API returned HTML instead of JSON", {
-          originalUrl,
-          rewrittenUrl,
-          status: resp.status,
-          contentType,
-        });
-      }
-    }
-
-    return resp;
   };
 }

@@ -8,6 +8,7 @@ declare global {
   interface Window {
     __toptryClientLog?: (event: string, payload?: any) => void;
     __toptryClientSessionId?: string;
+    __toptryRawFetch?: typeof fetch;
   }
 }
 
@@ -24,6 +25,7 @@ function makeClientSessionId() {
 }
 
 window.__toptryClientSessionId = makeClientSessionId();
+window.__toptryRawFetch = window.fetch.bind(window);
 
 window.__toptryClientLog = (event: string, payload: any = {}) => {
   try {
@@ -38,7 +40,7 @@ window.__toptryClientLog = (event: string, payload: any = {}) => {
       },
     };
 
-    fetch("/api/client-log", {
+    (window.__toptryRawFetch || fetch)("/api/client-log", {
       method: "POST",
       credentials: "include",
       cache: "no-store",
@@ -82,8 +84,17 @@ document.addEventListener("visibilitychange", () => {
 
 window.__toptryClientLog?.("index_module_loaded");
 
-patchFetchForApi();
-window.__toptryClientLog?.("fetch_patch_called");
+try {
+  window.__toptryClientLog?.("fetch_patch_before_call");
+  patchFetchForApi();
+  window.__toptryClientLog?.("fetch_patch_called");
+} catch (err: any) {
+  window.__toptryClientLog?.("fetch_patch_error", {
+    message: err?.message || String(err || ""),
+    stack: err?.stack ? String(err.stack).slice(0, 1000) : "",
+  });
+  console.error("[toptry] patchFetchForApi failed", err);
+}
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {
