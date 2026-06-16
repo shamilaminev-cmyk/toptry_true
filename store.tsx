@@ -156,17 +156,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // Hydrate from localStorage (fast MVP persistence)
+  // Hydrate non-auth UI state from localStorage.
+  // Backend /api/auth/me is the only source of truth for user session.
+  // Do NOT restore saved.user here: otherwise stale localStorage can create phantom-login.
   useEffect(() => {
     const saved = safeParse<{ user: User | null; wardrobe: WardrobeItem[]; looks: Look[]; homeLayout: HomeLayout }>(
       typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
     );
 
     if (saved) {
-      setUser(saved.user || null);
       setWardrobe(Array.isArray(saved.wardrobe) ? saved.wardrobe : []);
 
-      // Dates may come back as strings; keep them usable by re-wrapping if present.
       const restoredLooks = (Array.isArray(saved.looks) ? saved.looks : []).map((l: any) => ({
         ...l,
         createdAt: l?.createdAt ? new Date(l.createdAt) : new Date(),
@@ -176,48 +176,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setHomeLayout(saved.homeLayout || HomeLayout.DASHBOARD);
     }
 
-    // Simulate small loading skeleton
     const t = setTimeout(() => setLoading(false), 450);
-    
-  const addCatalogItemToLook = (item: any) => {
-    const id = item.id || item.externalId || String(Date.now());
-
-    const candidate = {
-      id,
-      imageUrl: item.imageUrl,
-      title: item.title,
-      brand: item.brand,
-      price: item.price,
-      source: 'catalog',
-    };
-
-    setCandidates((prev: any[]) => {
-      const exists = prev.find((x) => x.id === id);
-      if (exists) return prev;
-      return [...prev, candidate];
-    });
-
-    setSelectedIds((prev: Set<string>) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  };
-
-return () => clearTimeout(t);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
     (async () => {
       try {
+        console.info('[toptry][catalog] loading initial products');
+
         const resp = await fetch('/api/catalog/products', { credentials: 'include' });
-        if (!resp.ok) return;
-        const data = await resp.json().catch(() => null);
+        const contentType = resp.headers.get('content-type') || '';
+
+        if (!resp.ok) {
+          console.error('[toptry][catalog] initial products failed', {
+            status: resp.status,
+            contentType,
+          });
+          return;
+        }
+
+        if (contentType.includes('text/html')) {
+          const html = await resp.text().catch(() => '');
+          console.error('[toptry][catalog] initial products returned HTML instead of JSON', {
+            status: resp.status,
+            contentType,
+            prefix: html.slice(0, 120),
+          });
+          return;
+        }
+
+        const data = await resp.json().catch((err) => {
+          console.error('[toptry][catalog] initial products JSON parse failed', err);
+          return null;
+        });
+
         const items = Array.isArray(data?.products) ? data.products : [];
-        // allow empty (server is source of truth)
+        console.info('[toptry][catalog] initial products loaded', {
+          count: items.length,
+          total: data?.total,
+          meta: data?.meta,
+        });
+
         setProducts(items);
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error('[toptry][catalog] initial products request crashed', err);
       }
     })();
   }, []);
@@ -268,8 +271,9 @@ return () => clearTimeout(t);
           isPublic: !!u.isPublic,
           isAdmin: !!u.isAdmin,
         }));
-      } catch {
+      } catch (err) {
         // Network errors should not forcibly log the user out.
+        console.error('[toptry][auth] /api/auth/me request crashed', err);
       } finally {
         setLoading(false);
       }
@@ -1036,36 +1040,10 @@ register: async (email: string, username: string, password: string) => {
       setLooks((prev) => prev.filter((l) => String(l.id) !== String(id)));
     },
   }), [user, looks, wardrobe, homeLayout]);
-
   
-  const addCatalogItemToLook = (item: any) => {
-    const id = item.id || item.externalId || String(Date.now());
-
-    const candidate = {
-      id,
-      imageUrl: item.imageUrl,
-      title: item.title,
-      brand: item.brand,
-      price: item.price,
-      source: 'catalog',
-    };
-
-    setCandidates((prev: any[]) => {
-      const exists = prev.find((x) => x.id === id);
-      if (exists) return prev;
-      return [...prev, candidate];
-    });
-
-    setSelectedIds((prev: Set<string>) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  };
-
-return (
-      <AppContext.Provider value={{
-      addCatalogItemToLook, user, products, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
+  return (
+    <AppContext.Provider value={{
+      user, products, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
       {children}
     </AppContext.Provider>
   );
