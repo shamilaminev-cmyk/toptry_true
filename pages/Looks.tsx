@@ -723,7 +723,7 @@ const Looks = () => {
                 <div className="toptry-feed-side pt-4 md:pt-2 md:sticky md:top-28 md:space-y-8">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
                     <div>
-                      <h2 className="text-[21px] md:text-3xl font-black uppercase tracking-[-0.035em] leading-[1.02]">
+                      <h2 className="text-[19px] md:text-3xl font-extrabold md:font-black uppercase tracking-[-0.03em] leading-[1.08]">
                         {look.title && look.title !== 'Сгенерированный образ' ? look.title : (sourceItems.length ? `Образ из ${sourceItems.length} вещей` : 'Образ')}
                       </h2>
                       <div className="flex items-center gap-2 mt-3">
