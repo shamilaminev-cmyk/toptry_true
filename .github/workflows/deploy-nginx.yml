@@ -1,0 +1,47 @@
+name: Deploy nginx config
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-nginx:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload nginx config
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.TOPTRY_PROD_HOST }}
+          username: ${{ secrets.TOPTRY_PROD_USER }}
+          key: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          port: ${{ secrets.TOPTRY_PROD_PORT }}
+          source: "infra/nginx/toptry.conf"
+          target: "/tmp/toptry-nginx-deploy"
+          strip_components: 2
+          rm: true
+
+      - name: Validate and reload nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.TOPTRY_PROD_HOST }}
+          username: ${{ secrets.TOPTRY_PROD_USER }}
+          key: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          port: ${{ secrets.TOPTRY_PROD_PORT }}
+          script: |
+            set -euo pipefail
+
+            test -f /tmp/toptry-nginx-deploy/toptry.conf
+
+            TS="$(date -u +%Y%m%d-%H%M%S)"
+            sudo cp /etc/nginx/sites-available/toptry "/etc/nginx/sites-available/toptry.bak.${TS}"
+
+            sudo cp /tmp/toptry-nginx-deploy/toptry.conf /etc/nginx/sites-available/toptry
+
+            sudo nginx -t
+
+            sudo systemctl reload nginx
+
+            echo "nginx config deployed and reloaded"
