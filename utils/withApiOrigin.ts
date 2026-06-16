@@ -38,15 +38,11 @@ export function withApiOrigin(url?: string | null): string {
   const s = (url || "").toString();
   if (!s) return "";
 
-  // keep data/blob as-is
   if (s.startsWith("data:") || s.startsWith("blob:")) return s;
 
   const origin = apiOrigin();
-
-  // no origin => keep same-origin behavior for local dev without env
   if (!origin) return s;
 
-  // relative /api and /media => prefix
   if (
     s.startsWith("/api/") || s === "/api" || s.startsWith("/api?") ||
     s.startsWith("/media/") || s === "/media" || s.startsWith("/media?")
@@ -54,7 +50,6 @@ export function withApiOrigin(url?: string | null): string {
     return `${origin}${s}`;
   }
 
-  // relative api/media without leading slash
   if (
     s.startsWith("api/") || s === "api" || s.startsWith("api?") ||
     s.startsWith("media/") || s === "media" || s.startsWith("media?")
@@ -62,7 +57,6 @@ export function withApiOrigin(url?: string | null): string {
     return `${origin}/${s}`;
   }
 
-  // absolute URLs: keep, BUT if they point to /api or /media => rewrite origin to apiOrigin
   if (/^https?:\/\//i.test(s)) {
     try {
       const u = new URL(s);
