@@ -721,9 +721,9 @@ const Looks = () => {
                 </Link>
 
                 <div className="toptry-feed-side pt-4 md:pt-2 md:sticky md:top-28 md:space-y-8">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
                     <div>
-                      <h2 className="text-[28px] md:text-3xl font-black uppercase tracking-[-0.04em] leading-[0.95]">
+                      <h2 className="text-[23px] md:text-3xl font-black uppercase tracking-[-0.04em] leading-[0.92]">
                         {look.title && look.title !== 'Сгенерированный образ' ? look.title : (sourceItems.length ? `Образ из ${sourceItems.length} вещей` : 'Образ')}
                       </h2>
                       <div className="flex items-center gap-2 mt-3">
@@ -770,7 +770,7 @@ const Looks = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 text-sm font-bold whitespace-nowrap">
+                    <div className="flex items-center gap-4 text-sm font-bold whitespace-nowrap">
                       <button
                         onClick={() => handleLikeFromFeed(String(look.id))}
                         className="flex items-center gap-1.5 transition-transform hover:scale-110"
@@ -786,11 +786,13 @@ const Looks = () => {
                       <button
                         onClick={() => handleSaveLook(look)}
                         disabled={!!saveBusyIds[String(look.id)]}
-                        className={`flex items-center gap-1.5 transition-transform hover:scale-110 ${
-                          Boolean(savedOverrides[String(look.id)] ?? look.viewerSaved) ? 'text-zinc-900' : 'text-zinc-400'
+                        className={`h-8 px-3 rounded-full border text-[10px] font-black uppercase tracking-[0.14em] transition-all ${
+                          Boolean(savedOverrides[String(look.id)] ?? look.viewerSaved)
+                            ? 'bg-zinc-900 border-zinc-900 text-white'
+                            : 'bg-white border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-zinc-900'
                         } ${saveBusyIds[String(look.id)] ? 'opacity-60 pointer-events-none' : ''}`}
                       >
-                        <span className="text-base leading-none">🔖</span> {look.saves || 0}
+                        {Boolean(savedOverrides[String(look.id)] ?? look.viewerSaved) ? 'Сохранено' : 'Сохранить'}
                       </button>
                     </div>
                   </div>
@@ -961,7 +963,7 @@ const Looks = () => {
                     </Link>
                   </div>
 
-                  <div className="toptry-feed-mobile-meta md:hidden px-1 mt-3">
+                  <div className="hidden">
                     <div className="flex items-center justify-between">
                       {authorHref ? (
                         <Link
