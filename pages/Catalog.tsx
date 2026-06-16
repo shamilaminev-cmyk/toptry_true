@@ -529,6 +529,8 @@ const Catalog = () => {
 
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
 
   const hasProfileSize = Boolean(user?.sizeTop || user?.sizeBottom || user?.sizeShoes);
 
@@ -844,6 +846,7 @@ const Catalog = () => {
 
     const products = Array.isArray(data?.products) ? data.products : [];
 
+    setCatalogError(null);
     setItems((prev) => (append ? [...prev, ...products] : products));
     if (!append) {
       setFallbackInfo(data?.fallback?.active ? data.fallback : null);
@@ -854,7 +857,9 @@ const Catalog = () => {
   };
 
   useEffect(() => {
-    setItems([]);
+    // Do not clear existing products before the new request succeeds.
+    // On mobile, requests can be aborted/499 or restored from browser cache;
+    // clearing here turns a transient network issue into a false “Найдено: 0”.
     setOffset(0);
     setHasMore(false);
 
@@ -892,6 +897,7 @@ const Catalog = () => {
         if (!resp.ok) throw new Error(data?.error || `Catalog fetch failed (${resp.status})`);
 
         const products = Array.isArray(data?.products) ? data.products : [];
+        setCatalogError(null);
         setItems(products);
         setFallbackInfo(data?.fallback?.active ? data.fallback : null);
         setTotal(Number(data?.total || 0));
@@ -900,9 +906,8 @@ const Catalog = () => {
       } catch (e) {
         if (!cancelled) {
           console.error('[catalog] fetch error', e);
-          setItems([]);
+          setCatalogError('Не удалось загрузить каталог. Проверьте соединение и повторите.');
           setFallbackInfo(null);
-          setTotal(0);
           setOffset(0);
           setHasMore(false);
         }
@@ -915,7 +920,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [gender, displayCategory, clothingType, shoeType, bagType, accessoryType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode]);
+  }, [gender, displayCategory, clothingType, shoeType, bagType, accessoryType, debouncedSearch, discountOnly, brand, priceMin, priceMax, sort, size, sizeLoose, colorFamily, unavailableMode, catalogReloadKey]);
 
   useEffect(() => {
     try {
@@ -1148,6 +1153,7 @@ const Catalog = () => {
       await fetchCatalog(offset + PAGE_SIZE, true);
     } catch (e) {
       console.error('[catalog] load more error', e);
+      setCatalogError('Не удалось загрузить следующую страницу. Повторите попытку.');
     } finally {
       setLoadingMore(false);
     }
@@ -1247,7 +1253,7 @@ const Catalog = () => {
 
       <div className="px-4 mt-4 flex items-center justify-between">
         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-          Найдено: {filteredCountLabel}
+          {catalogError && items.length === 0 ? 'Каталог не загружен' : `Найдено: ${filteredCountLabel}`}
         </p>
         {(gender || displayCategory || clothingType || shoeType || bagType || accessoryType || search || discountOnly || brand || priceMin || priceMax || sort || size || colorFamily || unavailableMode || (size === 'MY' && sizeLoose)) && (
           <button
@@ -1833,7 +1839,24 @@ const Catalog = () => {
             })}
           </div>
 
-          {items.length === 0 && !loading && (
+          {items.length === 0 && !loading && catalogError && (
+            <div className="py-24 text-center space-y-4 px-6">
+              <div className="w-16 h-16 bg-zinc-50 rounded-full mx-auto flex items-center justify-center">
+                <svg className="w-8 h-8 text-zinc-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path>
+                </svg>
+              </div>
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">{catalogError}</p>
+              <button
+                onClick={() => setCatalogReloadKey((v) => v + 1)}
+                className="inline-flex items-center justify-center h-11 px-6 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] active:scale-95"
+              >
+                Повторить
+              </button>
+            </div>
+          )}
+
+          {items.length === 0 && !loading && !catalogError && (
             <div className="py-24 text-center space-y-4">
               <div className="w-16 h-16 bg-zinc-50 rounded-full mx-auto flex items-center justify-center">
                 <svg className="w-8 h-8 text-zinc-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">

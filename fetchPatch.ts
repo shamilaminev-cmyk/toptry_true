@@ -1,11 +1,5 @@
 const TOPTRY_FETCH_PATCH_FLAG = "__toptry_fetch_patched__";
 
-// Safe fetch patch:
-// - on production web hosts, keep /api and /media same-origin;
-// - nginx proxies /api and /media to backend;
-// - this avoids mobile cross-origin/CORS/preflight issues;
-// - diagnostics must never be able to break app boot.
-
 function isApiOrMediaLike(url: string) {
   return (
     url === "/api" ||
@@ -28,12 +22,6 @@ function normalizeRelativeApiOrMedia(url: string) {
   return url.startsWith("/") ? url : `/${url}`;
 }
 
-function normalizeOrigin(origin?: string | null) {
-  const s = (origin || "").toString().trim();
-  if (!s) return "";
-  return s.replace(/\/+$/g, "");
-}
-
 function isToptryWebHost() {
   if (typeof window === "undefined") return false;
   const host = window.location.hostname.toLowerCase();
@@ -44,17 +32,27 @@ function isToptryWebHost() {
   );
 }
 
+function normalizeOrigin(origin?: string | null) {
+  const s = (origin || "").toString().trim();
+  if (!s) return "";
+  return s.replace(/\/+$/g, "");
+}
+
 function explicitApiOriginForNonToptryHost() {
   if (typeof window === "undefined") return "";
 
-  // For local/dev/preview builds only: respect VITE_API_ORIGIN if provided.
-  // On toptry.ru itself, same-origin /api is safer and already proxied by nginx.
+  // On toptry.ru/staging.toptry.ru nginx proxies /api and /media.
+  // Keeping same-origin is safer for mobile browsers and avoids cross-origin cache quirks.
   if (isToptryWebHost()) return "";
 
-  const envOrigin = normalizeOrigin(import.meta.env.VITE_API_ORIGIN as string | undefined);
-  if (envOrigin) return envOrigin;
+  return normalizeOrigin(import.meta.env.VITE_API_ORIGIN as string | undefined);
+}
 
-  return "";
+function mergeNoStoreHeaders(headers?: HeadersInit) {
+  const h = new Headers(headers || {});
+  h.set("Cache-Control", "no-cache");
+  h.set("Pragma", "no-cache");
+  return h;
 }
 
 export function patchFetchForApi() {
@@ -76,12 +74,14 @@ export function patchFetchForApi() {
             : (input as Request).url;
 
       let rewrittenUrl = originalUrl;
-      let shouldForceCredentials = false;
+      let isApiRequest = false;
+      let isApiOrMediaRequest = false;
 
       const relativePath = normalizeRelativeApiOrMedia(originalUrl);
 
       if (relativePath) {
-        shouldForceCredentials = true;
+        isApiOrMediaRequest = true;
+        isApiRequest = relativePath === "/api" || relativePath.startsWith("/api/") || relativePath.startsWith("/api?");
 
         const explicitOrigin = explicitApiOriginForNonToptryHost();
         rewrittenUrl = explicitOrigin ? `${explicitOrigin}${relativePath}` : relativePath;
@@ -89,30 +89,25 @@ export function patchFetchForApi() {
         try {
           const u = new URL(originalUrl);
           const p = u.pathname;
-          const isApiOrMedia =
+          isApiOrMediaRequest =
             p === "/api" || p.startsWith("/api/") ||
             p === "/media" || p.startsWith("/media/");
-
-          if (isApiOrMedia) {
-            shouldForceCredentials = true;
-          }
+          isApiRequest = p === "/api" || p.startsWith("/api/");
         } catch {
           // keep original
         }
       }
 
-      const isApiRequest = shouldForceCredentials || String(rewrittenUrl || "").startsWith("/api");
-
-      const nextInit: RequestInit = isApiRequest
+      const nextInit: RequestInit = isApiOrMediaRequest
         ? {
             ...(init || {}),
             credentials: "include",
-            cache: "no-store",
-            headers: {
-              ...(((init || {}) as RequestInit).headers || {}),
-              "Cache-Control": "no-cache",
-              "Pragma": "no-cache",
-            },
+            ...(isApiRequest
+              ? {
+                  cache: "no-store",
+                  headers: mergeNoStoreHeaders((init || {}).headers),
+                }
+              : {}),
           }
         : (init || {});
 
@@ -127,10 +122,8 @@ export function patchFetchForApi() {
 
       return resp;
     } catch (err) {
-      // The fetch patch must never break the app.
-      // Fall back to the browser's original fetch.
-      console.error("[toptry][fetchPatch] patched fetch failed; falling back", err);
-      return originalFetch(input as any, init);
+      console.error("[toptry][fetchPatch] patched fetch failed", err);
+      throw err;
     }
   };
 }

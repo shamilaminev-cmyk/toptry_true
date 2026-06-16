@@ -16,7 +16,6 @@ import CreateLook from './pages/CreateLook';
 import ProductDetail from './pages/ProductDetail';
 import Admin from './pages/Admin';
 import UserStorefront from './pages/UserStorefront';
-import Logo from './components/Logo';
 
 class TopTryErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: any }> {
   state = { error: null as any };
@@ -82,12 +81,10 @@ const Header = () => {
   }, [user?.avatarUrl, user?.selfieUrl]);
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-zinc-100 px-4 py-4 flex items-center justify-between">
-      <Link to="/" className="flex items-center gap-2">
-        {/* ✅ Новый логотип через компонент (берёт /branding/logo.png) */}
-        <Logo className="h-8 w-auto object-contain block" alt="toptry" />
-
-        {/* Фолбэк (если файл логотипа не положили в public/branding/logo.png) */}
-        <span className="hidden text-xl font-black tracking-tighter uppercase">toptry</span>
+      <Link to="/" className="flex items-center gap-2" aria-label="TopTry">
+        <span className="text-xl font-black tracking-tighter uppercase text-zinc-950 leading-none">
+          toptry
+        </span>
       </Link>
 
       <div className="flex items-center gap-4">
