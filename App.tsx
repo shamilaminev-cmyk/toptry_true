@@ -16,6 +16,7 @@ import CreateLook from './pages/CreateLook';
 import ProductDetail from './pages/ProductDetail';
 import Admin from './pages/Admin';
 import UserStorefront from './pages/UserStorefront';
+import Logo from './components/Logo';
 
 class TopTryErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: any }> {
   state = { error: null as any };
@@ -82,9 +83,7 @@ const Header = () => {
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-zinc-100 px-4 py-4 flex items-center justify-between">
       <Link to="/" className="flex items-center gap-2" aria-label="TopTry">
-        <span className="text-xl font-black tracking-tighter uppercase text-zinc-950 leading-none">
-          toptry
-        </span>
+        <Logo className="h-7 w-auto object-contain" />
       </Link>
 
       <div className="flex items-center gap-4">
