@@ -41,6 +41,9 @@ const AVATAR_BG_REMOVER_URL = process.env.AVATAR_BG_REMOVER_URL || "";
 const CATALOG_IMAGE_CACHE_DIR =
   process.env.CATALOG_IMAGE_CACHE_DIR || "/data/catalog-image-cache";
 
+const AVATAR_THUMB_CACHE_DIR =
+  process.env.AVATAR_THUMB_CACHE_DIR || "/data/avatar-thumb-cache";
+
 function getCatalogImageCachePath(rawUrl, requestedWidth) {
   const key = crypto
     .createHash("sha256")
@@ -1464,6 +1467,113 @@ app.post("/api/avatar/process", requireAuth, async (req, res) => {
     return res.status(500).json({ error: err?.message || "avatar process failed" });
   }
 });
+
+
+function normalizeAvatarThumbWidth(value) {
+  const n = Number(value || 96);
+  if (!Number.isFinite(n)) return 96;
+  return Math.max(32, Math.min(256, Math.round(n)));
+}
+
+function avatarThumbCachePath(mediaKey, width) {
+  const key = crypto
+    .createHash("sha256")
+    .update(`${String(mediaKey || "").trim()}|w=${Number(width || 0)}|webp`)
+    .digest("hex");
+
+  return {
+    key,
+    dir: path.join(AVATAR_THUMB_CACHE_DIR, key.slice(0, 2), key.slice(2, 4)),
+    filePath: path.join(AVATAR_THUMB_CACHE_DIR, key.slice(0, 2), key.slice(2, 4), `${key}.webp`),
+  };
+}
+
+function mediaUrlToKey(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    if (/^https?:\/\//i.test(raw)) {
+      const u = new URL(raw);
+      if (u.pathname.startsWith("/media/")) {
+        return decodeURIComponent(u.pathname.slice("/media/".length));
+      }
+      return "";
+    }
+  } catch {}
+
+  const noQuery = raw.split("?")[0].split("#")[0];
+
+  if (noQuery.startsWith("/media/")) {
+    return decodeURIComponent(noQuery.slice("/media/".length));
+  }
+
+  if (noQuery.startsWith("media/")) {
+    return decodeURIComponent(noQuery.slice("media/".length));
+  }
+
+  return "";
+}
+
+function avatarThumbUrlForMediaUrl(value, width = 96) {
+  const key = mediaUrlToKey(value);
+  if (!key) return "";
+  return `/media-thumb/${encodeURIComponent(key)}?w=${normalizeAvatarThumbWidth(width)}`;
+}
+
+async function streamToBuffer(stream) {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+app.get("/media-thumb/:key(*)", async (req, res) => {
+  try {
+    const mediaKey = String(req.params.key || "").trim();
+    const width = normalizeAvatarThumbWidth(req.query.w || 96);
+
+    if (!mediaKey) return res.status(400).send("media key is required");
+
+    const cache = avatarThumbCachePath(mediaKey, width);
+
+    try {
+      const cached = await fs.readFile(cache.filePath);
+      res.setHeader("Content-Type", "image/webp");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      return res.send(cached);
+    } catch {}
+
+    const stream = await getObjectStream(mediaKey);
+    if (!stream) return res.status(404).send("media not found");
+
+    const input = await streamToBuffer(stream);
+    const output = await sharp(input, { failOnError: false })
+      .resize(width, width, {
+        fit: "cover",
+        position: "center",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 72 })
+      .toBuffer();
+
+    try {
+      await fs.mkdir(cache.dir, { recursive: true });
+      await fs.writeFile(cache.filePath, output);
+    } catch (e) {
+      console.warn("[toptry] avatar thumb cache write failed", e?.message || e);
+    }
+
+    res.setHeader("Content-Type", "image/webp");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    return res.send(output);
+  } catch (e) {
+    console.error("[toptry] /media-thumb error", e);
+    return res.status(500).send(e?.message || "media thumb error");
+  }
+});
+
 
 app.get("/media/:key(*)", async (req, res) => {
   try {
@@ -4658,6 +4768,7 @@ async function mapLookForApi(row, viewerUserId = "") {
     userDescription: row.userDescription || null,
     authorName: publicAuthorName(author),
     authorAvatar: author?.avatarUrl || "",
+    authorAvatarThumb: avatarThumbUrlForMediaUrl(author?.avatarUrl || ""),
     authorSlug: author?.publicSlug || author?.id || "",
     viewerLiked,
     viewerSaved,

@@ -738,7 +738,7 @@ const Looks = () => {
                           >
                             {(look.authorAvatar || user?.avatarUrl || user?.selfieUrl) ? (
                               <img
-                                src={withApiOrigin(look.authorAvatar || user?.avatarUrl || user?.selfieUrl || '')}
+                                src={withApiOrigin(look.authorAvatarThumb || look.authorAvatar || user?.avatarUrl || user?.selfieUrl || '')}
                                 alt=""
                                 loading="lazy"
                                 decoding="async"
