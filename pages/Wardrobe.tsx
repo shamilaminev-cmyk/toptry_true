@@ -1304,42 +1304,44 @@ const Wardrobe = () => {
                   </div>
 
                   <div
-                    className={`relative h-full rounded-[24px] bg-zinc-50 border border-zinc-100 transition-transform duration-200 overflow-hidden p-2.5 md:p-3 hover:border-zinc-300 hover:shadow-md ${
+                    className={`relative h-full rounded-[24px] bg-white border border-zinc-100 transition-transform duration-200 overflow-hidden flex flex-col hover:border-zinc-300 hover:shadow-md ${
                       swipedItemId === item.id ? '-translate-x-16' : 'translate-x-0'
                     }`}
                   >
-                    <img
-                      src={withApiOrigin(item.images?.[0])}
-                      alt=""
-                      className="w-full h-full object-contain mix-blend-multiply transition-all duration-500"
-                    />
+                    <div className="relative flex-1 min-h-0 m-2 mb-0 rounded-[20px] bg-zinc-50 p-3 flex items-center justify-center overflow-hidden">
+                      <img
+                        src={withApiOrigin(item.images?.[0])}
+                        alt=""
+                        className="max-w-full max-h-full object-contain mix-blend-multiply transition-all duration-500"
+                      />
 
-                    {!isCatalogItem && (
-                      <div className="absolute top-2 left-2 bg-white/85 backdrop-blur px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-[0.18em] text-zinc-900 shadow-sm">
-                        Ваше
-                      </div>
-                    )}
+                      {!isCatalogItem && (
+                        <div className="absolute top-2 left-2 bg-white/90 backdrop-blur px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-[0.18em] text-zinc-900 shadow-sm">
+                          Ваше
+                        </div>
+                      )}
+                    </div>
 
-                    <div className="absolute inset-x-0 bottom-0 p-2.5 md:p-3 bg-gradient-to-t from-white via-white/95 to-transparent">
-                      <div className="text-[11px] md:text-[10px] font-bold uppercase tracking-tight text-zinc-900 line-clamp-2 pr-7">
+                    <div className="shrink-0 p-3 pt-2 bg-white space-y-1.5">
+                      <div className="text-[10px] font-bold uppercase tracking-tight text-zinc-900 line-clamp-2 pr-7 min-h-[28px]">
                         {item.title || 'Без названия'}
                       </div>
 
                       {isCatalogItem ? (
                         <>
-                          <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-zinc-400 truncate">
+                          <div className="text-[8px] uppercase tracking-[0.18em] text-zinc-400 truncate">
                             {item.storeName || item.storeId || 'Каталог'}
                           </div>
-                          <div className="mt-1 text-[11px] font-medium text-zinc-500">
+                          <div className="text-[11px] font-black text-zinc-900">
                             {item.price ? `${item.price} ₽` : ''}
                           </div>
-                          <div className="mt-2 flex items-center gap-1.5">
+                          <div className="pt-1 grid grid-cols-2 gap-1.5">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openBuyForWardrobeItem(item);
                               }}
-                              className="h-7 flex-1 rounded-full bg-zinc-900 text-white text-[8px] font-black uppercase tracking-[0.14em]"
+                              className="h-8 rounded-full bg-zinc-900 text-white text-[8px] font-black uppercase tracking-[0.14em]"
                             >
                               Купить
                             </button>
@@ -1348,7 +1350,7 @@ const Wardrobe = () => {
                                 e.stopPropagation();
                                 navigate(buildSimilarCatalogHref(item));
                               }}
-                              className="h-7 flex-1 rounded-full bg-white/90 border border-zinc-200 text-zinc-700 text-[8px] font-black uppercase tracking-[0.14em]"
+                              className="h-8 rounded-full bg-white border border-zinc-200 text-zinc-700 text-[8px] font-black uppercase tracking-[0.14em]"
                             >
                               Похожие
                             </button>
@@ -1360,9 +1362,9 @@ const Wardrobe = () => {
                             e.stopPropagation();
                             navigate(buildSimilarCatalogHref(item));
                           }}
-                          className="mt-1 text-[10px] font-medium text-zinc-500 underline underline-offset-2"
+                          className="mt-1 h-8 w-full rounded-full bg-white border border-zinc-200 text-zinc-700 text-[8px] font-black uppercase tracking-[0.14em]"
                         >
-                          Найти похожее
+                          Похожие
                         </button>
                       )}
                     </div>
