@@ -280,6 +280,46 @@ function clearCatalogReturnState() {
   } catch {}
 }
 
+function findCatalogProductElement(productId: unknown) {
+  const id = String(productId || '');
+  if (!id) return null;
+
+  const nodes = Array.from(
+    document.querySelectorAll('[data-catalog-product-id]')
+  ) as HTMLElement[];
+
+  return nodes.find((node) => node.dataset.catalogProductId === id) || null;
+}
+
+function restoreCatalogReturnScroll(restoreState: any) {
+  const y = Math.max(0, Math.round(Number(restoreState?.scrollY || 0)));
+  const productId = String(restoreState?.productId || '');
+
+  const run = () => {
+    const el = findCatalogProductElement(productId);
+    if (el) {
+      el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+      return true;
+    }
+
+    if (y > 0) {
+      window.scrollTo({ top: y, left: 0, behavior: 'auto' });
+      return true;
+    }
+
+    return false;
+  };
+
+  window.requestAnimationFrame(() => {
+    run();
+    window.setTimeout(run, 120);
+    window.setTimeout(() => {
+      run();
+      clearCatalogReturnState();
+    }, 320);
+  });
+}
+
 
 type CatalogFallbackInfo = {
   active: boolean;
@@ -560,6 +600,22 @@ const Catalog = () => {
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogReloadKey, setCatalogReloadKey] = useState(0);
   const [catalogLoadStuck, setCatalogLoadStuck] = useState(false);
+
+  useEffect(() => {
+    if (!items.length) return;
+
+    const restoreState = readCatalogReturnState();
+    if (!restoreState) return;
+
+    const restoreHash = window.location.hash || '#/catalog';
+    if (restoreState.hash !== restoreHash) return;
+    if (Date.now() - Number(restoreState?.at || 0) >= 30 * 60 * 1000) {
+      clearCatalogReturnState();
+      return;
+    }
+
+    restoreCatalogReturnScroll(restoreState);
+  }, [items.length]);
 
   const hasProfileSize = Boolean(user?.sizeTop || user?.sizeBottom || user?.sizeShoes);
 
@@ -903,7 +959,7 @@ const Catalog = () => {
         const restoreHash = window.location.hash || '#/catalog';
         const shouldRestoreScroll = Boolean(
           restoreState?.hash === restoreHash &&
-          Number(restoreState?.scrollY || 0) > 0 &&
+          (restoreState?.productId || Number(restoreState?.scrollY || 0) > 0) &&
           Date.now() - Number(restoreState?.at || 0) < 30 * 60 * 1000
         );
         const restoreLimit = shouldRestoreScroll
@@ -1065,6 +1121,7 @@ const Catalog = () => {
     try {
       window.sessionStorage.setItem(CATALOG_RETURN_STORAGE_KEY, JSON.stringify({
         hash: window.location.hash || '#/catalog',
+        productId: String(product?.id || ''),
         scrollY: Math.max(0, Math.round(window.scrollY || 0)),
         loadedCount: Math.max(PAGE_SIZE, items.length || PAGE_SIZE),
         at: Date.now(),
@@ -1841,7 +1898,7 @@ const Catalog = () => {
             {items.map((p: any) => {
               const added = isInWardrobe(p);
               return (
-                <div key={p.id} className="group">
+                <div key={p.id} data-catalog-product-id={String(p.id)} className="group">
                   <div className="relative aspect-[3/4] rounded-[24px] overflow-hidden bg-zinc-50 p-6 border border-zinc-100 transition-all hover:shadow-xl hover:border-zinc-200">
                     {!!p.discountPercent && p.discountPercent > 0 && (
                       <div className="absolute top-4 left-4 z-10 bg-zinc-900 text-white px-2.5 py-1.5 rounded-full shadow-md">

@@ -131,6 +131,34 @@ const Header = () => {
   );
 };
 
+const RouteScrollManager = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    const path = location.pathname || '';
+
+    if (path.startsWith('/product/')) {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      });
+      return;
+    }
+
+    if (path === '/catalog') {
+      try {
+        if (window.sessionStorage.getItem('toptry.catalog.return.v1')) return;
+      } catch {}
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+  }, [location.pathname, location.search, location.key]);
+
+  return null;
+};
+
 const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isAdminPage = location.pathname === '/admin';
@@ -186,6 +214,7 @@ const App = () => {
     <TopTryErrorBoundary>
       <AppProvider>
       <Router>
+        <RouteScrollManager />
         <AppRoutes />
       </Router>
       </AppProvider>
