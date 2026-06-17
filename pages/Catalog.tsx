@@ -263,6 +263,23 @@ function hardRefreshCatalogDocument() {
   window.location.replace(`/?fresh=${fresh}${hash}`);
 }
 const CATALOG_FILTERS_STORAGE_KEY = 'toptry.catalog.filters.v1';
+const CATALOG_RETURN_STORAGE_KEY = 'toptry.catalog.return.v1';
+
+function readCatalogReturnState() {
+  try {
+    const raw = window.sessionStorage.getItem(CATALOG_RETURN_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearCatalogReturnState() {
+  try {
+    window.sessionStorage.removeItem(CATALOG_RETURN_STORAGE_KEY);
+  } catch {}
+}
+
 
 type CatalogFallbackInfo = {
   active: boolean;
@@ -882,8 +899,25 @@ const Catalog = () => {
       setCatalogLoadStuck(false);
       setCatalogError(null);
       try {
+        const restoreState = readCatalogReturnState();
+        const restoreHash = window.location.hash || '#/catalog';
+        const shouldRestoreScroll = Boolean(
+          restoreState?.hash === restoreHash &&
+          Number(restoreState?.scrollY || 0) > 0 &&
+          Date.now() - Number(restoreState?.at || 0) < 30 * 60 * 1000
+        );
+        const restoreLimit = shouldRestoreScroll
+          ? Math.max(
+              PAGE_SIZE,
+              Math.min(
+                240,
+                Math.ceil(Number(restoreState?.loadedCount || PAGE_SIZE) / PAGE_SIZE) * PAGE_SIZE
+              )
+            )
+          : PAGE_SIZE;
+
         const params = new URLSearchParams();
-        params.set('limit', String(PAGE_SIZE));
+        params.set('limit', String(restoreLimit));
         params.set('offset', '0');
 
         if (gender) params.set('gender', gender);
@@ -916,8 +950,16 @@ const Catalog = () => {
         setItems(products);
         setFallbackInfo(data?.fallback?.active ? data.fallback : null);
         setTotal(Number(data?.total || 0));
-        setOffset(Number(data?.offset || 0));
+        setOffset(Math.max(0, products.length - PAGE_SIZE));
         setHasMore(Boolean(data?.hasMore));
+
+        if (shouldRestoreScroll) {
+          const y = Math.max(0, Math.round(Number(restoreState?.scrollY || 0)));
+          window.setTimeout(() => {
+            window.scrollTo({ top: y, left: 0, behavior: 'auto' });
+            clearCatalogReturnState();
+          }, 80);
+        }
       } catch (e) {
         if (!cancelled) {
           console.error('[catalog] fetch error', e);
@@ -1019,6 +1061,19 @@ const Catalog = () => {
     unavailableMode,
   ]);
 
+  const openCatalogProduct = (product: any) => {
+    try {
+      window.sessionStorage.setItem(CATALOG_RETURN_STORAGE_KEY, JSON.stringify({
+        hash: window.location.hash || '#/catalog',
+        scrollY: Math.max(0, Math.round(window.scrollY || 0)),
+        loadedCount: Math.max(PAGE_SIZE, items.length || PAGE_SIZE),
+        at: Date.now(),
+      }));
+    } catch {}
+
+    navigate(`/product/${encodeURIComponent(product.id)}`);
+  };
+
   const isInWardrobe = (product: any) => {
     return wardrobe.some((item: any) => {
       if (!(item?.isCatalog || item?.sourceType === "catalog")) return false;
@@ -1069,6 +1124,7 @@ const Catalog = () => {
     setDraftSizeLoose(false);
     try {
       window.sessionStorage.removeItem(CATALOG_FILTERS_STORAGE_KEY);
+      window.sessionStorage.removeItem(CATALOG_RETURN_STORAGE_KEY);
     } catch {}
     window.history.replaceState(null, '', '#/catalog');
   };
@@ -1805,7 +1861,7 @@ const Catalog = () => {
 
                     <button
                       type="button"
-                      onClick={() => navigate(`/product/${encodeURIComponent(p.id)}`)}
+                      onClick={() => openCatalogProduct(p)}
                       className="w-full h-full block"
                       aria-label={`Открыть товар ${p.title || ''}`}
                     >
@@ -1852,7 +1908,7 @@ const Catalog = () => {
                     <div className="flex justify-between items-start">
                       <button
                         type="button"
-                        onClick={() => navigate(`/product/${encodeURIComponent(p.id)}`)}
+                        onClick={() => openCatalogProduct(p)}
                         className="min-w-0 flex-1 text-left"
                       >
                         <h3 className="text-[11px] font-bold uppercase tracking-tight truncate text-zinc-700 hover:text-zinc-950 min-h-[34px]">
@@ -1874,7 +1930,7 @@ const Catalog = () => {
                       </span>
                     </div>
                     <button
-                      onClick={() => navigate(`/product/${encodeURIComponent(p.id)}`)}
+                      onClick={() => openCatalogProduct(p)}
                       className="w-full mt-3 py-2.5 bg-white border border-zinc-900 rounded-full text-[9px] font-black uppercase tracking-[0.15em] hover:bg-zinc-900 hover:text-white transition-all active:scale-95 shadow-sm mt-auto min-h-[34px]"
                     >
                       Подробнее
