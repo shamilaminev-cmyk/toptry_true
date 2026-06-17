@@ -2355,6 +2355,10 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
       activeMaleShoesByMerchant.map((row) => [row.merchant, n(row._count?._all)])
     );
 
+    const disabledCatalogAlertMerchants = new Set(["snowqueen"]);
+    const shouldSkipCatalogMerchantAlert = (merchant) =>
+      disabledCatalogAlertMerchants.has(String(merchant || "").trim().toLowerCase());
+
     const alerts = [];
 
     for (const row of byMerchant) {
@@ -2369,6 +2373,8 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
 
     for (const row of maleShoesRisk || []) {
       const merchant = row.merchant || "";
+      if (shouldSkipCatalogMerchantAlert(merchant)) continue;
+
       const inactiveMaleShoes = n(row._count?._all);
       const activeMaleShoes = activeMaleShoesMap.get(merchant) || 0;
 
@@ -2383,6 +2389,8 @@ app.get("/api/admin/dashboard/summary", requireAuth, requireTopTryAdmin, async (
 
     for (const row of catalogMerchantHealth || []) {
       const merchant = row.merchant || "";
+      if (shouldSkipCatalogMerchantAlert(merchant)) continue;
+
       const activeTotalByMerchant = n(row.activeTotal);
       const inactiveUpdatedToday = n(row.inactiveUpdatedToday);
       const activeMaleShoes = n(row.activeMaleShoes);
@@ -13741,7 +13749,6 @@ const CATALOG_PIPELINE_MERCHANTS = [
   "sportcourt",
   "sportmaster",
   "finnflare",
-  "snowqueen",
 ];
 
 const CATALOG_PIPELINE_REPORT_DIR =
