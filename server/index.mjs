@@ -1518,7 +1518,7 @@ function mediaUrlToKey(value) {
 function avatarThumbUrlForMediaUrl(value, width = 96) {
   const key = mediaUrlToKey(value);
   if (!key) return "";
-  return `/media-thumb/${encodeURIComponent(key)}?w=${normalizeAvatarThumbWidth(width)}`;
+  return `/api/media-thumb/${encodeURIComponent(key)}?w=${normalizeAvatarThumbWidth(width)}`;
 }
 
 async function streamToBuffer(stream) {
@@ -1529,7 +1529,7 @@ async function streamToBuffer(stream) {
   return Buffer.concat(chunks);
 }
 
-app.get("/media-thumb/:key(*)", async (req, res) => {
+app.get("/api/media-thumb/:key(*)", async (req, res) => {
   try {
     const mediaKey = String(req.params.key || "").trim();
     const width = normalizeAvatarThumbWidth(req.query.w || 96);
