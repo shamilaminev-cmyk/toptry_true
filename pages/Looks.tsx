@@ -729,6 +729,16 @@ const Looks = () => {
                       <h2 className="text-[19px] md:text-3xl font-extrabold md:font-black uppercase tracking-[-0.03em] leading-[1.08]">
                         {look.title && look.title !== 'Сгенерированный образ' ? look.title : (sourceItems.length ? `Образ из ${sourceItems.length} вещей` : 'Образ')}
                       </h2>
+                      {totalPrice > 0 ? (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                            Товары образа
+                          </span>
+                          <span className="text-[15px] md:text-lg font-black tracking-tight text-zinc-900">
+                            {formatPriceRUB(totalPrice)}
+                          </span>
+                        </div>
+                      ) : null}
                       <div className="flex items-center gap-2 mt-3">
                         {authorHref ? (
                           <Link
