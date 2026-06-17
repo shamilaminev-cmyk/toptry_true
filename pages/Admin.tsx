@@ -3,11 +3,10 @@ import { Link } from 'react-router-dom';
 
 type AdminSummary = any;
 
-const API_ORIGIN = String(import.meta.env.VITE_API_ORIGIN || '').replace(/\/+$/, '');
-
 function adminApiUrl(path: string) {
-  const p = path.startsWith('/') ? path : `/${path}`;
-  return API_ORIGIN ? `${API_ORIGIN}${p}` : p;
+  if (!path) return path;
+  if (/^https?:\/\//i.test(path)) return path;
+  return path.startsWith('/') ? path : `/${path}`;
 }
 
 const numberFmt = new Intl.NumberFormat('ru-RU');
