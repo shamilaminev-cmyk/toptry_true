@@ -7118,7 +7118,7 @@ function normalizeCatalogCategory(raw) {
     return "DRESS";
   }
 
-  if (/(брюк|джинс|trouser|pants|shorts|юбк|skirt|legging|леггин|плавки|шорты)/i.test(s)) {
+  if (/(брюк|джинс|trouser|pants|shorts|юбк|skirt|legging|tights|леггин|легин|лосин|плавки|шорты)/i.test(s)) {
     return "BOTTOMS";
   }
 
@@ -7342,7 +7342,7 @@ function getCatalogClothingTypePredicates(clothingType) {
     ...(ct === "FORMAL_TROUSERS" ? [titleContains("BOTTOMS", "классическ"), titleContains("BOTTOMS", "костюмн"), titleContains("BOTTOMS", "formal")] : []),
     ...(ct === "JOGGERS" ? [titleContains("BOTTOMS", "джоггер"), titleContains("BOTTOMS", "jogger")] : []),
     ...(ct === "SHORTS" ? [titleContains("BOTTOMS", "шорт"), titleContains("BOTTOMS", "shorts")] : []),
-    ...(ct === "LEGGINGS" ? [titleContains("BOTTOMS", "леггин"), titleContains("BOTTOMS", "лосин"), titleContains("BOTTOMS", "legging")] : []),
+    ...(ct === "LEGGINGS" ? [titleContains("BOTTOMS", "леггин"), titleContains("BOTTOMS", "легин"), titleContains("BOTTOMS", "лосин"), titleContains("BOTTOMS", "legging"), titleContains("BOTTOMS", "tights")] : []),
     ...(ct === "DENIM" ? [titleContains("BOTTOMS", "джинс"), titleContains("BOTTOMS", "denim"), titleContains("BOTTOMS", "jeans")] : []),
     ...(ct === "SKIRTS" ? [titleContains("BOTTOMS", "юб"), titleContains("BOTTOMS", "skirt")] : []),
 
@@ -8215,13 +8215,13 @@ function inferCatalogTaxonomy(product) {
       else taxonomySubgroup = "OUTERWEAR";
     } else if (category === "BOTTOMS") {
       if (/(джинсов|denim).{0,40}(рубаш|сорочк|shirt)|(рубаш|сорочк|shirt).{0,40}(джинсов|denim)/.test(sourceText)) taxonomySubgroup = "DENIM_SHIRTS";
+      else if (/леггин|легин|лосин|legging|tights/.test(sourceText)) taxonomySubgroup = "LEGGINGS";
       else if (/юбк|skirt/.test(sourceText)) taxonomySubgroup = "SKIRTS";
       else if (/джинс|denim|jeans/.test(sourceText)) taxonomySubgroup = "DENIM";
       else if (/карго|cargo/.test(sourceText)) taxonomySubgroup = "CARGO_PANTS";
       else if (/чинос|chino/.test(sourceText)) taxonomySubgroup = "CHINOS";
       else if (/джоггер|jogger|треники|спортивн.*брюк/.test(sourceText)) taxonomySubgroup = "JOGGERS";
       else if (/шорт|shorts/.test(sourceText)) taxonomySubgroup = "SHORTS";
-      else if (/леггин|лосин|legging/.test(sourceText)) taxonomySubgroup = "LEGGINGS";
       else if (/классическ.*брюк|костюмн.*брюк|formal trouser|suit pants|dress pants|slacks/.test(sourceText)) taxonomySubgroup = "FORMAL_TROUSERS";
       else taxonomySubgroup = "TROUSERS";
     } else if (category === "TOPS") {
@@ -10239,11 +10239,18 @@ app.post("/api/admin/catalog/ai-review/apply-taxonomy-dryrun", async (req, res) 
 
 const CATALOG_AI_SAFE_TAXONOMY_RULES = [
   {
+    code: "TITLE_LEGGINGS",
+    toGroup: "CLOTHING",
+    toSubgroup: "LEGGINGS",
+    titleRe: /(леггинс|легинс|лосин|leggings|tights)/i,
+    rejectTitleRe: /(сумк|bag\b|bags\b|рюкзак|backpack)/i,
+  },
+  {
     code: "TITLE_BOTTOMS_TO_TROUSERS",
     toGroup: "CLOTHING",
     toSubgroup: "TROUSERS",
-    titleRe: /(брюки|шорты|легинс|велосипедк|полукомбинезон|pants|shorts|leggings|bib)/i,
-    rejectTitleRe: /(сумк|bag\b|bags\b|рюкзак|backpack)/i,
+    titleRe: /(брюки|велосипедк|полукомбинезон|pants|trousers|bib)/i,
+    rejectTitleRe: /(сумк|bag\b|bags\b|рюкзак|backpack|леггинс|легинс|лосин|leggings|tights)/i,
   },
   {
     code: "TITLE_OUTERWEAR",
