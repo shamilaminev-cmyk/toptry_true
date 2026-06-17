@@ -8185,7 +8185,88 @@ function inferCatalogTaxonomy(product) {
     };
   }
 
-  if (category === "SHOES") {
+  const inferCatalogTitleTaxonomyOverride = () => {
+    const titleText = String(product?.title || "").toLowerCase();
+    const has = (re) => re.test(titleText);
+
+    const hasEnglishDress =
+      has(/(^|[^a-z])dress([^a-z]|$)/i) &&
+      !has(/dress[-\s]?(pants|shirt|shoes?|boot|boots|sneakers?)/i);
+    const hasDress = has(/плать/i) || hasEnglishDress;
+    const hasSkirt = has(/юбк|skirt|skort/i);
+    const hasSkirtHybrid = has(/юбка[-\s]?шорты|skort|юбка[-\s]?брюки|юбка[-\s]?карго/i);
+    const hasHoodie = has(/худи|толстовк|свитшот|hoodie|sweatshirt/i);
+    const hasKnit = has(/джемпер|свитер|кардиган|водолазк|(^|[^a-z])(sweater|cardigan|turtleneck)([^a-z]|$)/i);
+    const hasPolo = has(/(^|[^a-zа-яё])поло([^a-zа-яё]|$)|(^|[^a-z])polo([^a-z]|$)/i);
+    const hasShorts = has(/шорты|shorts/i);
+    const hasLeggings = has(/леггинс|легинс|лосин|leggings|tights/i);
+    const hasTshirt = has(/(^|[^а-яё])(футболка|майка)([^а-яё]|$)|(^|[^a-z])(t[-\s]?shirt|tank top|tank)([^a-z]|$)/i);
+    const hasTrouser = has(/брюки|брюк|штаны|чинос|джоггер|карго|trousers|pants|chinos|joggers|cargo pants/i);
+    const hasDenim = has(/джинс|jeans|деним|denim/i);
+    const hasOuterwear = has(/куртк|пуховик|пальто|jacket|coat/i);
+    const hasShirt = has(/рубаш|сорочк|shirt/i);
+    const hasExplicitBag = has(/(^|[^a-zа-яё])(сумка|рюкзак|клатч|кошелек|кошелёк|портфель)([^a-zа-яё]|$)|(^|[^a-z])((leather|shoulder|crossbody|tote|shopper|mini|travel)[-\s]+bag|backpack|clutch|wallet)([^a-z]|$)/i);
+
+    const hasExplicitShoe = has(/балетк|ballerina|ballet|лофер|loafer|сандал|босонож|шл[её]панц|сланц|пантолет|sandal|slides?|flip[-\s]?flop|сапог|дутик|угги|ботин|полуботин|кроссов|кед|sneaker|trainer|boot/i);
+    const hasShoeFalsePositive = has(/bootcut|booty|буткат|брюк|джинс|pants|trousers|jeans|куртк|пуховик|jacket|coat|футболк|t[-\s]?shirt|tee|майк|city slide/i);
+
+    if (hasDress) return { category: "DRESS", taxonomyGroup: "CLOTHING", taxonomySubgroup: "DRESSES" };
+    if (hasSkirtHybrid || (hasSkirt && !hasDress)) return { category: "BOTTOMS", taxonomyGroup: "CLOTHING", taxonomySubgroup: "SKIRTS" };
+
+    if (hasExplicitShoe && !hasShoeFalsePositive) {
+      let taxonomySubgroup = "SHOES_OTHER";
+      if (has(/балетк|ballerina|ballet/i)) taxonomySubgroup = "BALLET";
+      else if (has(/лофер|loafer|мокас/i)) taxonomySubgroup = "LOAFERS";
+      else if (has(/сандал|босонож|шл[её]панц|сланц|пантолет|sandal|slides?|flip[-\s]?flop/i)) taxonomySubgroup = "SANDALS";
+      else if (has(/кроссов|кед|sneaker|trainer/i)) taxonomySubgroup = "SNEAKERS";
+      else if (has(/сапог|дутик|угги|tall boot|snow boot/i)) taxonomySubgroup = "TALL_BOOTS";
+      else if (has(/ботин|полуботин|boot/i)) taxonomySubgroup = "BOOTS";
+      return { category: "SHOES", taxonomyGroup: "SHOES", taxonomySubgroup };
+    }
+
+    if (hasHoodie) return { category: "TOPS", taxonomyGroup: "CLOTHING", taxonomySubgroup: "HOODIES" };
+    if (hasKnit && hasPolo) return { category: "TOPS", taxonomyGroup: "CLOTHING", taxonomySubgroup: "KNITWEAR" };
+    if (hasPolo) return { category: "TOPS", taxonomyGroup: "CLOTHING", taxonomySubgroup: "POLO" };
+    if (hasShorts && !hasSkirtHybrid) return { category: "BOTTOMS", taxonomyGroup: "CLOTHING", taxonomySubgroup: "SHORTS" };
+    if (hasLeggings) return { category: "BOTTOMS", taxonomyGroup: "CLOTHING", taxonomySubgroup: "LEGGINGS" };
+
+    if (hasTrouser && !hasSkirtHybrid && !hasLeggings && !hasDenim && !hasShorts && !hasOuterwear && !hasShirt) {
+      let taxonomySubgroup = "TROUSERS";
+      if (has(/джоггер|jogger|joggers/i)) taxonomySubgroup = "JOGGERS";
+      else if (has(/карго|cargo/i)) taxonomySubgroup = "CARGO_PANTS";
+      else if (has(/чинос|chino|chinos/i)) taxonomySubgroup = "CHINOS";
+      return { category: "BOTTOMS", taxonomyGroup: "CLOTHING", taxonomySubgroup };
+    }
+
+    if (hasKnit && !hasHoodie && !hasPolo && !has(/флис|fleece|пальто[-\s]?кардиган|пальто|coat/i)) {
+      let taxonomySubgroup = "KNITWEAR";
+      if (has(/кардиган|cardigan/i)) taxonomySubgroup = "CARDIGANS";
+      else if (has(/водолазк|turtleneck/i)) taxonomySubgroup = "TURTLENECKS";
+      else if (has(/свитер|sweater/i)) taxonomySubgroup = "SWEATERS";
+      return { category: "TOPS", taxonomyGroup: "CLOTHING", taxonomySubgroup };
+    }
+
+    if (hasTshirt && !hasPolo && !hasDress && !hasHoodie && !hasExplicitShoe) {
+      return { category: "TOPS", taxonomyGroup: "CLOTHING", taxonomySubgroup: "TSHIRTS" };
+    }
+
+    if (hasExplicitBag && !has(/baggy/i)) {
+      const bagSourceText = `${sourceText} ${noisyText}`;
+      const taxonomySubgroup = inferCatalogBagSubgroupFromText(bagSourceText);
+      return { category: "ACCESSORIES", taxonomyGroup: "BAGS", taxonomySubgroup };
+    }
+
+    return null;
+  };
+
+  const titleTaxonomyOverride = inferCatalogTitleTaxonomyOverride();
+  let taxonomyCategoryOverride = "";
+
+  if (titleTaxonomyOverride) {
+    taxonomyGroup = titleTaxonomyOverride.taxonomyGroup;
+    taxonomySubgroup = titleTaxonomyOverride.taxonomySubgroup;
+    taxonomyCategoryOverride = titleTaxonomyOverride.category || "";
+  } else if (category === "SHOES") {
     taxonomyGroup = "SHOES";
 
     if (/балетк|ballet/.test(sourceText)) taxonomySubgroup = "BALLET";
@@ -8269,9 +8350,11 @@ function inferCatalogTaxonomy(product) {
 
   const canPatchCategory = ["SHOES", "TOPS", "BOTTOMS", "JACKETS", "DRESS", "ACCESSORIES"].includes(category);
   const categoryPatch =
-    canPatchCategory && category && category !== originalCategory
-      ? { category }
-      : {};
+    taxonomyCategoryOverride && taxonomyCategoryOverride !== originalCategory
+      ? { category: taxonomyCategoryOverride }
+      : canPatchCategory && category && category !== originalCategory
+        ? { category }
+        : {};
 
   return {
     ...categoryPatch,
