@@ -164,13 +164,13 @@ const Home: React.FC = () => {
                 />
               ))}
 
-              <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-2">
+              <div className="absolute inset-x-0 bottom-1.5 sm:bottom-2 flex items-center justify-center gap-2">
                 {HERO_SLIDES.map((slide, idx) => (
                   <button
                     key={slide.src}
                     type="button"
                     onClick={() => setHeroSlideIndex(idx)}
-                    className={`h-2.5 rounded-full transition-all ${idx === heroSlideIndex ? 'w-8 bg-zinc-900' : 'w-2.5 bg-zinc-300 hover:bg-zinc-400'}`}
+                    className={`h-2 rounded-full transition-all ${idx === heroSlideIndex ? 'w-7 bg-zinc-500' : 'w-2 bg-zinc-200 hover:bg-zinc-300'}`}
                     aria-label={`Показать слайд ${idx + 1}`}
                   />
                 ))}
