@@ -183,13 +183,13 @@ const Home: React.FC = () => {
               </p>
 
               <h1 className="max-w-[560px] text-[30px] leading-[0.98] tracking-[-0.055em] text-zinc-950 sm:text-5xl md:text-[56px] lg:text-[58px] font-black">
-                Посмотрите на себя.
+                Посмотрите на себя —
                 <br />
-                Потом решайте.
+                потом решайте
               </h1>
 
               <p className="mt-4 max-w-[460px] text-[14px] md:text-[17px] leading-6 md:leading-8 text-zinc-600">
-                Примеряйте свои вещи и товары из разных магазинов, собирайте образы и спрашивайте мнение — до покупки.
+                Примеряйте свои вещи и товары из разных магазинов, собирайте образы и узнавайте мнение окружающих до покупки
               </p>
 
               <div className="mt-5 grid grid-cols-2 gap-3 sm:flex sm:flex-row">
@@ -219,19 +219,19 @@ const Home: React.FC = () => {
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">01</p>
             <h2 className="mt-3 text-base font-black">Примерьте на себе</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Соберите образ из своих вещей и товаров из каталога.</p>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Соберите образ из своих вещей и товаров из каталога</p>
           </div>
 
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">02</p>
             <h2 className="mt-3 text-base font-black">Спросите мнение</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Покажите образ тем, кому доверяете, или опубликуйте его в ленте.</p>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Покажите образ тем, кому доверяете, или опубликуйте его в ленте</p>
           </div>
 
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">03</p>
             <h2 className="mt-3 text-base font-black">Выберите уверенно</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Покупайте после примерки и обратной связи, а не наугад.</p>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Покупайте после примерки и обратной связи, а не наугад</p>
           </div>
         </div>
       </section>
