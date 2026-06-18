@@ -5,6 +5,13 @@ import { useAppState } from '../store';
 import { withApiOrigin } from '../utils/withApiOrigin';
 import { catalogImageSrc } from '../utils/catalogImageSrc';
 
+const HERO_SLIDES = [
+  { src: '/hero/Hero1.png', alt: 'Женский образ в современном интерфейсе TopTry' },
+  { src: '/hero/Hero2.png', alt: 'Мужской образ в современном интерфейсе TopTry' },
+  { src: '/hero/Hero3.png', alt: 'Молодёжный образ в современном интерфейсе TopTry' },
+  { src: '/hero/Hero4.png', alt: 'Классический образ в современном интерфейсе TopTry' },
+];
+
 const Home: React.FC = () => {
   const { user, looks } = useAppState();
   const [feedLooks, setFeedLooks] = useState<any[]>([]);
@@ -12,6 +19,7 @@ const Home: React.FC = () => {
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
   const [dealItems, setDealItems] = useState<any[]>([]);
   const [priceDropItems, setPriceDropItems] = useState<any[]>([]);
+  const [heroSlideIndex, setHeroSlideIndex] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -23,6 +31,16 @@ const Home: React.FC = () => {
         setFeedLooks([]);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setHeroSlideIndex((prev) => (prev + 1) % HERO_SLIDES.length);
+    }, 2800);
+
+    return () => {
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -135,30 +153,45 @@ const Home: React.FC = () => {
       <section className="px-4 pt-2 md:pt-5 md:px-8 md:max-w-7xl md:mx-auto">
         <div className="overflow-hidden rounded-[30px] md:rounded-[36px] border border-zinc-200 bg-[#f5f5f5] shadow-[0_20px_80px_rgba(15,23,42,0.06)]">
           <div className="lg:grid lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
-            <div className="relative h-[285px] sm:h-[360px] md:h-[520px] lg:order-2 lg:h-auto lg:min-h-[520px] bg-zinc-100">
-              <img
-                src="/hero-toptry-v4.webp"
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover object-[58%_center]"
-              />
-              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/10 to-transparent lg:hidden" />
+            <div className="relative h-[320px] sm:h-[420px] md:h-[560px] lg:order-2 lg:h-auto lg:min-h-[560px] bg-white">
+              {HERO_SLIDES.map((slide, idx) => (
+                <img
+                  key={slide.src}
+                  src={slide.src}
+                  alt={slide.alt}
+                  aria-hidden={idx !== heroSlideIndex}
+                  className={`absolute inset-0 h-full w-full object-contain object-center transition-opacity duration-700 ${idx === heroSlideIndex ? 'opacity-100' : 'opacity-0'}`}
+                />
+              ))}
+
+              <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-2">
+                {HERO_SLIDES.map((slide, idx) => (
+                  <button
+                    key={slide.src}
+                    type="button"
+                    onClick={() => setHeroSlideIndex(idx)}
+                    className={`h-2.5 rounded-full transition-all ${idx === heroSlideIndex ? 'w-8 bg-zinc-900' : 'w-2.5 bg-zinc-300 hover:bg-zinc-400'}`}
+                    aria-label={`Показать слайд ${idx + 1}`}
+                  />
+                ))}
+              </div>
             </div>
 
             <div className="lg:order-1 flex flex-col justify-center px-6 py-5 sm:p-8 lg:p-10 xl:p-12 bg-white lg:bg-[#f5f5f5]">
               <p className="mb-4 text-[10px] font-black uppercase tracking-[0.26em] text-zinc-400">
-                Виртуальная примерочная
+                Персональный стиль
               </p>
 
-              <h1 className="max-w-[520px] text-[30px] leading-[0.98] tracking-[-0.055em] text-zinc-950 sm:text-5xl md:text-[56px] lg:text-[58px] font-black">
-                Примеряйте вещи
+              <h1 className="max-w-[560px] text-[30px] leading-[0.98] tracking-[-0.055em] text-zinc-950 sm:text-5xl md:text-[56px] lg:text-[58px] font-black">
+                Собирайте свой образ
                 <br />
-                из разных магазинов
+                из своих вещей
                 <br />
-                на своём аватаре
+                и каталога
               </h1>
 
-              <p className="mt-4 max-w-[430px] text-[14px] md:text-[17px] leading-6 md:leading-8 text-zinc-600">
-                Соберите образ, сравните варианты и покупайте только то, что действительно подходит.
+              <p className="mt-4 max-w-[460px] text-[14px] md:text-[17px] leading-6 md:leading-8 text-zinc-600">
+                Добавляйте вещи из своего гардероба, сочетайте их с товарами из разных магазинов и примеряйте всё на себе перед покупкой.
               </p>
 
               <div className="mt-5 grid grid-cols-2 gap-3 sm:flex sm:flex-row">
@@ -177,18 +210,18 @@ const Home: React.FC = () => {
                 </Link>
               </div>
 
-              <div className="mt-6 hidden sm:grid grid-cols-3 gap-2 max-w-[430px]">
+              <div className="mt-6 hidden sm:grid grid-cols-3 gap-2 max-w-[460px]">
+                <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Свой гардероб</p>
+                  <p className="mt-1 text-xs font-bold text-zinc-700">добавляйте свои вещи</p>
+                </div>
                 <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
                   <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Каталог</p>
-                  <p className="mt-1 text-xs font-bold text-zinc-700">разные продавцы</p>
+                  <p className="mt-1 text-xs font-bold text-zinc-700">разные магазины</p>
                 </div>
                 <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
                   <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Примерка</p>
-                  <p className="mt-1 text-xs font-bold text-zinc-700">на аватаре</p>
-                </div>
-                <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Выбор</p>
-                  <p className="mt-1 text-xs font-bold text-zinc-700">без сомнений</p>
+                  <p className="mt-1 text-xs font-bold text-zinc-700">на себе перед покупкой</p>
                 </div>
               </div>
             </div>
@@ -200,20 +233,20 @@ const Home: React.FC = () => {
         <div className="grid md:grid-cols-3 gap-3">
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">01</p>
-            <h2 className="mt-3 text-base font-black">Примерьте на себе</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Загрузите аватар и посмотрите, как вещь выглядит именно на вас.</p>
+            <h2 className="mt-3 text-base font-black">Добавьте свои вещи</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Загрузите фото своих вещей или выберите товары из каталога.</p>
           </div>
 
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">02</p>
-            <h2 className="mt-3 text-base font-black">Сравните варианты</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Соберите несколько образов и спокойно сравните их между собой.</p>
+            <h2 className="mt-3 text-base font-black">Соберите образ</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Комбинируйте свой гардероб с вещами из разных магазинов.</p>
           </div>
 
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">03</p>
             <h2 className="mt-3 text-base font-black">Выберите уверенно</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Заказывайте только те вещи, которые прошли вашу личную проверку.</p>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Примеряйте на себе и покупайте только то, что действительно подходит.</p>
           </div>
         </div>
       </section>
@@ -222,19 +255,19 @@ const Home: React.FC = () => {
         <Link to="/create-look" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Plus className="w-7 h-7" />
           <h2 className="mt-5 text-lg font-black">AI-образ</h2>
-          <p className="mt-2 text-sm text-zinc-500">Соберите образ из вещей и примерьте его на себе.</p>
+          <p className="mt-2 text-sm text-zinc-500">Соберите образ из своих вещей и каталога и примерьте его на себе.</p>
         </Link>
 
         <Link to="/catalog" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Catalog className="w-7 h-7" />
           <h2 className="mt-5 text-lg font-black">Каталог</h2>
-          <p className="mt-2 text-sm text-zinc-500">Выбирайте одежду, обувь и аксессуары из каталога.</p>
+          <p className="mt-2 text-sm text-zinc-500">Выбирайте вещи у разных продавцов и добавляйте их в свой образ.</p>
         </Link>
 
         <Link to="/looks" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Looks className="w-7 h-7" />
           <h2 className="mt-5 text-lg font-black">Лента</h2>
-          <p className="mt-2 text-sm text-zinc-500">Смотрите опубликованные образы и сохраняйте идеи.</p>
+          <p className="mt-2 text-sm text-zinc-500">Смотрите опубликованные образы, сохраняйте идеи и собирайте свои сочетания.</p>
         </Link>
       </section>
 
