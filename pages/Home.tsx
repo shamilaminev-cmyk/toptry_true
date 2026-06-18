@@ -149,7 +149,7 @@ const Home: React.FC = () => {
   }, [feedLooks, looks, user?.catalogGenderPreference]);
 
   return (
-    <div className="pb-28 md:pb-10">
+    <div className="pb-[5.5rem] md:pb-8">
       <section className="px-4 pt-2 md:pt-5 md:px-8 md:max-w-7xl md:mx-auto">
         <div className="overflow-hidden rounded-[30px] md:rounded-[36px] border border-zinc-200 bg-[#f5f5f5] shadow-[0_20px_80px_rgba(15,23,42,0.06)]">
           <div className="lg:grid lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
