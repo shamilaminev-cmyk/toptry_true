@@ -179,51 +179,36 @@ const Home: React.FC = () => {
 
             <div className="lg:order-1 flex flex-col justify-center px-6 py-5 sm:p-8 lg:p-10 xl:p-12 bg-white lg:bg-[#f5f5f5]">
               <p className="mb-4 text-[10px] font-black uppercase tracking-[0.26em] text-zinc-400">
-                Персональный стиль
+                Социальная AI-примерочная
               </p>
 
               <h1 className="max-w-[560px] text-[30px] leading-[0.98] tracking-[-0.055em] text-zinc-950 sm:text-5xl md:text-[56px] lg:text-[58px] font-black">
-                Собирайте свой образ
+                Посмотрите на себя.
                 <br />
-                из своих вещей
-                <br />
-                и каталога
+                Потом решайте.
               </h1>
 
               <p className="mt-4 max-w-[460px] text-[14px] md:text-[17px] leading-6 md:leading-8 text-zinc-600">
-                Добавляйте вещи из своего гардероба, сочетайте их с товарами из разных магазинов и примеряйте всё на себе перед покупкой.
+                Примеряйте свои вещи и товары из разных магазинов, собирайте образы и спрашивайте мнение — до покупки.
               </p>
 
               <div className="mt-5 grid grid-cols-2 gap-3 sm:flex sm:flex-row">
                 <Link
-                  to="/catalog"
-                  className="bg-zinc-950 text-white rounded-full px-4 py-3.5 sm:px-7 sm:py-4 text-[13px] sm:text-sm font-black text-center transition hover:opacity-90"
-                >
-                  Открыть каталог
-                </Link>
-
-                <Link
                   to={user ? '/create-look' : '/auth'}
-                  className="bg-white text-zinc-950 border border-zinc-200 rounded-full px-4 py-3.5 sm:px-7 sm:py-4 text-[13px] sm:text-sm font-black text-center transition hover:bg-zinc-100"
+                  className="bg-zinc-950 text-white rounded-full px-4 py-3.5 sm:px-7 sm:py-4 text-[13px] sm:text-sm font-black text-center transition hover:opacity-90"
                 >
                   Создать образ
                 </Link>
+
+                <Link
+                  to="/catalog"
+                  className="bg-white text-zinc-950 border border-zinc-200 rounded-full px-4 py-3.5 sm:px-7 sm:py-4 text-[13px] sm:text-sm font-black text-center transition hover:bg-zinc-100"
+                >
+                  Открыть каталог
+                </Link>
               </div>
 
-              <div className="mt-6 hidden sm:grid grid-cols-3 gap-2 max-w-[460px]">
-                <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Свой гардероб</p>
-                  <p className="mt-1 text-xs font-bold text-zinc-700">добавляйте свои вещи</p>
-                </div>
-                <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Каталог</p>
-                  <p className="mt-1 text-xs font-bold text-zinc-700">разные магазины</p>
-                </div>
-                <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-400">Примерка</p>
-                  <p className="mt-1 text-xs font-bold text-zinc-700">на себе перед покупкой</p>
-                </div>
-              </div>
+
             </div>
           </div>
         </div>
@@ -233,20 +218,20 @@ const Home: React.FC = () => {
         <div className="grid md:grid-cols-3 gap-3">
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">01</p>
-            <h2 className="mt-3 text-base font-black">Добавьте свои вещи</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Загрузите фото своих вещей или выберите товары из каталога.</p>
+            <h2 className="mt-3 text-base font-black">Примерьте на себе</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Соберите образ из своих вещей и товаров из каталога.</p>
           </div>
 
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">02</p>
-            <h2 className="mt-3 text-base font-black">Соберите образ</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Комбинируйте свой гардероб с вещами из разных магазинов.</p>
+            <h2 className="mt-3 text-base font-black">Спросите мнение</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Покажите образ тем, кому доверяете, или опубликуйте его в ленте.</p>
           </div>
 
           <div className="rounded-[24px] bg-zinc-50 border border-zinc-100 px-5 py-4">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">03</p>
             <h2 className="mt-3 text-base font-black">Выберите уверенно</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Примеряйте на себе и покупайте только то, что действительно подходит.</p>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Покупайте после примерки и обратной связи, а не наугад.</p>
           </div>
         </div>
       </section>
