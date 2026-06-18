@@ -240,19 +240,19 @@ const Home: React.FC = () => {
         <Link to="/create-look" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Plus className="w-7 h-7" />
           <h2 className="mt-5 text-lg font-black">AI-образ</h2>
-          <p className="mt-2 text-sm text-zinc-500">Соберите образ из своих вещей и каталога и примерьте его на себе.</p>
+          <p className="mt-2 text-sm text-zinc-500">Соберите образ из своих вещей и каталога и примерьте его на себе</p>
         </Link>
 
         <Link to="/catalog" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Catalog className="w-7 h-7" />
           <h2 className="mt-5 text-lg font-black">Каталог</h2>
-          <p className="mt-2 text-sm text-zinc-500">Выбирайте вещи у разных продавцов и добавляйте их в свой образ.</p>
+          <p className="mt-2 text-sm text-zinc-500">Выбирайте вещи у разных продавцов и добавляйте их в свой образ</p>
         </Link>
 
         <Link to="/looks" className="rounded-[28px] border border-zinc-100 p-6 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
           <ICONS.Looks className="w-7 h-7" />
           <h2 className="mt-5 text-lg font-black">Лента</h2>
-          <p className="mt-2 text-sm text-zinc-500">Смотрите опубликованные образы, сохраняйте идеи и собирайте свои сочетания.</p>
+          <p className="mt-2 text-sm text-zinc-500">Смотрите опубликованные образы, сохраняйте идеи и собирайте свои сочетания</p>
         </Link>
       </section>
 
