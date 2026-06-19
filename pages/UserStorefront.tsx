@@ -7,6 +7,25 @@ const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || '';
 
 const apiUrl = (path: string) => {
   if (/^https?:\/\//i.test(path)) return path;
+
+  // For production storefront pages, force same-origin /api.
+  // This avoids browser CORS/credentials failures on public profile fetches
+  // while keeping local/dev behavior unchanged.
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isToptryHost =
+      host === 'toptry.ru' ||
+      host === 'www.toptry.ru' ||
+      host === 'staging.toptry.ru';
+
+    if (
+      isToptryHost &&
+      (path.startsWith('/api/') || path === '/api' || path.startsWith('/api?'))
+    ) {
+      return `${window.location.origin}${path}`;
+    }
+  }
+
   return `${API_ORIGIN}${path}`;
 };
 
