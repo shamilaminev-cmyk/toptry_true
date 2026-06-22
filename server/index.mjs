@@ -4137,10 +4137,20 @@ app.post("/api/wardrobe/extract", async (req, res) => {
           ? { "x-toptry-internal-secret": AI_GATEWAY_SECRET }
           : {};
         const { resp, text } = await proxyJsonPost(upstream, req.body, headers);
-        const ct = resp.headers.get("content-type");
-        if (ct) res.setHeader("content-type", ct);
-        res.status(resp.status).send(text);
-        return;
+
+        // The AI gateway may not expose wardrobe extraction.
+        // On a route miss, continue to the direct Gemini flow below.
+        if (resp.status !== 404 && resp.status !== 405) {
+          const ct = resp.headers.get("content-type");
+          if (ct) res.setHeader("content-type", ct);
+          res.status(resp.status).send(text);
+          return;
+        }
+
+        console.warn(
+          "[toptry] wardrobe/extract unavailable on AI gateway; falling back to direct provider",
+          { status: resp.status, upstream }
+        );
       } catch (e) {
         return res.status(502).json({
           error: "AI proxy request failed",
