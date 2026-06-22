@@ -5876,6 +5876,44 @@ app.get("/api/looks/:id", async (req, res) => {
   }
 });
 
+app.patch("/api/looks/:id/title", requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    const userId = req.auth.userId;
+    const title = String(req.body?.title || "").replace(/\s+/g, " ").trim();
+
+    if (!title) {
+      return res.status(400).json({ error: "Название образа обязательно" });
+    }
+
+    if (title.length > 80) {
+      return res.status(400).json({ error: "Название образа может содержать до 80 символов" });
+    }
+
+    const existing = await prisma.look.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: "Образ не найден" });
+    }
+
+    const row = await prisma.look.update({
+      where: { id },
+      data: { title },
+      include: {
+        user: { select: { id: true, username: true, avatarUrl: true, publicSlug: true, publicDisplayName: true } },
+      },
+    });
+
+    return res.json({ ok: true, look: await mapLookForApi(row, userId) });
+  } catch (err) {
+    console.error("[toptry] /api/looks/:id/title error", err);
+    return res.status(500).json({ error: err?.message || "Не удалось изменить название образа" });
+  }
+});
+
 app.post("/api/looks/:id/publish", requireAuth, async (req, res) => {
   try {
     const id = String(req.params.id || "");

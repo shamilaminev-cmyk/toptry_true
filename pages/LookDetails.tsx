@@ -210,6 +210,9 @@ const LookDetails = () => {
   const [publishBusy, setPublishBusy] = useState(false);
   const [viewerSaved, setViewerSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [titleBusy, setTitleBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportProblemType, setReportProblemType] = useState('Одежда наложилась плохо');
   const [reportMessage, setReportMessage] = useState('');
@@ -223,6 +226,8 @@ const LookDetails = () => {
   const [collectionError, setCollectionError] = useState('');
   const commentsRef = useRef<HTMLElement | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const titleEditCancelledRef = useRef(false);
 
   const quickComments = [
     'Классный образ',
@@ -314,6 +319,15 @@ const LookDetails = () => {
     };
   }, [look?.id, look?.isPublic, localLooks]);
 
+  useEffect(() => {
+    if (!isEditingTitle) return;
+
+    window.setTimeout(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    }, 0);
+  }, [isEditingTitle]);
+
   if (loading) return <div className="p-10 text-center text-zinc-400">Загрузка...</div>;
   if (!look) return <div className="p-10 text-center">Образ не найден</div>;
 
@@ -322,6 +336,76 @@ const LookDetails = () => {
       ? look.sourceItems
       : products.filter((p) => (look.items || look.itemIds || []).includes(p.id));
   const isOwnLook = !!localLooks.find((l) => String(l.id) === String(look?.id));
+
+  const startTitleEditing = () => {
+    if (!isOwnLook || !look?.id || titleBusy) return;
+
+    titleEditCancelledRef.current = false;
+    setTitleDraft(String(look.title || '').trim());
+    setIsEditingTitle(true);
+  };
+
+  const cancelTitleEditing = () => {
+    titleEditCancelledRef.current = true;
+    setIsEditingTitle(false);
+    setTitleDraft('');
+  };
+
+  const saveLookTitle = async () => {
+    if (!look?.id || titleBusy) return;
+
+    const title = String(titleDraft || '').replace(/\s+/g, ' ').trim();
+
+    if (!title) {
+      showToast('Введите название образа');
+      return;
+    }
+
+    if (title.length > 80) {
+      showToast('Название может содержать до 80 символов');
+      return;
+    }
+
+    if (title === String(look.title || '').trim()) {
+      setIsEditingTitle(false);
+      return;
+    }
+
+    setTitleBusy(true);
+
+    try {
+      const resp = await fetch(`/api/looks/${encodeURIComponent(String(look.id))}/title`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось изменить название');
+      }
+
+      setLook((prev: any) => prev ? { ...prev, ...(data?.look || {}), title } : prev);
+      setIsEditingTitle(false);
+      setTitleDraft('');
+      showToast('Название образа изменено');
+    } catch (err: any) {
+      showToast(err?.message || 'Не удалось изменить название');
+    } finally {
+      setTitleBusy(false);
+    }
+  };
+
+  const handleTitleInputBlur = () => {
+    if (titleEditCancelledRef.current) {
+      titleEditCancelledRef.current = false;
+      return;
+    }
+
+    void saveLookTitle();
+  };
 
   const handleTryOn = () => {
     if (!look?.sourceItems?.length) {
@@ -651,8 +735,70 @@ const LookDetails = () => {
 
         <div className="p-6 space-y-8 md:p-0 md:pb-24">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold uppercase tracking-tight">{look.title}</h1>
+          <div className="min-w-0">
+            {isEditingTitle ? (
+              <div className="flex items-center gap-2">
+                <input
+                  ref={titleInputRef}
+                  value={titleDraft}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  onBlur={handleTitleInputBlur}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void saveLookTitle();
+                    }
+
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      cancelTitleEditing();
+                    }
+                  }}
+                  maxLength={80}
+                  aria-label="Название образа"
+                  disabled={titleBusy}
+                  className="min-w-0 w-full max-w-md rounded-xl border border-zinc-300 bg-white px-3 py-2 text-2xl font-bold tracking-tight outline-none focus:border-zinc-900 disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  aria-label="Сохранить название"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void saveLookTitle()}
+                  disabled={titleBusy}
+                  className="shrink-0 rounded-full border border-zinc-900 bg-zinc-900 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  ✓
+                </button>
+                <button
+                  type="button"
+                  aria-label="Отменить изменение названия"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={cancelTitleEditing}
+                  disabled={titleBusy}
+                  className="shrink-0 rounded-full border border-zinc-200 px-3 py-2 text-sm font-bold text-zinc-500 disabled:opacity-60"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2">
+                <h1 className="text-2xl font-bold tracking-tight">{look.title || 'Образ TopTry'}</h1>
+                {isOwnLook ? (
+                  <button
+                    type="button"
+                    onClick={startTitleEditing}
+                    aria-label="Изменить название образа"
+                    title="Изменить название"
+                    className="mt-1 shrink-0 rounded-full border border-zinc-200 p-2 text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-900"
+                  >
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
+            )}
             <div className="flex items-center gap-2 mt-1">
               {look.authorAvatar ? (
                 <img src={withApiOrigin(look.authorAvatar)} alt="" className="w-5 h-5 rounded-full object-cover" />
