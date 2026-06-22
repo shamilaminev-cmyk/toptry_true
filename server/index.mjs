@@ -4123,201 +4123,142 @@ app.post("/api/tryon", async (req, res) => {
   }
 });
 
-/**
- * POST /api/wardrobe/extract
- */
-app.post("/api/wardrobe/extract", async (req, res) => {
+function parseWardrobeJsonFromText(text, fallback) {
   try {
-    const AI_PROXY_URL = AI_GATEWAY_URL;
-
-    if (AI_PROXY_URL) {
+    return JSON.parse(text);
+  } catch {
+    const first = String(text || "").indexOf("{");
+    const last = String(text || "").lastIndexOf("}");
+    if (first !== -1 && last !== -1 && last > first) {
       try {
-        const upstream = `${AI_PROXY_URL}/api/wardrobe/extract`;
-        const headers = AI_GATEWAY_SECRET
-          ? { "x-toptry-internal-secret": AI_GATEWAY_SECRET }
-          : {};
-        const { resp, text } = await proxyJsonPost(upstream, req.body, headers);
-
-        // The AI gateway may not expose wardrobe extraction.
-        // On a route miss, continue to the direct Gemini flow below.
-        if (resp.status !== 404 && resp.status !== 405) {
-          const ct = resp.headers.get("content-type");
-          if (ct) res.setHeader("content-type", ct);
-          res.status(resp.status).send(text);
-          return;
-        }
-
-        console.warn(
-          "[toptry] wardrobe/extract unavailable on AI gateway; falling back to direct provider",
-          { status: resp.status, upstream }
-        );
-      } catch (e) {
-        return res.status(502).json({
-          error: "AI proxy request failed",
-          details: e?.message || String(e),
-        });
-      }
+        return JSON.parse(String(text).slice(first, last + 1));
+      } catch {}
     }
+  }
+  return fallback;
+}
 
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server" });
+function normalizeWardrobeBox(box) {
+  if (!box || typeof box !== "object") return undefined;
+
+  const toUnit = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return undefined;
+    const normalized = n > 1 ? n / 1000 : n;
+    return Math.max(0, Math.min(1, normalized));
+  };
+
+  const x = toUnit(box.x);
+  const y = toUnit(box.y);
+  const w = toUnit(box.w);
+  const h = toUnit(box.h);
+
+  if ([x, y, w, h].some((value) => value === undefined)) return undefined;
+  if (w <= 0.02 || h <= 0.02) return undefined;
+
+  const clampedW = Math.min(w, 1 - x);
+  const clampedH = Math.min(h, 1 - y);
+  if (clampedW <= 0.02 || clampedH <= 0.02) return undefined;
+
+  return { x, y, w: clampedW, h: clampedH };
+}
+
+function imageDataUrlFromGeminiResponse(response) {
+  const parts = response?.candidates?.[0]?.content?.parts || [];
+
+  for (const part of parts) {
+    if (part?.inlineData?.data) {
+      const mimeType = part.inlineData.mimeType || "image/png";
+      return `data:${mimeType};base64,${part.inlineData.data}`;
     }
+  }
 
-    const { photoDataUrl, hintCategory, hintGender, targetItem } = req.body || {};
-    if (!photoDataUrl) {
-      return res.status(400).json({ error: "photoDataUrl is required" });
-    }
+  return "";
+}
 
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const photo = await imageToBase64(photoDataUrl);
+async function runWardrobeExtractAi(payload) {
+  if (!GEMINI_API_KEY) {
+    const err = new Error("GEMINI_API_KEY is not configured on the AI gateway");
+    err.statusCode = 503;
+    throw err;
+  }
 
-    async function cleanupCutoutDataUrl(inputDataUrl) {
-      let out = inputDataUrl;
-      try {
-        if (AVATAR_BG_REMOVER_URL) {
-          const geminiCutoutBuf = Buffer.from(String(out).split(",")[1] || "", "base64");
-          const cleanedCutoutPng = await bgRemoveToPng(geminiCutoutBuf);
-          const cleanedOnWhite = await sharp(cleanedCutoutPng, { failOnError: false })
-            .ensureAlpha()
-            .flatten({ background: "#ffffff" })
-            .png()
-            .toBuffer();
-          out = "data:image/png;base64," + cleanedOnWhite.toString("base64");
-        } else {
-          const geminiCutoutBuf = Buffer.from(String(out).split(",")[1] || "", "base64");
-          const cleanedOnWhite = await sharp(geminiCutoutBuf, { failOnError: false })
-            .ensureAlpha()
-            .flatten({ background: "#ffffff" })
-            .png()
-            .toBuffer();
-          out = "data:image/png;base64," + cleanedOnWhite.toString("base64");
-        }
-      } catch (e) {
-        console.warn("[toptry] wardrobe/extract post-process failed:", e?.message || e);
-      }
-      return out;
-    }
+  const { photoDataUrl, hintCategory, hintGender, targetItem } = payload || {};
+  if (!photoDataUrl) {
+    const err = new Error("photoDataUrl is required");
+    err.statusCode = 400;
+    throw err;
+  }
 
-    function parseJsonFromText(text, fallback) {
-      try {
-        return JSON.parse(text);
-      } catch {
-        const first = text.indexOf("{");
-        const last = text.lastIndexOf("}");
-        if (first !== -1 && last !== -1) {
-          try {
-            return JSON.parse(text.slice(first, last + 1));
-          } catch {}
-        }
-      }
-      return fallback;
-    }
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  const photo = await imageToBase64(photoDataUrl);
 
-    // STEP 2: user selected a specific item -> make ONE cutout only
-    if (targetItem && typeof targetItem === "object") {
-      const cand = {
-        title: targetItem?.title || "Моя вещь",
-        category: targetItem?.category || hintCategory || "Верх",
-        gender: targetItem?.gender || hintGender || "UNISEX",
-        tags: Array.isArray(targetItem?.tags) ? targetItem.tags : [],
-        color: targetItem?.color || "неизвестно",
-        material: targetItem?.material || "неизвестно",
-      };
+  if (targetItem && typeof targetItem === "object") {
+    const candidate = {
+      title: targetItem?.title || "Моя вещь",
+      category: targetItem?.category || hintCategory || "Верх",
+      gender: targetItem?.gender || hintGender || "UNISEX",
+      tags: Array.isArray(targetItem?.tags) ? targetItem.tags : [],
+      color: targetItem?.color || "неизвестно",
+      material: targetItem?.material || "неизвестно",
+    };
 
-      const cutoutPrompt = `You are an expert e-commerce catalog editor.
-Extract ONLY ONE clothing item from the photo.
+    const cutoutPrompt = `You are an expert e-commerce catalog editor.
+Create a clean catalog image of ONLY the selected wardrobe item from the source photo.
 
-The target item is:
-- title: ${cand.title}
-- category: ${cand.category}
-- gender: ${cand.gender}
-- color: ${cand.color}
-- material: ${cand.material}
+Selected item:
+- title: ${candidate.title}
+- category: ${candidate.category}
+- gender: ${candidate.gender}
+- color: ${candidate.color}
+- material: ${candidate.material}
 
-Output a single product image centered in frame.
 Requirements:
-- isolate ONLY the target item
-- use a SOLID PURE WHITE background
-- do NOT use transparency
-- do NOT use checkerboard or grid background
-- front-facing view if possible
-- no text, no logos, no watermark
-- keep true colors
-- clean edges, high-quality catalog result
-- output PNG
-If multiple items are visible, DO NOT choose another item.`;
+- isolate ONLY the selected item; remove the person, hands, other garments, hangers and room
+- preserve the actual item identity, silhouette, color, material, pattern and existing brand marking from the source photo
+- do not invent or remove garment details
+- center the item in a square frame with comfortable margins
+- use a SOLID PURE WHITE background (#FFFFFF), fully opaque, with no transparency
+- do NOT use a checkerboard, gradient, interior, shadow, caption, watermark or any added text/logo
+- use a front-facing product view when possible
+- return one clean catalog product image only.`;
 
-      const cutoutResp = await ai.models.generateContent({
-        model: "gemini-3-pro-image-preview",
-        contents: {
-          parts: [
-            { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
-            { text: cutoutPrompt },
-          ],
+    const cutoutResponse = await ai.models.generateContent({
+      model: process.env.GEMINI_MODEL_WARDROBE_IMAGE || "gemini-2.5-flash-image",
+      contents: {
+        parts: [
+          { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
+          { text: cutoutPrompt },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: "1:1",
         },
-        config: {
-          imageConfig: {
-            aspectRatio: "1:1",
-            imageSize: "1K",
-          },
-        },
-      });
+      },
+    });
 
-      let cutoutDataUrl = "";
-      const cutoutParts = cutoutResp?.candidates?.[0]?.content?.parts || [];
-      for (const part of cutoutParts) {
-        if (part.inlineData?.data) {
-          const mt = part.inlineData.mimeType || "image/png";
-          cutoutDataUrl = `data:${mt};base64,${part.inlineData.data}`;
-          break;
-        }
-      }
-
-      if (!cutoutDataUrl) {
-        return res.status(502).json({ error: "Gemini did not return cutout image" });
-      }
-
-      cutoutDataUrl = await cleanupCutoutDataUrl(cutoutDataUrl);
-
-      return res.json({
-        cutoutDataUrl,
-        attributes: {
-          title: cand.title,
-          category: cand.category,
-          gender: cand.gender,
-          tags: cand.tags,
-          color: cand.color,
-          material: cand.material,
-        },
-      });
+    const cutoutDataUrl = imageDataUrlFromGeminiResponse(cutoutResponse);
+    if (!cutoutDataUrl) {
+      const err = new Error("AI did not return a wardrobe image");
+      err.statusCode = 502;
+      throw err;
     }
 
-    function normalizeBox(box) {
-      if (!box || typeof box !== "object") return undefined;
-      const toUnit = (v) => {
-        const n = Number(v);
-        if (!Number.isFinite(n)) return undefined;
-        const normalized = n > 1 ? n / 1000 : n;
-        return Math.max(0, Math.min(1, normalized));
-      };
+    return {
+      cutoutDataUrl,
+      attributes: {
+        title: candidate.title,
+        category: candidate.category,
+        gender: candidate.gender,
+        tags: candidate.tags,
+        color: candidate.color,
+        material: candidate.material,
+      },
+    };
+  }
 
-      const x = toUnit(box?.x);
-      const y = toUnit(box?.y);
-      const w = toUnit(box?.w);
-      const h = toUnit(box?.h);
-
-      if ([x, y, w, h].some((v) => v === undefined)) return undefined;
-      if (w <= 0.02 || h <= 0.02) return undefined;
-
-      const clampedW = Math.min(w, 1 - x);
-      const clampedH = Math.min(h, 1 - y);
-      if (clampedW <= 0.02 || clampedH <= 0.02) return undefined;
-
-      return { x, y, w: clampedW, h: clampedH };
-    }
-
-    // STEP 1: detect candidates only
-    const detectPrompt = `Analyze the photo and identify up to 4 DISTINCT wardrobe items a user may want to add to wardrobe.
+  const detectPrompt = `Analyze the photo and identify up to 4 DISTINCT wardrobe items a user may want to add to their wardrobe.
 Return ONLY strict JSON:
 {
   "items": [
@@ -4338,72 +4279,106 @@ Return ONLY strict JSON:
   ]
 }
 Rules:
-- Use Russian for title/category/tags/color/material.
+- Use Russian for title, category, tags, color and material.
 - Include only real wearable items visible in the photo.
-- Items must be DISTINCT from each other.
-- Do not include duplicates or near-duplicates.
+- Items must be distinct from each other; do not include duplicates or near-duplicates.
 - If only one meaningful item is visible, return exactly one item.
 - box must tightly cover the visible item.
-- box coordinates must be relative to the full image.
-- Return box values as numbers in range 0..1000 where:
-  - x,y = top-left corner
-  - w,h = width and height
+- Return box values as numbers in range 0..1000 where x,y are top-left and w,h are width and height.
 - Do not omit box unless the item truly cannot be localized.
 Hints:
 - hintCategory: ${hintCategory || "none"}
 - hintGender: ${hintGender || "none"}`;
 
-    const detectResp = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: {
-        parts: [
-          { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
-          { text: detectPrompt },
-        ],
-      },
-    });
+  const detectResponse = await ai.models.generateContent({
+    model: process.env.GEMINI_MODEL_WARDROBE_TEXT || "gemini-2.5-flash",
+    contents: {
+      parts: [
+        { inlineData: { data: photo.base64, mimeType: photo.mimeType } },
+        { text: detectPrompt },
+      ],
+    },
+  });
 
-    const detectText = (detectResp?.candidates?.[0]?.content?.parts || [])
-      .map((p) => p.text)
-      .filter(Boolean)
-      .join("")
-      .trim();
+  const detectText = (detectResponse?.candidates?.[0]?.content?.parts || [])
+    .map((part) => part.text)
+    .filter(Boolean)
+    .join("")
+    .trim();
 
-    let items = parseJsonFromText(detectText, { items: [] })?.items || [];
-    if (!Array.isArray(items)) items = [];
+  let items = parseWardrobeJsonFromText(detectText, { items: [] })?.items || [];
+  if (!Array.isArray(items)) items = [];
 
-    const seen = new Set();
-    items = items.filter((d) => {
-      const key = `${String(d?.title || "").trim().toLowerCase()}|${String(d?.category || "").trim().toLowerCase()}`;
+  const seen = new Set();
+  items = items
+    .filter((item) => {
+      const key = `${String(item?.title || "").trim().toLowerCase()}|${String(item?.category || "").trim().toLowerCase()}`;
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
-    }).slice(0, 4).map((d) => ({
-      title: d?.title || "Моя вещь",
-      category: d?.category || hintCategory || "Верх",
-      gender: d?.gender || hintGender || "UNISEX",
-      tags: Array.isArray(d?.tags) ? d.tags : [],
-      color: d?.color || "неизвестно",
-      material: d?.material || "неизвестно",
-      box: normalizeBox(d?.box),
+    })
+    .slice(0, 4)
+    .map((item) => ({
+      title: item?.title || "Моя вещь",
+      category: item?.category || hintCategory || "Верх",
+      gender: item?.gender || hintGender || "UNISEX",
+      tags: Array.isArray(item?.tags) ? item.tags : [],
+      color: item?.color || "неизвестно",
+      material: item?.material || "неизвестно",
+      box: normalizeWardrobeBox(item?.box),
     }));
 
-    if (!items.length) {
-      items = [{
-        title: "Моя вещь",
-        category: hintCategory || "Верх",
-        gender: hintGender || "UNISEX",
-        tags: [],
-        color: "неизвестно",
-        material: "неизвестно",
-        box: undefined,
-      }];
+  if (!items.length) {
+    items = [{
+      title: "Моя вещь",
+      category: hintCategory || "Верх",
+      gender: hintGender || "UNISEX",
+      tags: [],
+      color: "неизвестно",
+      material: "неизвестно",
+      box: undefined,
+    }];
+  }
+
+  return { items };
+}
+
+app.post("/internal/ai/wardrobe/extract", async (req, res) => {
+  try {
+    if (!assertInternalAiRequest(req, res)) return;
+
+    // Gemini calls are permitted only in the dedicated DigitalOcean gateway container.
+    if (String(process.env.AI_GATEWAY_ROLE || "").trim().toLowerCase() !== "gateway") {
+      return res.status(409).json({ error: "This route is available only on the AI gateway" });
     }
 
-    return res.json({ items });
+    return res.json(await runWardrobeExtractAi(req.body || {}));
   } catch (err) {
-    console.error("[toptry] /api/wardrobe/extract error", err);
-    res.status(500).json({ error: err?.message || "Unknown server error" });
+    console.error("[toptry] /internal/ai/wardrobe/extract error", err?.stack || err);
+    return res.status(err?.statusCode || 500).json({ error: err?.message || "AI gateway error" });
+  }
+});
+
+/**
+ * POST /api/wardrobe/extract
+ */
+app.post("/api/wardrobe/extract", async (req, res) => {
+  try {
+    if (AI_GATEWAY_URL) {
+      const upstream = `${AI_GATEWAY_URL}/internal/ai/wardrobe/extract`;
+      const headers = AI_GATEWAY_SECRET
+        ? { "x-toptry-internal-secret": AI_GATEWAY_SECRET }
+        : {};
+      const { resp, text } = await proxyJsonPost(upstream, req.body || {}, headers);
+      const contentType = resp.headers.get("content-type");
+      if (contentType) res.setHeader("content-type", contentType);
+      return res.status(resp.status).send(text);
+    }
+
+    return res.json(await runWardrobeExtractAi(req.body || {}));
+  } catch (err) {
+    console.error("[toptry] /api/wardrobe/extract error", err?.stack || err);
+    return res.status(err?.statusCode || 500).json({ error: err?.message || "Unknown server error" });
   }
 });
 
