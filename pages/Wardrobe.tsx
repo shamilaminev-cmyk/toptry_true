@@ -495,6 +495,71 @@ const Wardrobe = () => {
       img.src = dataUrl;
     });
 
+  // /api/wardrobe/save receives two data URLs in one JSON request.
+  // Keep the final storage payload safely below the reverse-proxy limit.
+  const WARDROBE_SAVE_MAX_DATA_URL_CHARS = 280 * 1024;
+  const WARDROBE_SAVE_STEPS = [
+    { maxSide: 1280, quality: 0.86 },
+    { maxSide: 1100, quality: 0.80 },
+    { maxSide: 960, quality: 0.74 },
+    { maxSide: 820, quality: 0.68 },
+    { maxSide: 700, quality: 0.62 },
+    { maxSide: 600, quality: 0.58 },
+  ];
+
+  const optimizeWardrobeDataUrlForSave = (dataUrl: string, label: string) =>
+    new Promise<string>((resolve, reject) => {
+      if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+        reject(new Error(`Не удалось подготовить изображение для сохранения: ${label}`));
+        return;
+      }
+
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          const sourceWidth = img.naturalWidth || img.width;
+          const sourceHeight = img.naturalHeight || img.height;
+          const sourceMaxSide = Math.max(sourceWidth, sourceHeight);
+
+          for (const step of WARDROBE_SAVE_STEPS) {
+            const scale = sourceMaxSide > 0 ? Math.min(1, step.maxSide / sourceMaxSide) : 1;
+            const width = Math.max(1, Math.round(sourceWidth * scale));
+            const height = Math.max(1, Math.round(sourceHeight * scale));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Не удалось получить canvas context');
+
+            // Both images are stored on a white background, so JPEG is safe
+            // and substantially reduces the JSON request size.
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const candidate = canvas.toDataURL('image/jpeg', step.quality);
+
+            if (candidate.length <= WARDROBE_SAVE_MAX_DATA_URL_CHARS) {
+              resolve(candidate);
+              return;
+            }
+          }
+
+          reject(new Error('Изображение слишком большое для сохранения. Выберите фото меньшего размера.'));
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      img.onerror = () =>
+        reject(new Error(`Не удалось загрузить изображение для сохранения: ${label}`));
+
+      img.src = dataUrl;
+    });
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -619,9 +684,14 @@ const Wardrobe = () => {
 
         if (!cutout) throw new Error('Сервер не вернул вырезанную вещь');
 
+        const [originalForSave, cutoutForSave] = await Promise.all([
+          optimizeWardrobeDataUrlForSave(photoDataUrlForCutout, 'оригинал вещи'),
+          optimizeWardrobeDataUrlForSave(cutout, 'карточка вещи'),
+        ]);
+
         queue.push({
-          original: c.original,
-          cutout,
+          original: originalForSave,
+          cutout: cutoutForSave,
           attrs,
         });
       }
@@ -654,6 +724,9 @@ const Wardrobe = () => {
 
         if (!saveResp.ok) {
           const data = await saveResp.json().catch(() => ({}));
+          if (saveResp.status === 413) {
+            throw new Error('Изображение слишком большое для сохранения. Попробуйте другое фото.');
+          }
           throw new Error(data?.error || `Ошибка сохранения (${saveResp.status})`);
         }
 
@@ -694,6 +767,11 @@ const Wardrobe = () => {
     setIsRecognizing(true);
 
     try {
+      const [originalForSave, cutoutForSave] = await Promise.all([
+        optimizeWardrobeDataUrlForSave(extracted.original, 'оригинал вещи'),
+        optimizeWardrobeDataUrlForSave(extracted.cutout, 'карточка вещи'),
+      ]);
+
       const saveResp = await fetch('/api/wardrobe/save', {
         method: 'POST',
         credentials: 'include',
@@ -708,13 +786,15 @@ const Wardrobe = () => {
             .filter(Boolean),
           color: draftColor || undefined,
           material: draftMaterial || undefined,
-          originalDataUrl: extracted.original,
-          cutoutDataUrl: extracted.cutout,
+          originalDataUrl: originalForSave,
+          cutoutDataUrl: cutoutForSave,
         }),
       });
 
       if (!saveResp.ok) {
         const data = await saveResp.json().catch(() => ({}));
+        if (saveResp.status === 413)
+          throw new Error('Изображение слишком большое для сохранения. Попробуйте другое фото.');
         if (saveResp.status === 401)
           throw new Error('Нужно войти, чтобы добавлять свои вещи');
         throw new Error(data?.error || `Ошибка сохранения (${saveResp.status})`);
