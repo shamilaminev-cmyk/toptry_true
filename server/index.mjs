@@ -572,6 +572,37 @@ function prepareAiGatewayTryonPayload(payload) {
 }
 
 
+const AI_GATEWAY_FETCH_MAX_ATTEMPTS = Math.max(
+  1,
+  Math.min(2, Number(process.env.AI_GATEWAY_FETCH_MAX_ATTEMPTS || 2))
+);
+
+function sleepForAiGatewayRetry(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getAiGatewayFetchErrorDetails(error) {
+  return {
+    name: error?.name || null,
+    message: error?.message || String(error || ""),
+    code: error?.cause?.code || error?.code || null,
+    cause: error?.cause?.message || null,
+  };
+}
+
+function isRetryableAiGatewayFetchError(error) {
+  const code = String(error?.cause?.code || error?.code || "").trim().toUpperCase();
+  return new Set([
+    "EAI_AGAIN",
+    "ENOTFOUND",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "UND_ERR_CONNECT_TIMEOUT",
+    "UND_ERR_SOCKET",
+  ]).has(code);
+}
+
 async function callAiGatewayTryon(payload) {
   if (!AI_GATEWAY_URL) return null;
 
@@ -581,6 +612,7 @@ async function callAiGatewayTryon(payload) {
     : {};
 
   const stablePayload = prepareAiGatewayTryonPayload(payload);
+  const requestBody = JSON.stringify(stablePayload || {});
 
   console.log("[toptry] AI gateway payload prepared", {
     itemCount: Array.isArray(stablePayload.itemImageUrls) ? stablePayload.itemImageUrls.length : 0,
@@ -589,15 +621,46 @@ async function callAiGatewayTryon(payload) {
       : null,
   });
 
-  const resp = await fetch(upstream, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-      ...headers,
-    },
-    body: JSON.stringify(stablePayload || {}),
-  });
+  let resp;
+  for (let attempt = 1; attempt <= AI_GATEWAY_FETCH_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      resp = await fetch(upstream, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          ...headers,
+        },
+        body: requestBody,
+      });
+      break;
+    } catch (error) {
+      const details = getAiGatewayFetchErrorDetails(error);
+      const retryable = isRetryableAiGatewayFetchError(error);
+
+      console.warn("[toptry] AI gateway network fetch failed", {
+        upstream,
+        attempt,
+        maxAttempts: AI_GATEWAY_FETCH_MAX_ATTEMPTS,
+        retryable,
+        ...details,
+      });
+
+      if (!retryable || attempt >= AI_GATEWAY_FETCH_MAX_ATTEMPTS) {
+        const wrapped = new Error(
+          `AI gateway network request failed${details.code ? ` (${details.code})` : ""}: ${details.message}`
+        );
+        wrapped.cause = error;
+        throw wrapped;
+      }
+
+      await sleepForAiGatewayRetry(700 * attempt);
+    }
+  }
+
+  if (!resp) {
+    throw new Error("AI gateway returned no response");
+  }
 
   const text = await resp.text();
   let data = null;
@@ -8180,9 +8243,17 @@ function inferCatalogTaxonomy(product) {
     /(^|[\\/])обувь([\\/]|$)/i.test(sourceText) ||
     /женская\s+обувь|мужская\s+обувь/i.test(sourceText);
 
+  // "Blazer" is a footwear model name for Nike, Demix and Northland as well as
+  // a garment type. A direct product-name shoe signal must win over the word
+  // "blazer" so these items never leak into the blazer filter.
+  const explicitShoeTitleRe =
+    /(кед|кроссовк|ботин|ботильон|лофер|мокас|балетк|сандал|босонож|туфл|сапог|угг|sneakers?|trainers?|trail\s+blazer|nike\s+blazer|demix\s+blazer|northland\s+trail\s+blazer)/i;
+  // rules_v5_blazer_shoes_guard
+  const hasExplicitShoeTitle = explicitShoeTitleRe.test(String(product?.title || ""));
+
   if (explicitShoeAccessoryRe.test(sourceText) || explicitNonTryOnAccessoryRe.test(sourceText)) {
     sourceCategory = "ACCESSORIES";
-  } else if (hasSourceShoePath) {
+  } else if (hasExplicitShoeTitle || hasSourceShoePath) {
     sourceCategory = "SHOES";
   }
 
@@ -9391,8 +9462,20 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
 
   const outerwearTitleRe = /(верхн[яе][яе]\s+одежд|куртк|пуховик|ветровк|пальто|плащ|жилет|jacket|coat|parka|vest|gilet)/i;
   const blazerTitleRe = /(пиджак|жакет|blazer)/i;
+  const explicitShoeTitleRe =
+    /(кед|кроссовк|ботин|ботильон|лофер|мокас|балетк|сандал|босонож|туфл|сапог|угг|sneakers?|trainers?|trail\s+blazer|nike\s+blazer|demix\s+blazer|northland\s+trail\s+blazer)/i;
 
-  if (blazerTitleRe.test(title)) {
+  if (explicitShoeTitleRe.test(title)) {
+    item.taxonomyGroup = "SHOES";
+    if (/балетк|ballet/i.test(title)) item.taxonomySubgroup = "BALLET";
+    else if (/угг|ботфорт|высок.*сапог|tall boot|ugg/i.test(title)) item.taxonomySubgroup = "TALL_BOOTS";
+    else if (/ботин|ботильон|boot|chelsea|chukka|сапог/i.test(title)) item.taxonomySubgroup = "BOOTS";
+    else if (/лофер|loafer|мокас/i.test(title)) item.taxonomySubgroup = "LOAFERS";
+    else if (/сандал|босонож|сабо|эспадриль|тапоч|slip[-\s]?on|sand|espadrille/i.test(title)) item.taxonomySubgroup = "SANDALS";
+    else if (/туф|oxford|дерби|монк|brogue|formal shoe/i.test(title)) item.taxonomySubgroup = "SHOES_CLASSIC";
+    else item.taxonomySubgroup = "SNEAKERS";
+    item.isTryOnRelevant = true;
+  } else if (blazerTitleRe.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "BLAZERS";
     item.isTryOnRelevant = true;
@@ -10411,6 +10494,7 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     toGroup: "CLOTHING",
     toSubgroup: "BLAZERS",
     titleRe: /(пиджак|жакет|blazer)/i,
+    rejectTitleRe: /(кед|кроссовк|ботин|ботильон|лофер|мокас|балетк|сандал|босонож|туфл|сапог|угг|sneakers?|trainers?|trail\s+blazer|nike\s+blazer|demix\s+blazer|northland\s+trail\s+blazer)/i,
   },
   {
     code: "TITLE_TSHIRTS",
