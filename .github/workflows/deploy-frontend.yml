@@ -71,7 +71,11 @@ jobs:
             "$GITHUB_REF_NAME" "$BUILD_TIME" "$GITHUB_SHA" > dist/version.json
           printf '%s\n' "$BUILD_TIME" > dist/version.txt
 
-      - name: Upload dist to server
+      # Production path remains unchanged. The staging path below uses native OpenSSH
+      # with bounded retries because the appleboy SCP transport occasionally loses
+      # the runner-to-VPS connection after a successful remote operation.
+      - name: Upload production dist to server
+        if: github.ref_name == 'main'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.TOPTRY_PROD_HOST }}
@@ -83,7 +87,8 @@ jobs:
           strip_components: 1
           rm: true
 
-      - name: Promote frontend atomically
+      - name: Promote production frontend atomically
+        if: github.ref_name == 'main'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.TOPTRY_PROD_HOST }}
@@ -109,3 +114,85 @@ jobs:
 
             mv "${TARGET_DIR}.new" "${TARGET_DIR}"
             test -f "${TARGET_DIR}/index.html"
+
+      - name: Deploy staging frontend with resilient SSH
+        if: github.ref_name == 'develop'
+        env:
+          HOST: ${{ secrets.TOPTRY_PROD_HOST }}
+          USER: ${{ secrets.TOPTRY_PROD_USER }}
+          PORT: ${{ secrets.TOPTRY_PROD_PORT }}
+          SSH_KEY: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          TEMP_DIR: ${{ steps.vars.outputs.temp_dir }}
+          TARGET_DIR: ${{ steps.vars.outputs.target_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          printf "%s" "$SSH_KEY" > ~/.ssh/id_ed25519
+          echo >> ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          touch ~/.ssh/known_hosts
+
+          ARCHIVE="/tmp/toptry-staging-frontend-${GITHUB_SHA}.tar.gz"
+          REMOTE_ARCHIVE="${TEMP_DIR}.tar.gz"
+          tar -C dist -czf "$ARCHIVE" .
+
+          SSH_OPTS=(
+            -i "$HOME/.ssh/id_ed25519"
+            -p "$PORT"
+            -o StrictHostKeyChecking=accept-new
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o ConnectTimeout=20
+            -o ConnectionAttempts=3
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=8
+            -o TCPKeepAlive=yes
+          )
+
+          status=1
+          for attempt in 1 2 3; do
+            echo "Staging frontend deploy attempt ${attempt}/3"
+
+            if timeout 180 scp "${SSH_OPTS[@]}" "$ARCHIVE" "$USER@$HOST:$REMOTE_ARCHIVE"; then
+              if timeout 180 ssh "${SSH_OPTS[@]}" "$USER@$HOST" \
+                "TEMP_DIR='$TEMP_DIR' TARGET_DIR='$TARGET_DIR' REMOTE_ARCHIVE='$REMOTE_ARCHIVE' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          test -f "$REMOTE_ARCHIVE"
+          rm -rf "$TEMP_DIR"
+          mkdir -p "$TEMP_DIR"
+          tar -xzf "$REMOTE_ARCHIVE" -C "$TEMP_DIR"
+          rm -f "$REMOTE_ARCHIVE"
+          test -f "$TEMP_DIR/index.html"
+
+          rm -rf "${TARGET_DIR}.new"
+          mkdir -p "${TARGET_DIR}.new"
+          cp -a "${TEMP_DIR}/." "${TARGET_DIR}.new/"
+
+          if [ -d "${TARGET_DIR}" ]; then
+            rm -rf "${TARGET_DIR}.prev"
+            mv "${TARGET_DIR}" "${TARGET_DIR}.prev"
+          fi
+
+          mv "${TARGET_DIR}.new" "${TARGET_DIR}"
+          test -f "${TARGET_DIR}/index.html"
+          echo "Staging frontend deployed and smoke-checked"
+          REMOTE
+              then
+                rm -f "$ARCHIVE"
+                exit 0
+              else
+                status=$?
+              fi
+            else
+              status=$?
+            fi
+            echo "Staging frontend deploy attempt ${attempt} failed with status ${status}"
+            if [ "$attempt" -lt 3 ]; then
+              sleep "$((attempt * 10))"
+            fi
+          done
+
+          rm -f "$ARCHIVE"
+          exit "$status"

@@ -83,6 +83,10 @@ jobs:
             -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -o ConnectTimeout=20 \
+            -o ConnectionAttempts=3 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=8 \
+            -o TCPKeepAlive=yes \
             "$USER@$HOST" \
             "env IMAGE_API='$IMAGE_API' SHA_TAG='$SHA_TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" <<'REMOTE'
           set -euo pipefail
@@ -174,12 +178,10 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           touch ~/.ssh/known_hosts
 
-          ssh -i ~/.ssh/id_ed25519 -p "$PORT" \
-            -o StrictHostKeyChecking=accept-new \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -o ConnectTimeout=20 \
-            "$USER@$HOST" \
-            "IMAGE_API='$IMAGE_API' SHA_TAG='$SHA_TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" <<'REMOTE'
+          REMOTE_SCRIPT="$(mktemp)"
+          trap 'rm -f "$REMOTE_SCRIPT"' EXIT
+
+          cat > "$REMOTE_SCRIPT" <<'REMOTE'
           set -euo pipefail
 
           CONTAINER='toptry-ai-staging'
@@ -216,3 +218,33 @@ jobs:
 
           echo 'Staging API deployed and smoke-tested'
           REMOTE
+
+          SSH_OPTS=(
+            -i "$HOME/.ssh/id_ed25519"
+            -p "$PORT"
+            -o StrictHostKeyChecking=accept-new
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o ConnectTimeout=20
+            -o ConnectionAttempts=3
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=8
+            -o TCPKeepAlive=yes
+          )
+
+          status=1
+          for attempt in 1 2; do
+            echo "Staging API deploy attempt ${attempt}/2"
+            if timeout 420 ssh "${SSH_OPTS[@]}" "$USER@$HOST" \
+              "IMAGE_API='$IMAGE_API' SHA_TAG='$SHA_TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" \
+              < "$REMOTE_SCRIPT"; then
+              exit 0
+            else
+              status=$?
+            fi
+            echo "Staging API deploy attempt ${attempt} failed with status ${status}"
+            if [ "$attempt" -lt 2 ]; then
+              sleep 15
+            fi
+          done
+
+          exit "$status"
