@@ -1,11 +1,204 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppState } from '../store';
 import { ICONS, CURRENCY } from '../constants';
 import { withApiOrigin } from '../utils/withApiOrigin';
 
+
+function sourceItemClickoutUrl(item: any, placement: string, lookId?: string, itemIndex?: number) {
+  const id = String(item?.id || '').trim();
+  if (!id) return '';
+  const params = new URLSearchParams({ placement });
+  if (lookId) params.set('lookId', String(lookId));
+  if (typeof itemIndex === 'number') params.set('itemIndex', String(itemIndex));
+  return withApiOrigin(`/api/out/product/${encodeURIComponent(id)}?${params.toString()}`);
+}
+
+function similarCatalogRoute(item: any) {
+  const rawText = [
+    item?.title,
+    item?.brand,
+    item?.category,
+    item?.displayCategory,
+    item?.taxonomyGroup,
+    item?.taxonomySubgroup,
+    item?.colorFamily,
+    item?.color,
+    item?.storeName,
+    item?.merchant,
+  ]
+    .filter(Boolean)
+    .map(String)
+    .join(' ')
+    .toLowerCase();
+
+  const params = new URLSearchParams();
+  params.set('unavailable', '1');
+
+  const normalizeGender = (value: any) => {
+    const s = String(value || '').trim().toUpperCase();
+    if (s === 'MALE' || s === 'FEMALE') return s;
+
+    const hay = [
+      value,
+      item?.title,
+      item?.category,
+      item?.gender,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+
+    if (/муж|male|men|man/.test(hay)) return 'MALE';
+    if (/жен|female|women|woman|girl/.test(hay)) return 'FEMALE';
+
+    return '';
+  };
+
+  const normalizeColor = (value: any) => {
+    const s = String(value || '').trim().toLowerCase();
+
+    const map: Record<string, string> = {
+      black: 'black',
+      white: 'white',
+      gray: 'gray',
+      grey: 'gray',
+      silver: 'gray',
+      beige: 'beige',
+      brown: 'brown',
+      blue: 'blue',
+      green: 'green',
+      red: 'red',
+      pink: 'pink',
+      purple: 'purple',
+      yellow: 'yellow',
+      gold: 'yellow',
+      orange: 'orange',
+      multi: 'multi',
+      khaki: 'green',
+    };
+
+    if (map[s]) return map[s];
+
+    const hay = [
+      value,
+      item?.title,
+      item?.color,
+      item?.colorFamily,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+
+    if (/черн|чёрн|black/.test(hay)) return 'black';
+    if (/бел|white/.test(hay)) return 'white';
+    if (/сер|gray|grey|silver/.test(hay)) return 'gray';
+    if (/беж|beige/.test(hay)) return 'beige';
+    if (/корич|brown/.test(hay)) return 'brown';
+    if (/син|голуб|blue/.test(hay)) return 'blue';
+    if (/зел|green|khaki/.test(hay)) return 'green';
+    if (/крас|бордов|red/.test(hay)) return 'red';
+    if (/роз|pink/.test(hay)) return 'pink';
+    if (/фиолет|сирен|purple/.test(hay)) return 'purple';
+    if (/желт|жёлт|yellow|gold/.test(hay)) return 'yellow';
+    if (/оранж|orange/.test(hay)) return 'orange';
+    if (/мульти|разноцвет|multi/.test(hay)) return 'multi';
+
+    return '';
+  };
+
+  const gender = normalizeGender(item?.gender);
+  const colorFamily = normalizeColor(item?.colorFamily || item?.color);
+
+  if (gender) params.set('gender', gender);
+  if (colorFamily) params.set('colorFamily', colorFamily);
+
+  const setClothing = (clothingType: string) => {
+    params.set('displayCategory', 'CLOTHING');
+    params.set('clothingType', clothingType);
+    return `/catalog?${params.toString()}`;
+  };
+
+  const setShoes = (shoeType: string) => {
+    params.set('displayCategory', 'SHOES');
+    params.set('shoeType', shoeType);
+    return `/catalog?${params.toString()}`;
+  };
+
+  const subgroup = String(item?.taxonomySubgroup || '').trim().toUpperCase();
+  const group = String(item?.taxonomyGroup || '').trim().toUpperCase();
+
+  if (group === 'CLOTHING' && subgroup) {
+    const allowed = new Set([
+      'BLAZERS',
+      'OUTERWEAR',
+      'SHIRTS',
+      'TSHIRTS',
+      'POLO',
+      'HOODIES',
+      'KNITWEAR',
+      'TROUSERS',
+      'DENIM',
+      'SKIRTS',
+      'DRESSES',
+    ]);
+    if (allowed.has(subgroup)) return setClothing(subgroup);
+  }
+
+  if (group === 'SHOES' && subgroup) {
+    const allowed = new Set([
+      'LOAFERS',
+      'SNEAKERS',
+      'SNEAKERS_CASUAL',
+      'BALLET',
+      'TALL_BOOTS',
+      'BOOTS',
+      'SHOES_CLASSIC',
+      'SANDALS',
+    ]);
+    if (allowed.has(subgroup)) return setShoes(subgroup);
+  }
+
+  if (/пиджак|жакет|blazer/.test(rawText)) return setClothing('BLAZERS');
+  if (/пальто|куртк|пуховик|ветровк|плащ|бомбер|жилет|outerwear|jacket|coat|parka|vest/.test(rawText)) return setClothing('OUTERWEAR');
+  if (/рубаш|сорочк|блуз|shirt|blouse/.test(rawText)) return setClothing('SHIRTS');
+  if (/футболк|майк|t-?shirt|tee/.test(rawText)) return setClothing('TSHIRTS');
+  if (/поло|polo/.test(rawText)) return setClothing('POLO');
+  if (/худи|толстовк|свитшот|hoodie|sweatshirt/.test(rawText)) return setClothing('HOODIES');
+  if (/свитер|джемпер|кардиган|водолазк|knit|sweater|cardigan/.test(rawText)) return setClothing('KNITWEAR');
+  if (/брюк|trouser|pants|slacks/.test(rawText)) return setClothing('TROUSERS');
+  if (/джинс|denim|jeans/.test(rawText)) return setClothing('DENIM');
+  if (/юбк|skirt/.test(rawText)) return setClothing('SKIRTS');
+  if (/плать|сарафан|dress/.test(rawText)) return setClothing('DRESSES');
+
+  if (/лофер|loafer/.test(rawText)) return setShoes('LOAFERS');
+  if (/кроссов|sneaker|trainer|runner/.test(rawText)) return setShoes('SNEAKERS');
+  if (/кед|слипон|canvas|slip[-\s]?on/.test(rawText)) return setShoes('SNEAKERS_CASUAL');
+  if (/балетк|ballet/.test(rawText)) return setShoes('BALLET');
+  if (/сапог|ботфорт|угг|tall boot|ugg/.test(rawText)) return setShoes('TALL_BOOTS');
+  if (/ботин|ботильон|boot|chelsea|chukka/.test(rawText)) return setShoes('BOOTS');
+  if (/туфл|oxford|дерби|монк|brogue|formal shoe|shoes/.test(rawText)) return setShoes('SHOES_CLASSIC');
+  if (/босонож|сандал|сабо|эспадриль|сланц|шл[её]п|sandals?|espadrille/.test(rawText)) return setShoes('SANDALS');
+
+  if (/сумк|bag|рюкзак|backpack|клатч|clutch|кошелек|wallet/.test(rawText)) {
+    params.set('displayCategory', 'BAGS');
+    return `/catalog?${params.toString()}`;
+  }
+
+  const title = String(item?.title || '').trim();
+  const brand = String(item?.brand || '').trim();
+  const q = [brand, title].filter(Boolean).join(' ').trim();
+
+  if (q) params.set('q', q.slice(0, 120));
+  return `/catalog?${params.toString()}`;
+}
+
 const LookDetails = () => {
   const { id } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { looks: localLooks, products, actions, user } = useAppState();
   const [isTryingOn, setIsTryingOn] = useState(false);
   const [showResult, setShowResult] = useState(false);
@@ -14,13 +207,43 @@ const LookDetails = () => {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [commentBusy, setCommentBusy] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [viewerSaved, setViewerSaved] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [titleBusy, setTitleBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportProblemType, setReportProblemType] = useState('Одежда наложилась плохо');
+  const [reportMessage, setReportMessage] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportResult, setReportResult] = useState('');
+  const [reportError, setReportError] = useState('');
+  const [collections, setCollections] = useState<any[]>([]);
+  const [selectedCollectionId, setSelectedCollectionId] = useState('');
+  const [collectionBusy, setCollectionBusy] = useState(false);
+  const [collectionResult, setCollectionResult] = useState('');
+  const [collectionError, setCollectionError] = useState('');
+  const commentsRef = useRef<HTMLElement | null>(null);
+  const commentInputRef = useRef<HTMLInputElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const titleEditCancelledRef = useRef(false);
 
   const quickComments = [
-    'Очень удачно',
+    'Классный образ',
     'Хочу такой же',
-    'Лучше с другими брюками',
-    'Слишком спортивно',
+    'Хорошо смотрится',
+    'Интересное сочетание',
     'Где купить?',
+  ];
+
+  const reportProblemTypes = [
+    'Лицо изменилось',
+    'Одежда наложилась плохо',
+    'Вещь не появилась',
+    'Странные руки / тело',
+    'Плохое качество изображения',
+    'Другое',
   ];
 
   useEffect(() => {
@@ -31,6 +254,7 @@ const LookDetails = () => {
         if (resp.ok) {
           const data = await resp.json().catch(() => ({}));
           setLook(data?.look || null);
+          setViewerSaved(Boolean(data?.look?.viewerSaved));
         } else {
           const fallback = localLooks.find((l) => l.id === id);
           setLook(fallback || null);
@@ -55,6 +279,55 @@ const LookDetails = () => {
     })();
   }, [id]);
 
+  useEffect(() => {
+    if (loading) return;
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('comments') !== '1') return;
+
+    window.setTimeout(() => {
+      commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      commentInputRef.current?.focus();
+    }, 120);
+  }, [loading, location.search, id]);
+
+  useEffect(() => {
+    const own = Boolean(localLooks.find((l) => String(l.id) === String(look?.id)));
+    if (!look?.id || !own || !look?.isPublic) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const resp = await fetch('/api/profile/look-collections', {
+          credentials: 'include',
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok || cancelled) return;
+
+        const rows = Array.isArray(data?.collections) ? data.collections : [];
+        setCollections(rows);
+        setSelectedCollectionId((prev) => prev || rows[0]?.id || '');
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [look?.id, look?.isPublic, localLooks]);
+
+  useEffect(() => {
+    if (!isEditingTitle) return;
+
+    window.setTimeout(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    }, 0);
+  }, [isEditingTitle]);
+
   if (loading) return <div className="p-10 text-center text-zinc-400">Загрузка...</div>;
   if (!look) return <div className="p-10 text-center">Образ не найден</div>;
 
@@ -64,37 +337,318 @@ const LookDetails = () => {
       : products.filter((p) => (look.items || look.itemIds || []).includes(p.id));
   const isOwnLook = !!localLooks.find((l) => String(l.id) === String(look?.id));
 
-  const handleTryOn = () => {
-    setIsTryingOn(true);
-    setTimeout(() => {
-      setIsTryingOn(false);
-      setShowResult(true);
-    }, 2000);
+  const startTitleEditing = () => {
+    if (!isOwnLook || !look?.id || titleBusy) return;
+
+    titleEditCancelledRef.current = false;
+    setTitleDraft(String(look.title || '').trim());
+    setIsEditingTitle(true);
   };
 
-  const submitComment = async () => {
-    if (!user?.id) return;
-    if (!commentText.trim()) return;
+  const cancelTitleEditing = () => {
+    titleEditCancelledRef.current = true;
+    setIsEditingTitle(false);
+    setTitleDraft('');
+  };
+
+  const saveLookTitle = async () => {
+    if (!look?.id || titleBusy) return;
+
+    const title = String(titleDraft || '').replace(/\s+/g, ' ').trim();
+
+    if (!title) {
+      showToast('Введите название образа');
+      return;
+    }
+
+    if (title.length > 80) {
+      showToast('Название может содержать до 80 символов');
+      return;
+    }
+
+    if (title === String(look.title || '').trim()) {
+      setIsEditingTitle(false);
+      return;
+    }
+
+    setTitleBusy(true);
+
+    try {
+      const resp = await fetch(`/api/looks/${encodeURIComponent(String(look.id))}/title`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось изменить название');
+      }
+
+      setLook((prev: any) => prev ? { ...prev, ...(data?.look || {}), title } : prev);
+      setIsEditingTitle(false);
+      setTitleDraft('');
+      showToast('Название образа изменено');
+    } catch (err: any) {
+      showToast(err?.message || 'Не удалось изменить название');
+    } finally {
+      setTitleBusy(false);
+    }
+  };
+
+  const handleTitleInputBlur = () => {
+    if (titleEditCancelledRef.current) {
+      titleEditCancelledRef.current = false;
+      return;
+    }
+
+    void saveLookTitle();
+  };
+
+  const handleTryOn = () => {
+    if (!look?.sourceItems?.length) {
+      showToast('В этом образе нет товаров для примерки');
+      return;
+    }
+
+    navigate('/create-look', {
+      state: {
+        preselectedItems: (look.sourceItems || []).slice(0, 5),
+        fromLookId: look.id,
+      },
+    });
+  };
+
+  const submitComment = async (presetText?: string) => {
+    if (!user?.id) {
+      showToast('Войдите, чтобы комментировать');
+      return;
+    }
+
+    const text = String(presetText ?? commentText).trim();
+    if (!text) return;
 
     setCommentBusy(true);
     try {
       const resp = await fetch(`/api/looks/${encodeURIComponent(String(id))}/comments`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: commentText.trim() }),
+        body: JSON.stringify({ text }),
       });
-      if (!resp.ok) return;
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        showToast(data?.error || 'Не удалось отправить комментарий');
+        return;
+      }
 
       setCommentText('');
 
+      if (data?.comment) {
+        const nextComment = { ...data.comment, createdAt: new Date(data.comment.createdAt) };
+        setComments((prev) => [...prev, nextComment]);
+        setLook((prev: any) => prev ? { ...prev, comments: (prev.comments || 0) + 1 } : prev);
+        return;
+      }
+
       const refreshed = await fetch(`/api/looks/${encodeURIComponent(String(id))}/comments`);
       if (refreshed.ok) {
-        const data = await refreshed.json().catch(() => ({}));
-        const raw = Array.isArray(data?.comments) ? data.comments : [];
+        const refreshedData = await refreshed.json().catch(() => ({}));
+        const raw = Array.isArray(refreshedData?.comments) ? refreshedData.comments : [];
         setComments(raw.map((c: any) => ({ ...c, createdAt: new Date(c.createdAt) })));
+        setLook((prev: any) => prev ? { ...prev, comments: raw.length } : prev);
       }
     } finally {
       setCommentBusy(false);
+    }
+  };
+
+  const handlePublishToggle = async () => {
+    if (!user?.id || !look?.id) return;
+
+    setPublishBusy(true);
+    try {
+      const endpoint = look.isPublic ? "unpublish" : "publish";
+      const resp = await fetch(`/api/looks/${encodeURIComponent(String(look.id))}/${endpoint}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        showToast(data?.error || 'Не удалось обновить публикацию');
+        return;
+      }
+
+      if (data?.look) {
+        setLook({ ...data.look, createdAt: new Date(data.look.createdAt) });
+      } else {
+        setLook((prev: any) => prev ? { ...prev, isPublic: !prev.isPublic } : prev);
+      }
+
+      showToast(endpoint === "publish" ? 'Образ опубликован' : 'Образ скрыт из ленты');
+    } finally {
+      setPublishBusy(false);
+    }
+  };
+
+  const handleDeleteLook = async () => {
+    if (!look?.id) return;
+
+    const ok = window.confirm('Удалить образ? Это действие нельзя отменить.');
+    if (!ok) return;
+
+    try {
+      await actions.deleteLook(look.id);
+      showToast('Образ удалён');
+      navigate('/looks?tab=mine');
+    } catch (e: any) {
+      showToast(e?.message || 'Не удалось удалить образ');
+    }
+  };
+
+  const handleSaveLook = async () => {
+    if (!user?.id || !look?.id) {
+      showToast('Войдите, чтобы сохранять образы');
+      return;
+    }
+
+    const method = viewerSaved ? 'DELETE' : 'POST';
+    setSaveBusy(true);
+
+    try {
+      const resp = await fetch(`/api/looks/${encodeURIComponent(String(look.id))}/save`, {
+        method,
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        showToast(data?.error || 'Не удалось обновить сохранение');
+        return;
+      }
+
+      setViewerSaved(Boolean(data?.saved));
+      setLook((prev: any) => prev ? { ...prev, saves: data?.saves ?? prev.saves, viewerSaved: Boolean(data?.saved) } : prev);
+      showToast(data?.saved ? 'Образ сохранён' : 'Образ убран из сохранённых');
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
+  const loadCollections = async () => {
+    try {
+      const resp = await fetch('/api/profile/look-collections', {
+        credentials: 'include',
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) return;
+
+      const rows = Array.isArray(data?.collections) ? data.collections : [];
+      setCollections(rows);
+      setSelectedCollectionId((prev) => prev || rows[0]?.id || '');
+    } catch {
+      // ignore
+    }
+  };
+
+  const addToCollection = async () => {
+    setCollectionResult('');
+    setCollectionError('');
+
+    if (!selectedCollectionId) {
+      setCollectionError('Сначала создайте подборку в профиле');
+      return;
+    }
+
+    if (!look?.id) return;
+
+    setCollectionBusy(true);
+
+    try {
+      const resp = await fetch(`/api/profile/look-collections/${encodeURIComponent(selectedCollectionId)}/items`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lookId: look.id }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось добавить образ в подборку');
+      }
+
+      setCollectionResult('Образ добавлен в подборку');
+      await loadCollections();
+    } catch (e: any) {
+      setCollectionError(e?.message || 'Не удалось добавить образ в подборку');
+    } finally {
+      setCollectionBusy(false);
+    }
+  };
+
+  const submitLookReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!user?.id) {
+      showToast('Войдите, чтобы отправить обращение');
+      navigate('/auth');
+      return;
+    }
+
+    if (!look?.id) return;
+
+    const messageText = String(reportMessage || '').trim();
+    const composedMessage = [
+      `Тип проблемы: ${reportProblemType}`,
+      messageText ? `Комментарий: ${messageText}` : null,
+    ].filter(Boolean).join('\n');
+
+    setReportBusy(true);
+    setReportError('');
+    setReportResult('');
+
+    try {
+      const resp = await fetch('/api/support/request', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          topic: 'Проблема с генерацией',
+          message: composedMessage,
+          source: 'look_details',
+          lookId: String(look.id),
+          pageUrl: window.location.href,
+          context: {
+            problemType: reportProblemType,
+            userMessage: messageText || null,
+            lookTitle: look.title || null,
+            isPublic: Boolean(look.isPublic),
+            sourceItemCount: Array.isArray(look.sourceItems) ? look.sourceItems.length : null,
+            itemIds: Array.isArray(look.items) ? look.items : Array.isArray(look.itemIds) ? look.itemIds : null,
+            resultImageUrl: look.resultImageUrl || null,
+          },
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || `Ошибка ${resp.status}`);
+      }
+
+      setReportMessage('');
+      setReportResult(`Спасибо, обращение отправлено. Номер: ${data?.request?.id || '—'}`);
+      showToast('Обращение отправлено');
+    } catch (err: any) {
+      setReportError(err?.message || String(err));
+    } finally {
+      setReportBusy(false);
     }
   };
 
@@ -143,8 +697,9 @@ const LookDetails = () => {
   };
 
   return (
-    <div className="pb-12">
-      <div className="relative aspect-[3/4] bg-zinc-100">
+    <div className="pb-12 md:px-6 md:py-6">
+      <div className="md:grid md:grid-cols-[minmax(0,560px)_minmax(360px,1fr)] md:gap-8 md:items-start md:max-w-6xl md:mx-auto">
+        <div className="relative aspect-[3/4] bg-zinc-100 md:sticky md:top-24 md:h-[calc(100vh-180px)] md:min-h-[560px] md:max-h-[820px] md:aspect-auto md:rounded-[32px] md:overflow-hidden md:border md:border-zinc-100">
         <img
           src={
             showResult
@@ -152,7 +707,7 @@ const LookDetails = () => {
               : withApiOrigin(look.resultImageUrl)
           }
           alt=""
-          className={`w-full h-full object-cover transition-all duration-1000 ${
+          className={`w-full h-full object-cover md:object-contain transition-all duration-1000 ${
             isTryingOn ? 'blur-xl' : 'blur-0'
           }`}
         />
@@ -166,17 +721,6 @@ const LookDetails = () => {
           </div>
         )}
 
-        {!showResult && !isTryingOn && !isOwnLook && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <button
-              onClick={handleTryOn}
-              className="bg-white/90 backdrop-blur-md px-10 py-4 rounded-full font-bold uppercase tracking-widest text-sm shadow-2xl hover:scale-105 transition-transform"
-            >
-              Примерить этот образ
-            </button>
-          </div>
-        )}
-
         <Link to="/" className="absolute top-4 left-4 bg-white/50 backdrop-blur p-2 rounded-full">
           <svg className="w-6 h-6 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -187,34 +731,204 @@ const LookDetails = () => {
             ></path>
           </svg>
         </Link>
-      </div>
+        </div>
 
-      <div className="p-6 space-y-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold uppercase tracking-tight">{look.title}</h1>
+        <div className="p-6 space-y-8 md:p-0 md:pb-24">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            {isEditingTitle ? (
+              <div className="flex items-center gap-2">
+                <input
+                  ref={titleInputRef}
+                  value={titleDraft}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  onBlur={handleTitleInputBlur}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void saveLookTitle();
+                    }
+
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      cancelTitleEditing();
+                    }
+                  }}
+                  maxLength={80}
+                  aria-label="Название образа"
+                  disabled={titleBusy}
+                  className="min-w-0 w-full max-w-md rounded-xl border border-zinc-300 bg-white px-3 py-2 text-2xl font-bold tracking-tight outline-none focus:border-zinc-900 disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  aria-label="Сохранить название"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void saveLookTitle()}
+                  disabled={titleBusy}
+                  className="shrink-0 rounded-full border border-zinc-900 bg-zinc-900 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  ✓
+                </button>
+                <button
+                  type="button"
+                  aria-label="Отменить изменение названия"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={cancelTitleEditing}
+                  disabled={titleBusy}
+                  className="shrink-0 rounded-full border border-zinc-200 px-3 py-2 text-sm font-bold text-zinc-500 disabled:opacity-60"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2">
+                <h1 className="text-2xl font-bold tracking-tight">{look.title || 'Образ TopTry'}</h1>
+                {isOwnLook ? (
+                  <button
+                    type="button"
+                    onClick={startTitleEditing}
+                    aria-label="Изменить название образа"
+                    title="Изменить название"
+                    className="mt-1 shrink-0 rounded-full border border-zinc-200 p-2 text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-900"
+                  >
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
+            )}
             <div className="flex items-center gap-2 mt-1">
-              <img src={withApiOrigin(look.authorAvatar)} alt="" className="w-5 h-5 rounded-full" />
+              {look.authorAvatar ? (
+                <img src={withApiOrigin(look.authorAvatar)} alt="" className="w-5 h-5 rounded-full object-cover" />
+              ) : (
+                <span className="w-5 h-5 rounded-full bg-zinc-100 inline-block" />
+              )}
               <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
-                {look.authorName}
+                {look.authorName || 'Автор'}
               </span>
+              {look.isPublic ? (
+                <span className="text-[9px] bg-zinc-900 text-white px-2 py-1 rounded-full font-bold uppercase tracking-widest">
+                  Опубликовано
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="flex gap-4 flex-wrap justify-end">
+            {isOwnLook && (
+              <div className="flex items-center gap-2">
+              <button
+                onClick={handlePublishToggle}
+                disabled={publishBusy}
+                className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border ${
+                  look.isPublic
+                    ? 'border-zinc-300 text-zinc-500'
+                    : 'border-zinc-900 bg-zinc-900 text-white'
+                } ${publishBusy ? 'opacity-60 pointer-events-none' : ''}`}
+              >
+                {look.isPublic ? 'Скрыть' : 'Опубликовать'}
+              </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteLook}
+                  className="px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border border-zinc-200 text-zinc-400 hover:text-zinc-900 hover:border-zinc-400"
+                >
+                  Удалить
+                </button>
+              </div>
+            )}
             <button onClick={() => actions.reactToLook(look.id, 'like')} className="flex items-center gap-1.5 font-bold">
-              <ICONS.Heart className="w-6 h-6" /> {look.likes}
+              <ICONS.Heart className="w-6 h-6" /> {look.likes || 0}
             </button>
-            <button onClick={() => actions.reactToLook(look.id, 'want_try')} className="flex items-center gap-1.5 font-bold">
-              <span className="text-lg leading-none">🔥</span> {look.wantTryCount || 0}
+            <button onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="flex items-center gap-1.5 font-bold">
+              <span className="text-lg leading-none">💬</span> {look.comments || 0}
             </button>
-            <button onClick={() => actions.reactToLook(look.id, 'would_buy')} className="flex items-center gap-1.5 font-bold">
-              <span className="text-lg leading-none">🛍️</span> {look.wouldBuyCount || 0}
-            </button>
-            <button onClick={() => actions.saveLook(look.id)} className="flex items-center gap-1.5 font-bold">
+            <button
+              type="button"
+              onClick={handleSaveLook}
+              disabled={saveBusy}
+              className={`flex items-center gap-1.5 font-bold ${viewerSaved ? 'text-zinc-900' : 'text-zinc-400'} ${saveBusy ? 'opacity-60 pointer-events-none' : ''}`}
+            >
               <span className="text-lg leading-none">🔖</span> {look.saves || 0}
             </button>
           </div>
         </div>
+
+        {!isOwnLook && Array.isArray(look.sourceItems) && look.sourceItems.length > 0 && (
+          <section className="rounded-3xl border border-zinc-100 bg-zinc-50 p-4">
+            <button
+              type="button"
+              onClick={handleTryOn}
+              className="w-full bg-zinc-900 text-white px-5 py-4 rounded-full text-xs font-black uppercase tracking-[0.18em] hover:bg-zinc-800 transition-colors"
+            >
+              Примерить на себе
+            </button>
+            <p className="mt-3 text-xs text-zinc-400 leading-relaxed">
+              Соберите новый образ из этих товаров и посмотрите, как он будет выглядеть на вашем аватаре.
+            </p>
+          </section>
+        )}
+
+        {isOwnLook && look.isPublic && (
+          <section className="rounded-3xl border border-zinc-100 bg-zinc-50 p-4 space-y-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                Подборки
+              </p>
+              <h3 className="mt-1 text-sm font-black tracking-tight">
+                Добавить в подборку
+              </h3>
+              <p className="mt-2 text-xs text-zinc-500 leading-relaxed">
+                Подборки отображаются на публичной витрине автора.
+              </p>
+            </div>
+
+            {collections.length ? (
+              <div className="grid md:grid-cols-[minmax(0,1fr)_auto] gap-2">
+                <select
+                  value={selectedCollectionId}
+                  onChange={(e) => setSelectedCollectionId(e.target.value)}
+                  className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm font-bold outline-none"
+                >
+                  {collections.map((collection) => (
+                    <option key={collection.id} value={collection.id}>
+                      {collection.title}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={addToCollection}
+                  disabled={collectionBusy}
+                  className="h-11 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.16em] disabled:opacity-50"
+                >
+                  {collectionBusy ? 'Добавляем...' : 'Добавить'}
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/profile"
+                className="h-11 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.16em] inline-flex items-center justify-center"
+              >
+                Создать подборку в профиле
+              </Link>
+            )}
+
+            {collectionResult ? (
+              <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-3 text-xs font-bold text-emerald-700">
+                {collectionResult}
+              </div>
+            ) : null}
+
+            {collectionError ? (
+              <div className="rounded-2xl bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-700">
+                {collectionError}
+              </div>
+            ) : null}
+          </section>
+        )}
 
         {(look.userDescription || look.aiDescription) && (
           <section className="space-y-2">
@@ -231,10 +945,82 @@ const LookDetails = () => {
           </section>
         )}
 
+        <section className="rounded-3xl border border-zinc-100 bg-zinc-50 p-4 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
+                Качество примерки
+              </h2>
+              <p className="mt-2 text-sm text-zinc-600 leading-relaxed">
+                Если образ получился странно, сообщите нам. Мы привяжем обращение к этому образу и сможем быстрее разобраться.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setReportOpen((v) => !v);
+                setReportError('');
+                setReportResult('');
+              }}
+              className="shrink-0 px-4 py-2 rounded-full bg-white border border-zinc-100 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-900"
+            >
+              {reportOpen ? 'Скрыть' : 'Сообщить'}
+            </button>
+          </div>
+
+          {reportOpen && (
+            <form onSubmit={submitLookReport} className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {reportProblemTypes.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setReportProblemType(type)}
+                    className={`px-3 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest ${
+                      reportProblemType === type
+                        ? 'border-zinc-900 bg-zinc-900 text-white'
+                        : 'border-zinc-200 bg-white text-zinc-500'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                value={reportMessage}
+                onChange={(e) => setReportMessage(e.target.value)}
+                placeholder="Можно добавить комментарий: что именно выглядит неправильно?"
+                rows={3}
+                className="w-full rounded-2xl border border-zinc-100 bg-white px-4 py-3 text-sm outline-none focus:border-zinc-900 resize-none"
+              />
+
+              {(reportError || reportResult) && (
+                <div className={`rounded-2xl p-3 text-xs leading-relaxed ${
+                  reportError
+                    ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                    : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                }`}>
+                  {reportError || reportResult}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={reportBusy}
+                className="h-10 px-5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em] disabled:opacity-50"
+              >
+                {reportBusy ? 'Отправляем…' : 'Отправить проблему'}
+              </button>
+            </form>
+          )}
+        </section>
+
         <section className="space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Вещи в образе</h2>
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Товары образа</h2>
           <div className="space-y-3">
-            {lookProducts.map((p) => (
+            {lookProducts.map((p, idx) => (
               <div
                 key={p.id}
                 className="flex items-center gap-4 bg-zinc-50 p-3 rounded-2xl border border-zinc-100"
@@ -254,7 +1040,7 @@ const LookDetails = () => {
                 </div>
                 {p.affiliateUrl || p.productUrl ? (
                   <a
-                    href={p.affiliateUrl || p.productUrl}
+                    href={sourceItemClickoutUrl(p, 'look_details', String(look.id), idx)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-zinc-900 text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest"
@@ -262,19 +1048,42 @@ const LookDetails = () => {
                     Купить
                   </a>
                 ) : (
-                  <button className="bg-zinc-300 text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest cursor-not-allowed">
-                    Нет ссылки
-                  </button>
+                  <Link
+                    to={similarCatalogRoute(p)}
+                    className="bg-zinc-100 text-zinc-700 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-colors"
+                  >
+                    Найти похожее
+                  </Link>
                 )}
               </div>
             ))}
           </div>
 
-          {Array.isArray(look.sourceItems) && look.sourceItems.some((i: any) => i.isCatalog) && (
+          
+        {(look.authorSlug || look.userId) && (
+          <div className="bg-white rounded-[28px] border border-zinc-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                Автор образа
+              </p>
+              <div className="mt-1 text-sm font-black tracking-tight">
+                {look.authorName || 'Автор'}
+              </div>
+            </div>
+            <Link
+              to={`/u/${look.authorSlug || look.userId}`}
+              className="h-10 px-4 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.16em] flex items-center justify-center"
+            >
+              Все образы автора
+            </Link>
+          </div>
+        )}
+
+{Array.isArray(look.sourceItems) && look.sourceItems.some((i: any) => i.isCatalog) && (
             <div className="pt-4">
               <div className="bg-zinc-900 text-white p-4 rounded-2xl flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest opacity-70">Купить всё</p>
+                  <p className="text-[10px] uppercase tracking-widest opacity-70">Товары образа</p>
                   <p className="text-lg font-bold">
                     {look.priceBuyNowRUB || 0} {CURRENCY}
                   </p>
@@ -282,9 +1091,10 @@ const LookDetails = () => {
                 <button
                   onClick={() => {
                     (look.sourceItems || [])
-                      .filter((i: any) => i.affiliateUrl || i.productUrl)
-                      .forEach((i: any) => {
-                        window.open(i.affiliateUrl || i.productUrl, '_blank');
+                      .map((i: any, idx: number) => sourceItemClickoutUrl(i, 'look_details_buy_all', String(look.id), idx))
+                      .filter(Boolean)
+                      .forEach((url: string) => {
+                        window.open(url, '_blank', 'noopener,noreferrer');
                       });
                   }}
                   className="bg-white text-black px-5 py-3 rounded-full text-xs font-bold uppercase tracking-widest"
@@ -311,11 +1121,11 @@ const LookDetails = () => {
           </div>
         </section>
 
-        <section className="space-y-4">
+        <section ref={commentsRef} className="space-y-4 scroll-mt-24">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">Комментарии</h2>
 
           {comments.length === 0 ? (
-            <p className="text-sm text-zinc-400">Пока нет комментариев.</p>
+            <p className="text-sm text-zinc-400">Пока нет комментариев. Будьте первым, кто оставит мнение об образе.</p>
           ) : (
             <div className="space-y-3">
               {comments.map((c) => (
@@ -338,14 +1148,17 @@ const LookDetails = () => {
             </div>
           )}
 
-          {user?.id && (
+          {user?.id ? (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {quickComments.map((preset) => (
                   <button
                     key={preset}
-                    onClick={() => setCommentText(preset)}
-                    className="px-3 py-2 rounded-full border border-zinc-200 text-[10px] font-bold uppercase tracking-widest hover:border-zinc-900"
+                    onClick={() => submitComment(preset)}
+                    disabled={commentBusy}
+                    className={`px-3 py-2 rounded-full border border-zinc-200 text-[10px] font-bold uppercase tracking-widest hover:border-zinc-900 ${
+                      commentBusy ? 'opacity-60 pointer-events-none' : ''
+                    }`}
                   >
                     {preset}
                   </button>
@@ -354,13 +1167,14 @@ const LookDetails = () => {
 
               <div className="flex gap-2">
                 <input
+                  ref={commentInputRef}
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   placeholder="Написать комментарий..."
                   className="flex-1 border border-zinc-200 rounded-full px-5 py-3 text-sm focus:outline-none focus:border-zinc-900"
                 />
                 <button
-                  onClick={submitComment}
+                  onClick={() => submitComment()}
                   disabled={commentBusy}
                   className={`bg-zinc-900 text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest ${
                     commentBusy ? 'opacity-60 pointer-events-none' : ''
@@ -369,6 +1183,18 @@ const LookDetails = () => {
                   Отправить
                 </button>
               </div>
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-zinc-100 bg-zinc-50 p-5 text-center space-y-3">
+              <p className="text-sm text-zinc-500">
+                Войдите, чтобы оставить комментарий или быстро отреагировать на образ.
+              </p>
+              <Link
+                to="/auth"
+                className="inline-flex h-10 px-5 items-center justify-center rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.18em]"
+              >
+                Войти
+              </Link>
             </div>
           )}
         </section>
@@ -380,6 +1206,7 @@ const LookDetails = () => {
           >
             <ICONS.Share className="w-4 h-4" /> Поделиться этим образом
           </button>
+        </div>
         </div>
       </div>
     </div>

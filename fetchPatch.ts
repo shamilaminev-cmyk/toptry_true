@@ -1,8 +1,166 @@
 const TOPTRY_FETCH_PATCH_FLAG = "__toptry_fetch_patched__";
 
-// fetchPatch.ts
-// Monkeypatch window.fetch so that relative /api/* and /media/* calls
-// go to VITE_API_ORIGIN (e.g. https://api.toptry.ru) and always include cookies.
+function isApiOrMediaLike(url: string) {
+  return (
+    url === "/api" ||
+    url.startsWith("/api/") ||
+    url.startsWith("/api?") ||
+    url === "api" ||
+    url.startsWith("api/") ||
+    url.startsWith("api?") ||
+    url === "/media" ||
+    url.startsWith("/media/") ||
+    url.startsWith("/media?") ||
+    url === "media" ||
+    url.startsWith("media/") ||
+    url.startsWith("media?")
+  );
+}
+
+function normalizeRelativeApiOrMedia(url: string) {
+  if (!isApiOrMediaLike(url)) return "";
+  return url.startsWith("/") ? url : `/${url}`;
+}
+
+function isToptryWebHost() {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.toLowerCase();
+
+  return (
+    host === "toptry.ru" ||
+    host === "www.toptry.ru" ||
+    host === "staging.toptry.ru"
+  );
+}
+
+function normalizeOrigin(origin?: string | null) {
+  const s = (origin || "").toString().trim();
+  if (!s) return "";
+  return s.replace(/\/+$/g, "");
+}
+
+function explicitApiOriginForNonToptryHost() {
+  if (typeof window === "undefined") return "";
+
+  // On toptry.ru/staging.toptry.ru nginx proxies /api and /media.
+  // Keeping same-origin is safer for mobile browsers and avoids cross-origin cache quirks.
+  if (isToptryWebHost()) return "";
+
+  return normalizeOrigin(import.meta.env.VITE_API_ORIGIN as string | undefined);
+}
+
+function inferMethod(input: RequestInfo | URL, init?: RequestInit) {
+  const method =
+    (init?.method ||
+      (typeof Request !== "undefined" && input instanceof Request ? input.method : "") ||
+      "GET").toString();
+
+  return method.toUpperCase();
+}
+
+function isApiUrl(url: string) {
+  try {
+    if (url.startsWith("/api") || url.startsWith("api")) return true;
+    if (/^https?:\/\//i.test(url)) {
+      const u = new URL(url);
+      return u.pathname === "/api" || u.pathname.startsWith("/api/");
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+function isMediaUrl(url: string) {
+  try {
+    if (url.startsWith("/media") || url.startsWith("media")) return true;
+    if (/^https?:\/\//i.test(url)) {
+      const u = new URL(url);
+      return u.pathname === "/media" || u.pathname.startsWith("/media/");
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+function mergeNoStoreHeaders(headers?: HeadersInit) {
+  const h = new Headers(headers || {});
+  h.set("Cache-Control", "no-cache");
+  h.set("Pragma", "no-cache");
+  return h;
+}
+
+function addCacheBuster(url: string, attempt: number) {
+  const token = `${Date.now()}-${attempt}-${Math.random().toString(36).slice(2, 8)}`;
+
+  try {
+    if (/^https?:\/\//i.test(url)) {
+      const u = new URL(url);
+      u.searchParams.set("_t", token);
+      return u.toString();
+    }
+
+    const [path, hash = ""] = url.split("#");
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}_t=${encodeURIComponent(token)}${hash ? `#${hash}` : ""}`;
+  } catch {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}_t=${encodeURIComponent(token)}`;
+  }
+}
+
+function shouldRetryApiResponse(resp: Response) {
+  return (
+    resp.status === 304 ||
+    resp.status === 408 ||
+    resp.status === 425 ||
+    resp.status === 429 ||
+    resp.status === 500 ||
+    resp.status === 502 ||
+    resp.status === 503 ||
+    resp.status === 504
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function mergeAbortSignals(a?: AbortSignal | null, b?: AbortSignal | null) {
+  if (!a) return b || undefined;
+  if (!b) return a || undefined;
+
+  const controller = new AbortController();
+
+  const abort = () => {
+    if (!controller.signal.aborted) controller.abort();
+  };
+
+  if (a.aborted || b.aborted) {
+    abort();
+    return controller.signal;
+  }
+
+  a.addEventListener("abort", abort, { once: true });
+  b.addEventListener("abort", abort, { once: true });
+
+  return controller.signal;
+}
+
+function createApiTimeoutSignal(ms: number) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, ms);
+
+  return {
+    signal: controller.signal,
+    clear: () => window.clearTimeout(timeoutId),
+  };
+}
 
 export function patchFetchForApi() {
   if (typeof window === "undefined" || typeof window.fetch !== "function") return;
@@ -11,62 +169,100 @@ export function patchFetchForApi() {
   if (w[TOPTRY_FETCH_PATCH_FLAG]) return;
   w[TOPTRY_FETCH_PATCH_FLAG] = true;
 
-  if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
-
-  // IMPORTANT: use direct import.meta.env access so Vite replaces it reliably.
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN as string | undefined;
-
-  // TEMP (optional): uncomment for one deploy to verify in prod console
-  // console.log('[fetchPatch] VITE_API_ORIGIN =', apiOrigin);
-
-  const normalizeOrigin = (origin?: string) => {
-    if (!origin) return '';
-    return origin.endsWith('/') ? origin.slice(0, -1) : origin;
-  };
-
-  const origin = normalizeOrigin(apiOrigin);
-
   const originalFetch = window.fetch.bind(window);
 
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    const url =
-      typeof input === 'string'
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const originalUrl =
+      typeof input === "string"
         ? input
         : input instanceof URL
           ? input.toString()
           : (input as Request).url;
 
-    // Support both "/api/..." and "api/..." (some code uses no leading slash)
-    const isApi =
-      url.startsWith('/api/') || url === '/api' || url.startsWith('/api?') ||
-      url.startsWith('api/') || url === 'api' || url.startsWith('api?');
+    let rewrittenUrl = originalUrl;
 
-    const isMedia =
-      url.startsWith('/media/') || url === '/media' || url.startsWith('/media?') ||
-      url.startsWith('media/') || url === 'media' || url.startsWith('media?');
-
-    const isAbsApi = !!origin && (
-      url.startsWith(origin + "/api/") || url === origin + "/api" || url.startsWith(origin + "/api?")
-    );
-    const isAbsMedia = !!origin && (
-      url.startsWith(origin + "/media/") || url === origin + "/media" || url.startsWith(origin + "/media?")
-    );
-
-    if (isAbsApi || isAbsMedia) {
-      const nextInit: RequestInit = { ...(init || {}), credentials: "include" };
-      return originalFetch(input as any, nextInit);
+    const relativePath = normalizeRelativeApiOrMedia(originalUrl);
+    if (relativePath) {
+      const explicitOrigin = explicitApiOriginForNonToptryHost();
+      rewrittenUrl = explicitOrigin ? `${explicitOrigin}${relativePath}` : relativePath;
     }
 
+    const method = inferMethod(input, init);
+    const apiRequest = isApiUrl(rewrittenUrl);
+    const mediaRequest = isMediaUrl(rewrittenUrl);
+    const apiGet = apiRequest && method === "GET";
 
-    if (isApi || isMedia) {
-      // Rewrite relative paths to absolute using origin (if set).
-      const path = url.startsWith('/') ? url : `/${url}`;
-      const rewritten = origin ? `${origin}${path}` : url;
+    const nextInit: RequestInit = apiRequest || mediaRequest
+      ? {
+          ...(init || {}),
+          credentials: "include",
+          ...(apiRequest
+            ? {
+                cache: "no-store",
+                headers: mergeNoStoreHeaders((init || {}).headers),
+              }
+            : {}),
+        }
+      : (init || {});
 
-      const nextInit: RequestInit = { ...(init || {}), credentials: 'include' };
-      return originalFetch(rewritten, nextInit);
+    const maxAttempts = apiGet ? 3 : 1;
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const attemptUrl = apiGet ? addCacheBuster(String(rewrittenUrl), attempt + 1) : rewrittenUrl;
+
+      const apiTimeout = apiGet ? createApiTimeoutSignal(10000) : null;
+      const attemptInit: RequestInit = apiTimeout
+        ? {
+            ...nextInit,
+            signal: mergeAbortSignals((nextInit as any).signal, apiTimeout.signal),
+          }
+        : nextInit;
+
+      try {
+        const resp = await originalFetch(attemptUrl as any, attemptInit);
+        apiTimeout?.clear();
+
+        if (apiGet && shouldRetryApiResponse(resp) && attempt < maxAttempts - 1) {
+          console.warn("[toptry][fetchPatch] retrying api response", {
+            url: String(rewrittenUrl || ""),
+            status: resp.status,
+            attempt: attempt + 1,
+          });
+
+          await sleep(300 + attempt * 500);
+          continue;
+        }
+
+        if (apiRequest && resp.status === 304) {
+          throw new Error(`API returned unexpected 304: ${String(rewrittenUrl || "")}`);
+        }
+
+        return resp;
+      } catch (err) {
+        apiTimeout?.clear();
+        lastError = err;
+
+        if (apiGet && attempt < maxAttempts - 1) {
+          console.warn("[toptry][fetchPatch] retrying api fetch error", {
+            url: String(rewrittenUrl || ""),
+            attempt: attempt + 1,
+            error: err instanceof Error ? err.message : String(err),
+          });
+
+          await sleep(300 + attempt * 500);
+          continue;
+        }
+
+        console.error("[toptry][fetchPatch] fetch failed", {
+          url: String(rewrittenUrl || ""),
+          error: err instanceof Error ? err.message : String(err),
+        });
+
+        throw err;
+      }
     }
 
-    return originalFetch(input as any, init);
+    throw lastError || new Error(`API fetch failed: ${String(rewrittenUrl || "")}`);
   };
 }

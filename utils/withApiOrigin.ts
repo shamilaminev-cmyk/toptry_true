@@ -1,47 +1,55 @@
 // utils/withApiOrigin.ts
+function normalizeOrigin(origin?: string | null): string {
+  const s = (origin || "").toString().trim();
+  if (!s) return "";
+  return s.replace(/\/+$/g, "");
+}
+
+function isToptryWebHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.toLowerCase();
+  return (
+    host === "toptry.ru" ||
+    host === "www.toptry.ru" ||
+    host === "staging.toptry.ru"
+  );
+}
+
+function explicitApiOriginForNonToptryHost(): string {
+  if (typeof window === "undefined") return "";
+
+  // On toptry.ru and staging.toptry.ru, nginx already proxies /api and /media.
+  // Keeping same-origin avoids mobile cross-origin/CORS/preflight instability.
+  if (isToptryWebHost()) return "";
+
+  return normalizeOrigin((import.meta as any)?.env?.VITE_API_ORIGIN?.toString?.() || "");
+}
+
 export function withApiOrigin(url?: string | null): string {
   const s = (url || "").toString();
   if (!s) return "";
 
-  // keep data/blob as-is
   if (s.startsWith("data:") || s.startsWith("blob:")) return s;
 
-  // Build-time origin (vite)
-  const apiOriginRaw = (import.meta as any)?.env?.VITE_API_ORIGIN?.toString?.() || "";
-
-  // Runtime fallback for static hosting:
-  // <meta name="toptry-api-origin" content="%VITE_API_ORIGIN%">
-  const metaOrigin =
-    typeof window !== "undefined"
-      ? ((document.querySelector('meta[name="toptry-api-origin"]') as any)?.content?.toString?.() || "")
-      : "";
-
-  const apiOrigin = (apiOriginRaw || metaOrigin).replace(/\/+$/g, "");
-
-  // no origin => keep same-origin behavior
-  if (!apiOrigin) return s;
-
-  // relative /api and /media => prefix
-  if (
+  const isRelativeApiOrMedia =
     s.startsWith("/api/") || s === "/api" || s.startsWith("/api?") ||
-    s.startsWith("/media/") || s === "/media" || s.startsWith("/media?")
-  ) {
-    return `${apiOrigin}${s}`;
+    s.startsWith("/media/") || s === "/media" || s.startsWith("/media?");
+
+  const isBareApiOrMedia =
+    s.startsWith("api/") || s === "api" || s.startsWith("api?") ||
+    s.startsWith("media/") || s === "media" || s.startsWith("media?");
+
+  const explicitOrigin = explicitApiOriginForNonToptryHost();
+
+  if (isRelativeApiOrMedia) {
+    return explicitOrigin ? `${explicitOrigin}${s}` : s;
   }
 
-  // absolute URLs: keep, BUT if they point to /api or /media => rewrite origin to apiOrigin
+  if (isBareApiOrMedia) {
+    return explicitOrigin ? `${explicitOrigin}/${s}` : `/${s}`;
+  }
+
   if (/^https?:\/\//i.test(s)) {
-    try {
-      const u = new URL(s);
-      const p = u.pathname;
-      const isApi = p === "/api" || p.startsWith("/api/");
-      const isMedia = p === "/media" || p.startsWith("/media/");
-      if (isApi || isMedia) {
-        return `${apiOrigin}${u.pathname}${u.search}${u.hash}`;
-      }
-    } catch {
-      // ignore parse errors
-    }
     return s;
   }
 

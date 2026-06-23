@@ -85,6 +85,108 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Deploy AI gateway on DigitalOcean
+        if: github.ref == 'refs/heads/main'
+        env:
+          IMAGE_API: ${{ steps.vars.outputs.image_api }}
+          TAG: ${{ steps.vars.outputs.tag }}
+          HOST: ${{ secrets.SSH_HOST }}
+          USER: ${{ secrets.SSH_USER }}
+          PORT: ${{ secrets.SSH_PORT }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          printf "%s" "$SSH_KEY" > ~/.ssh/id_ed25519
+          echo >> ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/id_ed25519 -p "$PORT" "$USER@$HOST" \
+            "IMAGE_API='$IMAGE_API' TAG='$TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          CONTAINER="toptry-ai-gateway"
+          PORT_BIND="127.0.0.1:8090:5174"
+          ENV_FILE="$(mktemp /tmp/toptry-ai-gateway.env.XXXXXX)"
+          BODY_FILE="$(mktemp /tmp/toptry-ai-gateway-smoke.XXXXXX)"
+          REPLACED=0
+
+          cleanup() {
+            rm -f "$ENV_FILE" "$BODY_FILE"
+          }
+
+          rollback() {
+            if [ "$REPLACED" != "1" ]; then
+              return
+            fi
+
+            echo "AI gateway smoke check failed; restoring previous image"
+            docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+            docker run -d \
+              --name "$CONTAINER" \
+              --restart unless-stopped \
+              --network "$NETWORK" \
+              --env-file "$ENV_FILE" \
+              -e AI_GATEWAY_ROLE=gateway \
+              -p "$PORT_BIND" \
+              "$PREVIOUS_IMAGE" >/dev/null
+          }
+
+          on_error() {
+            status=$?
+            rollback || true
+            cleanup
+            exit "$status"
+          }
+
+          trap on_error ERR
+          trap cleanup EXIT
+
+          docker inspect "$CONTAINER" >/dev/null
+          PREVIOUS_IMAGE="$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')"
+          NETWORK="$(docker inspect "$CONTAINER" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{printf "%s" $name}}{{end}}')"
+          NETWORK="${NETWORK:-toptry-ai_default}"
+          docker inspect "$CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' > "$ENV_FILE"
+
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          docker pull "$IMAGE_API:$TAG"
+
+          docker rm -f "$CONTAINER" >/dev/null
+          docker run -d \
+            --name "$CONTAINER" \
+            --restart unless-stopped \
+            --network "$NETWORK" \
+            --env-file "$ENV_FILE" \
+            -e AI_GATEWAY_ROLE=gateway \
+            -p "$PORT_BIND" \
+            "$IMAGE_API:$TAG" >/dev/null
+          REPLACED=1
+
+          sleep 2
+          SECRET="$(sed -n 's/^AI_GATEWAY_SECRET=//p' "$ENV_FILE" | head -n 1)"
+          if [ -z "$SECRET" ]; then
+            SECRET="$(sed -n 's/^PROXY_SHARED_SECRET=//p' "$ENV_FILE" | head -n 1)"
+          fi
+          test -n "$SECRET"
+
+          CODE="$(curl -sS -o "$BODY_FILE" -w '%{http_code}' \
+            --connect-timeout 10 --max-time 25 \
+            -X POST http://127.0.0.1:8090/internal/ai/wardrobe/extract \
+            -H 'content-type: application/json' \
+            -H "x-toptry-internal-secret: $SECRET" \
+            --data '{}')"
+
+          test "$CODE" = "400"
+          grep -q 'photoDataUrl is required' "$BODY_FILE"
+
+          echo "AI gateway deployed and wardrobe endpoint smoke-tested"
+          REMOTE
+
+
       # --- WEB image ---
       - name: Build & push WEB image
         uses: docker/build-push-action@v6
@@ -112,12 +214,12 @@ jobs:
           WEB_CONTAINER="${{ steps.vars.outputs.web_container }}"
           WEB_PORT_BIND="${{ steps.vars.outputs.web_port_bind }}"
 
-          HOST="$(printf "%s" "${{ secrets.SSH_HOST }}" | tr -d '\r\n')"
-          USER="$(printf "%s" "${{ secrets.SSH_USER }}" | tr -d '\r\n')"
-          PORT="$(printf "%s" "${{ secrets.SSH_PORT }}" | tr -d '\r\n')"
+          HOST="$(printf "%s" "${{ secrets.TOPTRY_PROD_HOST }}" | tr -d '\r\n')"
+          USER="$(printf "%s" "${{ secrets.TOPTRY_PROD_USER }}" | tr -d '\r\n')"
+          PORT="$(printf "%s" "${{ secrets.TOPTRY_PROD_PORT }}" | tr -d '\r\n')"
 
           mkdir -p ~/.ssh
-          printf "%s" "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          printf "%s" "${{ secrets.TOPTRY_PROD_SSH_KEY }}" > ~/.ssh/id_ed25519
           echo >> ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -p "${PORT}" -H "${HOST}" >> ~/.ssh/known_hosts

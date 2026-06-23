@@ -74,12 +74,21 @@ export interface User {
   phone: string;
   avatarUrl?: string;
   selfieUrl?: string;
+  sizeTop?: string;
+  sizeBottom?: string;
+  sizeShoes?: string;
+  catalogGenderPreference?: 'MALE' | 'FEMALE' | 'UNISEX' | 'ALL';
+  publicSlug?: string;
+  publicDisplayName?: string;
+  publicBio?: string;
+  publicSocialUrl?: string;
   tier: SubscriptionTier;
   limits: {
     hdTryOnRemaining: number;
     looksRemaining: number;
   };
   isPublic: boolean;
+  isAdmin?: boolean;
 }
 
 export interface Look {
@@ -91,19 +100,17 @@ export interface Look {
   isPublic: boolean;
   likes: number;
   comments: number;
-  wantTryCount?: number;
-  wouldBuyCount?: number;
   saves?: number;
   createdAt: Date;
   authorName?: string;
   authorAvatar?: string;
+  authorSlug?: string;
 
   userDescription?: string;
   aiDescription?: string;
   priceBuyNowRUB?: number;
   buyLinks?: string[];
 
-  viewerReaction?: 'like' | 'want_try' | 'would_buy' | null;
   viewerSaved?: boolean;
 }
 

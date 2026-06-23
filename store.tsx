@@ -19,8 +19,12 @@ interface AppState {
     login: (emailOrUsername: string, password: string) => Promise<void>;
     register: (email: string, username: string, password: string) => Promise<void>;
     startPhoneAuth: (phone: string) => Promise<void>;
-    verifyPhoneAuth: (phone: string, code: string) => Promise<any>;
+    verifyPhoneAuth: (phone: string, code: string, referralCode?: string) => Promise<any>;
+    updateProfileSizes: (sizeTop: string, sizeBottom: string, sizeShoes: string, catalogGenderPreference?: string) => Promise<void>;
+    updatePublicProfile: (publicSlug: string, publicDisplayName: string, publicBio: string, publicSocialUrl: string) => Promise<void>;
+    refreshMe: () => Promise<User | null>;
     logout: () => Promise<void>;
+    resetSession: () => void;
     toggleHomeLayout: () => void;
     addToWardrobe: (product: Product) => void;
     addMultipleToWardrobe: (products: Product[]) => void;
@@ -29,8 +33,9 @@ interface AppState {
     createLook: (items: WardrobeItem[]) => Promise<string | undefined>;
     setSelfie: (url: string) => void;
     likeLook: (id: string) => void;
-    reactToLook: (id: string, reaction: 'like' | 'want_try' | 'would_buy') => Promise<void>;
+    reactToLook: (id: string, reaction?: 'like') => Promise<void>;
     saveLook: (id: string) => Promise<void>;
+    deleteLook: (id: string) => Promise<void>;
   };
 }
 
@@ -120,8 +125,32 @@ async function urlToDataUrlIfMock(url: string): Promise<string> {
 
 const STORAGE_KEY = "toptry_state_v1";
 
+const TOPTRY_CLIENT_STORAGE_KEYS = [
+  STORAGE_KEY,
+  "toptry-state",
+  "toptry_state",
+  "toptry_state_v1",
+];
+
+function clearTopTryClientStorage() {
+  if (typeof window === "undefined") return;
+
+  for (const key of TOPTRY_CLIENT_STORAGE_KEYS) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  useEffect(() => {
+    window.__toptryClientLog?.("app_provider_mounted");
+  }, []);
+
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
@@ -131,17 +160,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // Hydrate from localStorage (fast MVP persistence)
+  // Hydrate non-auth UI state from localStorage.
+  // Backend /api/auth/me is the only source of truth for user session.
+  // Do NOT restore saved.user here: otherwise stale localStorage can create phantom-login.
   useEffect(() => {
     const saved = safeParse<{ user: User | null; wardrobe: WardrobeItem[]; looks: Look[]; homeLayout: HomeLayout }>(
       typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
     );
 
     if (saved) {
-      setUser(saved.user || null);
       setWardrobe(Array.isArray(saved.wardrobe) ? saved.wardrobe : []);
 
-      // Dates may come back as strings; keep them usable by re-wrapping if present.
       const restoredLooks = (Array.isArray(saved.looks) ? saved.looks : []).map((l: any) => ({
         ...l,
         createdAt: l?.createdAt ? new Date(l.createdAt) : new Date(),
@@ -151,7 +180,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setHomeLayout(saved.homeLayout || HomeLayout.DASHBOARD);
     }
 
-    // Simulate small loading skeleton
     const t = setTimeout(() => setLoading(false), 450);
     return () => clearTimeout(t);
   }, []);
@@ -159,43 +187,109 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     (async () => {
       try {
+        console.info('[toptry][catalog] loading initial products');
+        window.__toptryClientLog?.("catalog_initial_fetch_start");
+
         const resp = await fetch('/api/catalog/products', { credentials: 'include' });
-        if (!resp.ok) return;
-        const data = await resp.json().catch(() => null);
+        window.__toptryClientLog?.("catalog_initial_fetch_response", {
+          status: resp.status,
+          contentType: resp.headers.get('content-type') || '',
+        });
+        const contentType = resp.headers.get('content-type') || '';
+
+        if (!resp.ok) {
+          console.error('[toptry][catalog] initial products failed', {
+            status: resp.status,
+            contentType,
+          });
+          return;
+        }
+
+        if (contentType.includes('text/html')) {
+          const html = await resp.text().catch(() => '');
+          console.error('[toptry][catalog] initial products returned HTML instead of JSON', {
+            status: resp.status,
+            contentType,
+            prefix: html.slice(0, 120),
+          });
+          return;
+        }
+
+        const data = await resp.json().catch((err) => {
+          console.error('[toptry][catalog] initial products JSON parse failed', err);
+          return null;
+        });
+
         const items = Array.isArray(data?.products) ? data.products : [];
-        // allow empty (server is source of truth)
+        console.info('[toptry][catalog] initial products loaded', {
+          count: items.length,
+          total: data?.total,
+          meta: data?.meta,
+        });
+
         setProducts(items);
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error('[toptry][catalog] initial products request crashed', err);
       }
     })();
   }, []);
 
-  // Restore server session (JWT in httpOnly cookie)
+  // Restore server session (JWT in httpOnly cookie).
+  // Important: backend is the source of truth. If /api/auth/me returns user:null,
+  // clear stale local user from localStorage/state so the app does not look logged in.
   useEffect(() => {
     (async () => {
       try {
+        window.__toptryClientLog?.("auth_me_fetch_start");
         const resp = await fetch('/api/auth/me', { credentials: 'include' });
-        if (!resp.ok) return;
-        const data = await resp.json().catch(() => null);
-        if (!data?.user) return;
-        const u = data.user;
-        setUser((prev) => {
-          return {
-            id: u.id,
-            email: u.email,
-            name: prev?.name || u.username,
-            username: u.username,
-            phone: prev?.phone || '',
-            avatarUrl: u.avatarUrl || prev?.avatarUrl,
-            selfieUrl: prev?.selfieUrl,
-            tier: prev?.tier || SubscriptionTier.FREE,
-            limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
-            isPublic: !!u.isPublic,
-          };
+        window.__toptryClientLog?.("auth_me_fetch_response", {
+          status: resp.status,
+          contentType: resp.headers.get('content-type') || '',
         });
-      } catch {
-        // ignore
+
+        if (!resp.ok) {
+          if (resp.status === 401) {
+            clearTopTryClientStorage();
+            setUser(null);
+            setWardrobe([]);
+            setLooks([]);
+          }
+          return;
+        }
+
+        const data = await resp.json().catch(() => null);
+
+        if (!data?.user) {
+          clearTopTryClientStorage();
+          setUser(null);
+          setWardrobe([]);
+          setLooks([]);
+          return;
+        }
+
+        const u = data.user;
+        setUser((prev) => ({
+          id: u.id,
+          email: u.email || undefined,
+          name: u.username || undefined,
+          username: u.username || undefined,
+          phone: u.phone || prev?.phone || '',
+          avatarUrl: u.avatarUrl || undefined,
+          selfieUrl: prev?.selfieUrl,
+          sizeTop: u.sizeTop || undefined,
+          sizeBottom: u.sizeBottom || undefined,
+          sizeShoes: u.sizeShoes || undefined,
+          catalogGenderPreference: u.catalogGenderPreference || undefined,
+          tier: prev?.tier || SubscriptionTier.FREE,
+          limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
+          isPublic: !!u.isPublic,
+          isAdmin: !!u.isAdmin,
+        }));
+      } catch (err) {
+        // Network errors should not forcibly log the user out.
+        console.error('[toptry][auth] /api/auth/me request crashed', err);
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -273,27 +367,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const actions = useMemo(() => ({
     startPhoneAuth: async (phone: string) => {
-      const resp = await fetch('/api/auth/phone/start', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
+  let r: Response;
 
-      const data = await resp.json().catch(() => ({}));
+  try {
+    r = await fetch(`/api/auth/phone/start?t=${Date.now()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      cache: 'no-store',
+      body: JSON.stringify({ phone })
+    });
+  } catch (e: any) {
+    console.warn('[auth] phone start failed before response', e);
+    throw new Error('Не удалось отправить запрос. Сбросьте сессию или откройте сайт в обычном браузере.');
+  }
 
-      if (!resp.ok) {
-        throw new Error(data?.error || 'Не удалось отправить код');
+  let text = '';
+  try {
+    text = await r.text();
+  } catch {}
+
+  let j: any = {};
+  try {
+    j = text ? JSON.parse(text) : {};
+  } catch {}
+
+  if (!r.ok) {
+    const msg =
+      j?.error ||
+      (r.status === 429 ? 'Код уже отправлен, подождите немного' : null) ||
+      `HTTP ${r.status}`;
+
+    const err: any = new Error(msg);
+    err.retryAfterSec = j?.retryAfterSec;
+    err.status = r.status;
+
+    throw err;
+  }
+
+  return j;
+},
+
+    verifyPhoneAuth: async (phone: string, code: string, referralCode?: string) => {
+      let resp: Response;
+      try {
+        const body = new URLSearchParams({ phone, code });
+        if (referralCode) body.set('referralCode', referralCode);
+        resp = await fetch('/api/auth/phone/verify', {
+          method: 'POST',
+          credentials: 'include',
+          body,
+        });
+      } catch (e: any) {
+        throw new Error('Не удалось связаться с сервером. Попробуйте обновить страницу или открыть сайт в новой вкладке.');
       }
-    },
-
-    verifyPhoneAuth: async (phone: string, code: string) => {
-      const resp = await fetch('/api/auth/phone/verify', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code }),
-      });
 
       const data = await resp.json().catch(() => ({}));
 
@@ -312,9 +439,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         phone: u.phone || phone,
         avatarUrl: u.avatarUrl || undefined,
         selfieUrl: undefined,
+        sizeTop: u.sizeTop || undefined,
+        sizeBottom: u.sizeBottom || undefined,
+        sizeShoes: u.sizeShoes || undefined,
         tier: SubscriptionTier.FREE,
         limits: { hdTryOnRemaining: 5, looksRemaining: 10 },
         isPublic: u.isPublic ?? false,
+        isAdmin: !!u.isAdmin,
       });
 
       return data;
@@ -360,9 +491,13 @@ login: async (emailOrUsername: string, password: string) => {
     phone: prev?.phone || '',
     avatarUrl: u.avatarUrl || prev?.avatarUrl,
     selfieUrl: prev?.selfieUrl,
+    sizeTop: u.sizeTop || prev?.sizeTop,
+    sizeBottom: u.sizeBottom || prev?.sizeBottom,
+    sizeShoes: u.sizeShoes || prev?.sizeShoes,
     tier: prev?.tier || SubscriptionTier.FREE,
     limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
     isPublic: u.isPublic ?? true,
+    isAdmin: !!u.isAdmin,
   }));
 
   console.log('[auth] login done');
@@ -409,16 +544,109 @@ register: async (email: string, username: string, password: string) => {
     phone: prev?.phone || '',
     avatarUrl: u.avatarUrl || prev?.avatarUrl,
     selfieUrl: prev?.selfieUrl,
+    sizeTop: u.sizeTop || prev?.sizeTop,
+    sizeBottom: u.sizeBottom || prev?.sizeBottom,
+    sizeShoes: u.sizeShoes || prev?.sizeShoes,
     tier: prev?.tier || SubscriptionTier.FREE,
     limits: prev?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
     isPublic: u.isPublic ?? true,
+    isAdmin: !!u.isAdmin,
   }));
 
   console.log('[auth] register done');
 },
 
+    updateProfileSizes: async (sizeTop: string, sizeBottom: string, sizeShoes: string, catalogGenderPreference?: string) => {
+      const resp = await fetch('/api/profile/update', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sizeTop, sizeBottom, sizeShoes, catalogGenderPreference: catalogGenderPreference || user?.catalogGenderPreference || 'ALL' }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        setUser(null);
+        setWardrobe([]);
+        setLooks([]);
+        throw new Error('SESSION_EXPIRED');
+      }
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Profile update failed');
+      }
+
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              sizeTop: data?.user?.sizeTop || undefined,
+              sizeBottom: data?.user?.sizeBottom || undefined,
+              sizeShoes: data?.user?.sizeShoes || undefined,
+              catalogGenderPreference: data?.user?.catalogGenderPreference || undefined,
+              publicSlug: data?.user?.publicSlug || undefined,
+              publicDisplayName: data?.user?.publicDisplayName || undefined,
+              publicBio: data?.user?.publicBio || undefined,
+              publicSocialUrl: data?.user?.publicSocialUrl || undefined,
+            }
+          : prev
+      );
+    },
+
+    updatePublicProfile: async (publicSlug: string, publicDisplayName: string, publicBio: string, publicSocialUrl: string) => {
+      const resp = await fetch('/api/profile/update', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sizeTop: user?.sizeTop || '',
+          sizeBottom: user?.sizeBottom || '',
+          sizeShoes: user?.sizeShoes || '',
+          catalogGenderPreference: user?.catalogGenderPreference || 'ALL',
+          publicSlug,
+          publicDisplayName,
+          publicBio,
+          publicSocialUrl,
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        setUser(null);
+        setWardrobe([]);
+        setLooks([]);
+        throw new Error('SESSION_EXPIRED');
+      }
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Public profile update failed');
+      }
+
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              publicSlug: data?.user?.publicSlug || undefined,
+              publicDisplayName: data?.user?.publicDisplayName || undefined,
+              publicBio: data?.user?.publicBio || undefined,
+              publicSocialUrl: data?.user?.publicSocialUrl || undefined,
+            }
+          : prev
+      );
+    },
+
     logout: async () => {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null);
+      clearTopTryClientStorage();
+      setUser(null);
+      setWardrobe([]);
+      setLooks([]);
+    },
+
+    resetSession: () => {
+      clearTopTryClientStorage();
       setUser(null);
       setWardrobe([]);
       setLooks([]);
@@ -426,14 +654,59 @@ register: async (email: string, username: string, password: string) => {
 
     refreshMe: async () => {
       try {
+        window.__toptryClientLog?.("auth_me_fetch_start");
         const resp = await fetch('/api/auth/me', { credentials: 'include' });
-        if (!resp.ok) return;
+        window.__toptryClientLog?.("auth_me_fetch_response", {
+          status: resp.status,
+          contentType: resp.headers.get('content-type') || '',
+        });
+
+        if (!resp.ok) {
+          if (resp.status === 401) {
+            clearTopTryClientStorage();
+            setUser(null);
+            setWardrobe([]);
+            setLooks([]);
+          }
+          return null;
+        }
+
         const data = await resp.json().catch(() => null);
-        if (!data?.user) return;
+
+        if (!data?.user) {
+          setUser(null);
+          setWardrobe([]);
+          setLooks([]);
+          return null;
+        }
+
         const u = data.user;
-        setUser((prev) => (prev ? { ...prev, avatarUrl: u.avatarUrl || prev.avatarUrl } : prev));
+        const nextUser = {
+          id: u.id,
+          email: u.email || undefined,
+          name: u.username || undefined,
+          username: u.username || undefined,
+          phone: u.phone || '',
+          avatarUrl: u.avatarUrl || undefined,
+          selfieUrl: user?.selfieUrl,
+          sizeTop: u.sizeTop || undefined,
+          sizeBottom: u.sizeBottom || undefined,
+          sizeShoes: u.sizeShoes || undefined,
+          publicSlug: u.publicSlug || undefined,
+          publicDisplayName: u.publicDisplayName || undefined,
+          publicBio: u.publicBio || undefined,
+          publicSocialUrl: u.publicSocialUrl || undefined,
+          tier: user?.tier || SubscriptionTier.FREE,
+          limits: user?.limits || { hdTryOnRemaining: 5, looksRemaining: 10 },
+          isPublic: !!u.isPublic,
+          isAdmin: !!u.isAdmin,
+        };
+
+        setUser(nextUser);
+        return nextUser;
       } catch {
-        // ignore
+        // Network errors should not forcibly log the user out.
+        return user || null;
       }
     },
     toggleHomeLayout: () => setHomeLayout(prev => 
@@ -514,8 +787,23 @@ register: async (email: string, username: string, password: string) => {
         ];
       });
     },
-    removeFromWardrobe: (id: string) => {
-      setWardrobe(prev => prev.filter(i => i.id !== id));
+    removeFromWardrobe: async (id: string) => {
+      try {
+        const resp = await fetch(`/api/wardrobe/item/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+          throw new Error(data?.error || 'Delete failed');
+        }
+
+        setWardrobe(prev => prev.filter(i => i.id !== id));
+      } catch (e) {
+        console.error('[wardrobe] delete failed', e);
+      }
     },
     createLook: async (selectedItems: WardrobeItem[]) => {
       const selfieUrl = user?.selfieUrl || user?.avatarUrl;
@@ -599,6 +887,7 @@ register: async (email: string, username: string, password: string) => {
           itemIds,
           sourceItems,
           aspectRatio: '3:4',
+          qualityMode: 'quality',
           priceBuyNowRUB,
         };
 
@@ -635,6 +924,15 @@ register: async (email: string, username: string, password: string) => {
           if (resp.status === 401) {
             throw new Error('AUTH_REQUIRED');
           }
+
+          if (resp.status === 429 && data?.code === 'LOOK_GENERATION_LIMIT_REACHED') {
+            const limitErr: any = new Error(data?.error || 'Лимит генераций исчерпан');
+            limitErr.code = data.code;
+            limitErr.limitType = data?.limitType || null;
+            limitErr.usage = data?.usage || null;
+            throw limitErr;
+          }
+
           throw new Error(data?.error || raw || `AI server error (${resp.status})`);
         }
 
@@ -674,6 +972,9 @@ register: async (email: string, username: string, password: string) => {
           phone: '+7 (000) 000-00-00',
           avatarUrl: 'https://i.pravatar.cc/150?u=guest',
           selfieUrl: url,
+          sizeTop: undefined,
+          sizeBottom: undefined,
+          sizeShoes: undefined,
           tier: SubscriptionTier.FREE,
           limits: { hdTryOnRemaining: 5, looksRemaining: 10 },
           isPublic: false,
@@ -691,16 +992,16 @@ register: async (email: string, username: string, password: string) => {
       }
     },
 
-    reactToLook: async (id: string, reaction: 'like' | 'want_try' | 'would_buy') => {
+    reactToLook: async (id: string, reaction: 'like' = 'like') => {
+      if (reaction !== 'like') return;
+
       try {
-        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/react`, {
+        const resp = await fetch(`/api/looks/${encodeURIComponent(id)}/like`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reaction }),
         });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(data?.error || 'Reaction failed');
+        if (!resp.ok) throw new Error(data?.error || 'Like failed');
 
         setLooks((prev) =>
           prev.map((l) =>
@@ -708,9 +1009,7 @@ register: async (email: string, username: string, password: string) => {
               ? {
                   ...l,
                   likes: data?.likes ?? l.likes,
-                  wantTryCount: data?.wantTryCount ?? l.wantTryCount ?? 0,
-                  wouldBuyCount: data?.wouldBuyCount ?? l.wouldBuyCount ?? 0,
-                  viewerReaction: reaction,
+                  viewerLiked: true,
                 }
               : l
           )
@@ -744,10 +1043,26 @@ register: async (email: string, username: string, password: string) => {
         // ignore
       }
     },
-  }), [user, looks, wardrobe, homeLayout]);
 
+    deleteLook: async (id: string) => {
+      const resp = await fetch(`/api/looks/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Не удалось удалить образ');
+      }
+
+      setLooks((prev) => prev.filter((l) => String(l.id) !== String(id)));
+    },
+  }), [user, looks, wardrobe, homeLayout]);
+  
   return (
-      <AppContext.Provider value={{ user, products, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
+    <AppContext.Provider value={{
+      user, products, wardrobe, looks, homeLayout, loading, aiBusy, aiError, actions }}>
       {children}
     </AppContext.Provider>
   );

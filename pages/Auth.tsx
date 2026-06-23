@@ -1,16 +1,44 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAppState } from '../store';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
+
+const TOPTRY_REFERRAL_CODE_KEY = 'toptry.referralCode';
 
 const Auth = () => {
   const { actions } = useAppState();
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const referralCode = useMemo(() => {
+    const params = new URLSearchParams(location.search || '');
+    const raw = params.get('ref') || params.get('referralCode') || '';
+    return raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32);
+  }, [location.search]);
+
+  useEffect(() => {
+    if (referralCode) {
+      window.sessionStorage.setItem(TOPTRY_REFERRAL_CODE_KEY, referralCode);
+    }
+  }, [referralCode]);
+
+  const storedReferralCode = () => {
+    const s = window.sessionStorage.getItem(TOPTRY_REFERRAL_CODE_KEY) || '';
+    return s.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32);
+  };
+
+  const resetBrokenSession = () => {
+    actions.resetSession();
+    setStep('phone');
+    setCode('');
+    setError(null);
+    window.location.hash = '#/auth';
+  };
 
   const submit = async () => {
     setError(null);
@@ -20,11 +48,16 @@ const Auth = () => {
         await actions.startPhoneAuth(phone.trim());
         setStep('code');
       } else {
-        await actions.verifyPhoneAuth(phone.trim(), code.trim());
+        await actions.verifyPhoneAuth(phone.trim(), code.trim(), storedReferralCode());
         navigate('/');
       }
     } catch (e: any) {
-      setError(e?.message || 'Ошибка');
+      const msg = e?.message || 'Ошибка';
+      if (msg === 'Failed to fetch') {
+        setError('Не удалось отправить запрос. Сбросьте сессию или откройте сайт в обычном браузере.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setBusy(false);
     }
@@ -46,7 +79,7 @@ const Auth = () => {
         <h1 className="hidden text-5xl font-black uppercase tracking-tighter">toptry</h1>
 
         <p className="text-xs text-zinc-400 uppercase tracking-[0.3em] font-black">
-          AI Virtual Fitting
+          Виртуальная примерочная
         </p>
       </div>
 
@@ -62,9 +95,22 @@ const Auth = () => {
           </div>
         </div>
 
-        {error && (
+        {referralCode && (
           <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-700">
-            {error}
+            Вы пришли по приглашению. После регистрации вам начислится 1 дополнительная генерация.
+          </div>
+        )}
+
+        {error && (
+          <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-700 space-y-3">
+            <div>{error}</div>
+            <button
+              type="button"
+              onClick={resetBrokenSession}
+              className="w-full rounded-full bg-white border border-zinc-200 px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-700"
+            >
+              Сбросить сессию
+            </button>
           </div>
         )}
 
@@ -111,6 +157,7 @@ const Auth = () => {
         </div>
 
         <button
+          type="button"
           onClick={submit}
           disabled={busy}
           className={`w-full bg-zinc-900 text-white py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:scale-[0.98] transition-all shadow-lg active:scale-95 ${

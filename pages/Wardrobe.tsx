@@ -1,5 +1,6 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
+import { catalogImageSrc } from "../utils/catalogImageSrc";
 import { useAppState } from '../store';
 import { ICONS } from '../constants';
 import { Category, Gender, WardrobeItem } from '../types';
@@ -50,6 +51,15 @@ const Wardrobe = () => {
   const [pendingExtracted, setPendingExtracted] = useState<Array<{ original: string; cutout: string; attrs: any }>>([]);
   const [hoveredCandidateId, setHoveredCandidateId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<WardrobeItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [menuItem, setMenuItem] = useState<WardrobeItem | null>(null);
+  const [swipedItemId, setSwipedItemId] = useState<string | null>(null);
+  const [wardrobePriceDrops, setWardrobePriceDrops] = useState<any[]>([]);
+  const [priceDropsLoading, setPriceDropsLoading] = useState(false);
+  const longPressTimerRef = useRef<number | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchCurrentXRef = useRef<number | null>(null);
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +68,199 @@ const Wardrobe = () => {
     activeCategory === 'all'
       ? wardrobe
       : wardrobe.filter((i) => i.category === activeCategory);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!user?.id) {
+      setWardrobePriceDrops([]);
+      return;
+    }
+
+    const hasCatalogItems = wardrobe.some((item) => item?.sourceType === 'catalog' || item?.isCatalog);
+    if (!hasCatalogItems) {
+      setWardrobePriceDrops([]);
+      return;
+    }
+
+    (async () => {
+      setPriceDropsLoading(true);
+      try {
+        const resp = await fetch(withApiOrigin('/api/wardrobe/price-drops?limit=8&days=30'), {
+          credentials: 'include',
+        });
+
+        if (!resp.ok) {
+          if (!cancelled) setWardrobePriceDrops([]);
+          return;
+        }
+
+        const data = await resp.json().catch(() => ({}));
+        const items = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data?.products)
+            ? data.products
+            : [];
+
+        if (!cancelled) setWardrobePriceDrops(items);
+      } catch {
+        if (!cancelled) setWardrobePriceDrops([]);
+      } finally {
+        if (!cancelled) setPriceDropsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, wardrobe.length]);
+
+  const isCatalogWardrobeItem = (item: WardrobeItem | null | undefined) =>
+    item?.sourceType === 'catalog' || !!item?.isCatalog;
+
+  const normalizeWardrobeColorFamily = (item: WardrobeItem) => {
+    const direct = String((item as any)?.colorFamily || item.color || '').trim().toLowerCase();
+
+    const hay = [
+      direct,
+      item.title,
+      ...(Array.isArray(item.tags) ? item.tags : []),
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+
+    const map: Array<[RegExp, string]> = [
+      [/черн|чёрн|black/, 'black'],
+      [/бел|white/, 'white'],
+      [/сер|gray|grey|silver/, 'gray'],
+      [/беж|beige/, 'beige'],
+      [/корич|brown/, 'brown'],
+      [/син|голуб|blue/, 'blue'],
+      [/зел|green|khaki|хаки/, 'green'],
+      [/крас|бордов|red|burgundy/, 'red'],
+      [/роз|pink/, 'pink'],
+      [/фиолет|сирен|purple/, 'purple'],
+      [/желт|жёлт|yellow|gold/, 'yellow'],
+      [/оранж|orange/, 'orange'],
+      [/мульти|разноцвет|multi/, 'multi'],
+    ];
+
+    for (const [re, color] of map) {
+      if (re.test(hay)) return color;
+    }
+
+    return '';
+  };
+
+
+  const inferWardrobeClothingTypeFromItem = (item: WardrobeItem): string => {
+    const hay = [
+      item.title,
+      item.color,
+      item.material,
+      ...(Array.isArray(item.tags) ? item.tags : []),
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+
+    if (/карго|cargo/.test(hay)) return 'CARGO_PANTS';
+    if (/чинос|chino/.test(hay)) return 'CHINOS';
+    if (/джоггер|jogger/.test(hay)) return 'JOGGERS';
+    if (/шорт|shorts/.test(hay)) return 'SHORTS';
+    if (/леггин|лосин|legging/.test(hay)) return 'LEGGINGS';
+    if (/классическ.*брюк|костюмн.*брюк|formal trouser|slacks/.test(hay)) return 'FORMAL_TROUSERS';
+
+    if (/пальто|coat/.test(hay)) return 'COATS';
+    if (/пухов|дутик|puffer|down jacket/.test(hay)) return 'PUFFER_JACKETS';
+    if (/бомбер|bomber/.test(hay)) return 'BOMBERS';
+    if (/парка|parka/.test(hay)) return 'PARKAS';
+    if (/тренч|плащ|trench/.test(hay)) return 'TRENCHES';
+    if (/кожан|leather/.test(hay)) return 'LEATHER_JACKETS';
+    if (/джинсов.*куртк|denim jacket/.test(hay)) return 'DENIM_JACKETS';
+    if (/жилет|vest|gilet/.test(hay)) return 'VESTS';
+
+    if (/куртка[-\s]?рубаш|рубашка[-\s]?куртк|overshirt/.test(hay)) return 'OVERSHIRTS';
+    if (/льнян.*рубаш|linen shirt/.test(hay)) return 'LINEN_SHIRTS';
+    if (/джинсов.*рубаш|denim shirt/.test(hay)) return 'DENIM_SHIRTS';
+    if (/классическ.*рубаш|formal shirt|dress shirt/.test(hay)) return 'FORMAL_SHIRTS';
+    if (/кардиган|cardigan/.test(hay)) return 'CARDIGANS';
+    if (/водолазк|turtleneck/.test(hay)) return 'TURTLENECKS';
+    if (/свитер|джемпер|sweater/.test(hay)) return 'SWEATERS';
+
+    return '';
+  };
+
+  const buildSimilarCatalogHref = (item: WardrobeItem) => {
+    const params = new URLSearchParams();
+
+    // “Найти похожее” should search by product meaning, not by exact title/brand.
+    // Exact q often drags the original brand/manufacturer into results and makes
+    // recommendations worse. Use category + gender + color instead.
+    switch (item.category) {
+      case Category.TOPS:
+        params.set('displayCategory', 'CLOTHING');
+        params.set('clothingType', inferWardrobeClothingTypeFromItem(item) || 'TOPS');
+        break;
+      case Category.BOTTOMS:
+        params.set('displayCategory', 'CLOTHING');
+        params.set('clothingType', inferWardrobeClothingTypeFromItem(item) || 'TROUSERS');
+        break;
+      case Category.DRESSES:
+        params.set('displayCategory', 'CLOTHING');
+        params.set('clothingType', 'DRESSES');
+        break;
+      case Category.OUTERWEAR:
+        params.set('displayCategory', 'CLOTHING');
+        params.set('clothingType', inferWardrobeClothingTypeFromItem(item) || 'OUTERWEAR');
+        break;
+      case Category.SHOES:
+        params.set('displayCategory', 'SHOES');
+        break;
+      case Category.ACCESSORIES:
+        params.set('displayCategory', 'ACCESSORIES');
+        break;
+      default:
+        break;
+    }
+
+    if (item.gender && item.gender !== Gender.UNISEX) {
+      params.set('gender', String(item.gender));
+    }
+
+    const colorFamily = normalizeWardrobeColorFamily(item);
+    if (colorFamily) {
+      params.set('colorFamily', colorFamily);
+    }
+
+    params.set('unavailable', '1');
+
+    return `/catalog?${params.toString()}`;
+  };
+
+  const openBuyForWardrobeItem = (item: WardrobeItem) => {
+    if (!isCatalogWardrobeItem(item)) return;
+
+    const url = withApiOrigin(
+      `/api/out/product/${encodeURIComponent(item.id)}?placement=wardrobe`
+    );
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const openBuyForWardrobePriceDrop = (item: any) => {
+    const productId = String(item?.id || item?.productId || item?.wardrobeItemId || '').trim();
+    if (!productId) return;
+
+    const url = withApiOrigin(
+      `/api/out/product/${encodeURIComponent(productId)}?placement=wardrobe_price_drop&wardrobeItemId=${encodeURIComponent(String(item?.wardrobeItemId || ''))}`
+    );
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   const readAsDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -292,6 +495,71 @@ const Wardrobe = () => {
       img.src = dataUrl;
     });
 
+  // /api/wardrobe/save receives two data URLs in one JSON request.
+  // Keep the final storage payload safely below the reverse-proxy limit.
+  const WARDROBE_SAVE_MAX_DATA_URL_CHARS = 280 * 1024;
+  const WARDROBE_SAVE_STEPS = [
+    { maxSide: 1280, quality: 0.86 },
+    { maxSide: 1100, quality: 0.80 },
+    { maxSide: 960, quality: 0.74 },
+    { maxSide: 820, quality: 0.68 },
+    { maxSide: 700, quality: 0.62 },
+    { maxSide: 600, quality: 0.58 },
+  ];
+
+  const optimizeWardrobeDataUrlForSave = (dataUrl: string, label: string) =>
+    new Promise<string>((resolve, reject) => {
+      if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+        reject(new Error(`Не удалось подготовить изображение для сохранения: ${label}`));
+        return;
+      }
+
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          const sourceWidth = img.naturalWidth || img.width;
+          const sourceHeight = img.naturalHeight || img.height;
+          const sourceMaxSide = Math.max(sourceWidth, sourceHeight);
+
+          for (const step of WARDROBE_SAVE_STEPS) {
+            const scale = sourceMaxSide > 0 ? Math.min(1, step.maxSide / sourceMaxSide) : 1;
+            const width = Math.max(1, Math.round(sourceWidth * scale));
+            const height = Math.max(1, Math.round(sourceHeight * scale));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Не удалось получить canvas context');
+
+            // Both images are stored on a white background, so JPEG is safe
+            // and substantially reduces the JSON request size.
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const candidate = canvas.toDataURL('image/jpeg', step.quality);
+
+            if (candidate.length <= WARDROBE_SAVE_MAX_DATA_URL_CHARS) {
+              resolve(candidate);
+              return;
+            }
+          }
+
+          reject(new Error('Изображение слишком большое для сохранения. Выберите фото меньшего размера.'));
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      img.onerror = () =>
+        reject(new Error(`Не удалось загрузить изображение для сохранения: ${label}`));
+
+      img.src = dataUrl;
+    });
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -416,9 +684,14 @@ const Wardrobe = () => {
 
         if (!cutout) throw new Error('Сервер не вернул вырезанную вещь');
 
+        const [originalForSave, cutoutForSave] = await Promise.all([
+          optimizeWardrobeDataUrlForSave(photoDataUrlForCutout, 'оригинал вещи'),
+          optimizeWardrobeDataUrlForSave(cutout, 'карточка вещи'),
+        ]);
+
         queue.push({
-          original: c.original,
-          cutout,
+          original: originalForSave,
+          cutout: cutoutForSave,
           attrs,
         });
       }
@@ -451,6 +724,9 @@ const Wardrobe = () => {
 
         if (!saveResp.ok) {
           const data = await saveResp.json().catch(() => ({}));
+          if (saveResp.status === 413) {
+            throw new Error('Изображение слишком большое для сохранения. Попробуйте другое фото.');
+          }
           throw new Error(data?.error || `Ошибка сохранения (${saveResp.status})`);
         }
 
@@ -491,6 +767,11 @@ const Wardrobe = () => {
     setIsRecognizing(true);
 
     try {
+      const [originalForSave, cutoutForSave] = await Promise.all([
+        optimizeWardrobeDataUrlForSave(extracted.original, 'оригинал вещи'),
+        optimizeWardrobeDataUrlForSave(extracted.cutout, 'карточка вещи'),
+      ]);
+
       const saveResp = await fetch('/api/wardrobe/save', {
         method: 'POST',
         credentials: 'include',
@@ -505,13 +786,15 @@ const Wardrobe = () => {
             .filter(Boolean),
           color: draftColor || undefined,
           material: draftMaterial || undefined,
-          originalDataUrl: extracted.original,
-          cutoutDataUrl: extracted.cutout,
+          originalDataUrl: originalForSave,
+          cutoutDataUrl: cutoutForSave,
         }),
       });
 
       if (!saveResp.ok) {
         const data = await saveResp.json().catch(() => ({}));
+        if (saveResp.status === 413)
+          throw new Error('Изображение слишком большое для сохранения. Попробуйте другое фото.');
         if (saveResp.status === 401)
           throw new Error('Нужно войти, чтобы добавлять свои вещи');
         throw new Error(data?.error || `Ошибка сохранения (${saveResp.status})`);
@@ -544,6 +827,108 @@ const Wardrobe = () => {
     } finally {
       setIsRecognizing(false);
     }
+  };
+
+  const requestDeleteItem = (item: WardrobeItem) => {
+    setPendingDeleteItem(item);
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!pendingDeleteItem || isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      await actions.removeFromWardrobe(pendingDeleteItem.id);
+      setPendingDeleteItem(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const cancelDeleteItem = () => {
+    if (isDeleting) return;
+    setPendingDeleteItem(null);
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const startLongPress = (item: WardrobeItem) => {
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      setMenuItem(item);
+      longPressTimerRef.current = null;
+    }, 420);
+  };
+
+  const closeItemMenu = () => {
+    clearLongPressTimer();
+    setMenuItem(null);
+  };
+
+  const openSimilarFromMenu = () => {
+    if (!menuItem) return;
+
+    const href = buildSimilarCatalogHref(menuItem);
+    setMenuItem(null);
+    navigate(href);
+  };
+
+  const openBuyFromMenu = () => {
+    if (!menuItem || !isCatalogWardrobeItem(menuItem)) return;
+
+    const item = menuItem;
+    setMenuItem(null);
+    openBuyForWardrobeItem(item);
+  };
+
+  const requestDeleteFromMenu = () => {
+    if (!menuItem) return;
+    setPendingDeleteItem(menuItem);
+    setMenuItem(null);
+  };
+
+  const handleCardTouchStart = (e: React.TouchEvent<HTMLDivElement>, item: WardrobeItem) => {
+    startLongPress(item);
+    touchStartXRef.current = e.touches[0]?.clientX ?? null;
+    touchCurrentXRef.current = touchStartXRef.current;
+  };
+
+  const handleCardTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    clearLongPressTimer();
+    touchCurrentXRef.current = e.touches[0]?.clientX ?? null;
+  };
+
+  const handleCardTouchEnd = (item: WardrobeItem) => {
+    clearLongPressTimer();
+
+    const startX = touchStartXRef.current;
+    const endX = touchCurrentXRef.current;
+
+    touchStartXRef.current = null;
+    touchCurrentXRef.current = null;
+
+    if (startX == null || endX == null) return;
+
+    const deltaX = endX - startX;
+
+    if (deltaX <= -42) {
+      setSwipedItemId(item.id);
+      return;
+    }
+
+    if (deltaX >= 24 && swipedItemId === item.id) {
+      setSwipedItemId(null);
+      return;
+    }
+  };
+
+  const closeSwipedItem = () => {
+    setSwipedItemId(null);
   };
 
   return (
@@ -852,6 +1237,110 @@ const Wardrobe = () => {
           </div>
         )}
 
+        {wardrobePriceDrops.length > 0 ? (
+          <section className="rounded-[32px] border border-zinc-100 bg-zinc-50 p-4 space-y-4">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-zinc-400">
+                  Цена снизилась
+                </p>
+                <h2 className="mt-1 text-xl font-black uppercase tracking-tighter">
+                  Подешевело в шкафу
+                </h2>
+              </div>
+              {priceDropsLoading ? (
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+                  Обновляем
+                </span>
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {wardrobePriceDrops.slice(0, 4).map((item: any) => {
+                const image =
+                  Array.isArray(item.images) && item.images[0]
+                    ? item.images[0]
+                    : (item.imageUrl || item.wardrobeImageUrl || '');
+
+                const currentPrice = Number(item.currentPrice || item.price || 0);
+                const previousPrice = Number(item.previousPrice || item.wardrobePrice || 0);
+                const delta = Number(item.delta || (previousPrice > currentPrice ? previousPrice - currentPrice : 0));
+                const deltaPct = Number(item.deltaPct || (previousPrice > currentPrice && previousPrice > 0 ? ((previousPrice - currentPrice) / previousPrice) * 100 : 0));
+                const dropRub = Math.max(0, Math.round(delta));
+                const discount = Math.max(0, Math.round(deltaPct));
+                const detectedAtRaw = item.priceDropDetectedAt || item.detectedAt || '';
+                const detectedAtDate = detectedAtRaw ? new Date(detectedAtRaw) : null;
+                const detectedAtLabel =
+                  detectedAtDate && !Number.isNaN(detectedAtDate.getTime())
+                    ? new Intl.DateTimeFormat('ru-RU', {
+                        day: 'numeric',
+                        month: 'long',
+                      }).format(detectedAtDate)
+                    : '';
+
+                return (
+                  <div key={`${item.wardrobeItemId || item.id}-${item.id}`} className="rounded-[24px] bg-white border border-zinc-100 p-3 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/product/${encodeURIComponent(item.id)}`)}
+                      className="relative block w-full aspect-[3/4] rounded-[20px] bg-zinc-50 overflow-hidden"
+                    >
+                      {dropRub > 0 ? (
+                        <div className="absolute left-2 top-2 z-10 rounded-full bg-zinc-950 px-2.5 py-1 text-[10px] font-black text-white">
+                          −{dropRub.toLocaleString('ru-RU')} ₽
+                        </div>
+                      ) : null}
+
+                      {image ? (
+                        <img
+                          src={catalogImageSrc(image, { w: 420 })}
+                          alt=""
+                          className="w-full h-full object-contain"
+                        />
+                      ) : null}
+                    </button>
+
+                    <p className="mt-3 text-[10px] font-black uppercase tracking-tight line-clamp-2">
+                      {item.title || item.wardrobeTitle || 'Товар'}
+                    </p>
+
+                    {detectedAtLabel ? (
+                      <p className="mt-2 text-[10px] font-bold text-zinc-500">
+                        Цена снизилась {detectedAtLabel}
+                      </p>
+                    ) : null}
+
+                    {dropRub > 0 ? (
+                      <p className="mt-1 text-[10px] font-black text-emerald-700">
+                        Подешевело на {dropRub.toLocaleString('ru-RU')} ₽{discount > 0 ? ` • −${discount}%` : ''}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <p className="text-xs font-black text-zinc-950">
+                        {currentPrice.toLocaleString('ru-RU')} ₽
+                      </p>
+                      {previousPrice > currentPrice ? (
+                        <p className="text-[10px] font-bold text-zinc-400 line-through">
+                          {previousPrice.toLocaleString('ru-RU')} ₽
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openBuyForWardrobePriceDrop(item)}
+                      className="mt-3 h-9 w-full rounded-full bg-zinc-900 text-white text-[9px] font-black uppercase tracking-[0.16em]"
+                    >
+                      Купить дешевле
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
         {wardrobe.length === 0 ? (
           <div className="py-24 text-center border-2 border-dashed border-zinc-100 rounded-[48px] bg-zinc-50 px-8 space-y-8">
             <ICONS.Wardrobe className="w-10 h-10 text-zinc-200 mx-auto" />
@@ -864,72 +1353,117 @@ const Wardrobe = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             {filteredItems.map((item) => {
               const isCatalogItem = item.sourceType === 'catalog' || item.isCatalog;
 
               return (
                 <div
                   key={item.id}
-                  className={`relative group aspect-square rounded-[24px] bg-zinc-50 border border-zinc-100 transition-all overflow-hidden p-3 hover:border-zinc-300 hover:shadow-md`}
+                  onTouchStart={(e) => handleCardTouchStart(e, item)}
+                  onTouchMove={handleCardTouchMove}
+                  onTouchEnd={() => handleCardTouchEnd(item)}
+                  onTouchCancel={closeSwipedItem}
+                  className="relative aspect-[3/4] rounded-[24px] overflow-hidden md:group"
                 >
-                  <img
-                    src={withApiOrigin(item.images?.[0])}
-                    alt=""
-                    className="w-full h-full object-contain mix-blend-multiply transition-all duration-500"
-                  />
-
-                  {!isCatalogItem && (
-                    <div className="absolute top-2 left-2 bg-white/90 backdrop-blur px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest text-zinc-900 shadow-sm">
-                      Ваше
-                    </div>
-                  )}
-
-                  <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-white via-white/95 to-transparent">
-                    <div className="text-[10px] font-bold uppercase tracking-tight text-zinc-900 truncate">
-                      {item.title || 'Без названия'}
-                    </div>
-
-                    {isCatalogItem ? (
-                      <>
-                        <div className="mt-1 text-[9px] uppercase tracking-widest text-zinc-400 truncate">
-                          {item.storeName || item.storeId || 'Каталог'}
-                        </div>
-                        <div className="mt-1 text-[10px] font-bold text-zinc-900">
-                          {item.price ? `${item.price} ₽` : ''}
-                        </div>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          const params = new URLSearchParams();
-
-                          if (item.category) {
-                            params.set('category', String(item.category));
-                          }
-
-                          navigate(`/catalog?${params.toString()}`);
-                        }}
-                        className="mt-2 text-[9px] font-bold uppercase tracking-widest text-zinc-900 underline"
-                      >
-                        Найти похожее
-                      </button>
-                    )}
+                  <div className="absolute inset-y-0 right-0 w-16 flex items-center justify-center bg-red-500/90 md:hidden">
+                    <button
+                      onClick={() => requestDeleteItem(item)}
+                      className="w-full h-full flex items-center justify-center text-white"
+                      aria-label="Удалить вещь"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        ></path>
+                      </svg>
+                    </button>
                   </div>
 
-                  <button
-                    onClick={() => actions.removeFromWardrobe(item.id)}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-lg text-zinc-400 hover:text-red-500 shadow-sm"
+                  <div
+                    className={`relative h-full rounded-[24px] bg-white border border-zinc-100 transition-transform duration-200 overflow-hidden flex flex-col hover:border-zinc-300 hover:shadow-md ${
+                      swipedItemId === item.id ? '-translate-x-16' : 'translate-x-0'
+                    }`}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      ></path>
-                    </svg>
-                  </button>
+                    <div className="relative flex-1 min-h-0 m-2 mb-0 rounded-[20px] bg-zinc-50 p-3 flex items-center justify-center overflow-hidden">
+                      <img
+                        src={withApiOrigin(item.images?.[0])}
+                        alt=""
+                        className="max-w-full max-h-full object-contain mix-blend-multiply transition-all duration-500"
+                      />
+
+                      {!isCatalogItem && (
+                        <div className="absolute top-2 left-2 bg-white/90 backdrop-blur px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-[0.18em] text-zinc-900 shadow-sm">
+                          Ваше
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="shrink-0 p-3 pt-2 bg-white space-y-1.5">
+                      <div className="text-[10px] font-bold uppercase tracking-tight text-zinc-900 line-clamp-2 pr-7 min-h-[28px]">
+                        {item.title || 'Без названия'}
+                      </div>
+
+                      {isCatalogItem ? (
+                        <>
+                          <div className="text-[8px] uppercase tracking-[0.18em] text-zinc-400 truncate">
+                            {item.storeName || item.storeId || 'Каталог'}
+                          </div>
+                          <div className="text-[11px] font-black text-zinc-900">
+                            {item.price ? `${item.price} ₽` : ''}
+                          </div>
+                          <div className="pt-1 grid grid-cols-2 gap-1.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openBuyForWardrobeItem(item);
+                              }}
+                              className="h-8 rounded-full bg-zinc-900 text-white text-[8px] font-black uppercase tracking-[0.14em]"
+                            >
+                              Купить
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(buildSimilarCatalogHref(item));
+                              }}
+                              className="h-8 rounded-full bg-white border border-zinc-200 text-zinc-700 text-[8px] font-black uppercase tracking-[0.14em]"
+                            >
+                              Похожие
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(buildSimilarCatalogHref(item));
+                          }}
+                          className="mt-1 h-8 w-full rounded-full bg-white border border-zinc-200 text-zinc-700 text-[8px] font-black uppercase tracking-[0.14em]"
+                        >
+                          Похожие
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => requestDeleteItem(item)}
+                      className="absolute top-2 right-2 transition-opacity bg-white/90 p-1.5 rounded-lg text-zinc-400 hover:text-red-500 shadow-sm z-10"
+                      aria-label="Удалить вещь"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        ></path>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -938,11 +1472,21 @@ const Wardrobe = () => {
 
         <div className="pt-6">
           <div className="bg-zinc-900 text-white p-8 rounded-[40px] space-y-6 shadow-2xl overflow-hidden relative group">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          removeWardrobeItem(item.id);
+        }}
+        className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-xs font-bold hover:bg-red-500 hover:text-white transition z-10"
+      >
+        ×
+      </button>
+
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 blur-3xl -translate-y-1/2 translate-x-1/2"></div>
             <div className="relative z-10 space-y-2">
               <h3 className="text-xl font-bold uppercase tracking-widest">Стилизовать образ</h3>
               <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest leading-relaxed">
-                Используйте Gemini 3 для виртуальной примерки ваших вещей.
+                Соберите образ из своих вещей и примерьте его на аватаре.
               </p>
             </div>
             <button
@@ -954,6 +1498,109 @@ const Wardrobe = () => {
           </div>
         </div>
       </div>
+
+      {menuItem && (
+        <div className="fixed inset-0 z-[109] bg-zinc-950/40 backdrop-blur-[2px] flex items-end justify-center p-3 md:hidden" onClick={closeItemMenu}>
+          <div
+            className="w-full max-w-md rounded-[28px] bg-white shadow-2xl border border-zinc-100 overflow-hidden animate-in slide-in-from-bottom-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 pt-4 pb-3 border-b border-zinc-100">
+              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400">
+                Действия с вещью
+              </div>
+              <div className="mt-2 text-sm font-bold text-zinc-900 line-clamp-2">
+                {menuItem.title || 'Без названия'}
+              </div>
+            </div>
+
+            <div className="p-2">
+              {isCatalogWardrobeItem(menuItem) && (
+                <button
+                  onClick={openBuyFromMenu}
+                  className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 transition"
+                >
+                  Посмотреть/купить у продавца
+                </button>
+              )}
+
+              <button
+                onClick={openSimilarFromMenu}
+                className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 transition"
+              >
+                Найти похожее
+              </button>
+
+              <button
+                onClick={requestDeleteFromMenu}
+                className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-red-600 hover:bg-red-50 transition"
+              >
+                Удалить
+              </button>
+
+              <button
+                onClick={closeItemMenu}
+                className="w-full h-12 rounded-2xl text-left px-4 text-sm font-medium text-zinc-500 hover:bg-zinc-50 transition"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteItem && (
+        <div className="fixed inset-0 z-[110] bg-zinc-950/70 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-[32px] bg-white p-6 md:p-7 shadow-2xl space-y-5 animate-in zoom-in">
+            <div className="space-y-2">
+              <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-zinc-400">
+                Подтвердите удаление
+              </div>
+              <h3 className="text-lg font-bold uppercase tracking-tight text-zinc-900">
+                Удалить вещь из шкафа?
+              </h3>
+              <p className="text-sm text-zinc-500 leading-relaxed">
+                {pendingDeleteItem.title || 'Эта вещь'} будет удалена из вашего шкафа.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 rounded-2xl bg-zinc-50 border border-zinc-100 p-3">
+              <div className="w-16 h-16 rounded-2xl bg-white border border-zinc-100 p-2 flex items-center justify-center shrink-0 overflow-hidden">
+                <img
+                  src={withApiOrigin(pendingDeleteItem.images?.[0])}
+                  alt=""
+                  className="w-full h-full object-contain mix-blend-multiply"
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-tight text-zinc-900 line-clamp-2">
+                  {pendingDeleteItem.title || 'Без названия'}
+                </div>
+                <div className="mt-1 text-[9px] uppercase tracking-[0.18em] text-zinc-400">
+                  {pendingDeleteItem.sourceType === 'catalog' || pendingDeleteItem.isCatalog ? 'Каталог' : 'Ваше'}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={cancelDeleteItem}
+                disabled={isDeleting}
+                className="h-12 rounded-full border border-zinc-200 text-zinc-700 text-[10px] font-bold uppercase tracking-[0.18em] bg-white disabled:opacity-60"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={confirmDeleteItem}
+                disabled={isDeleting}
+                className="h-12 rounded-full bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-[0.18em] disabled:opacity-60"
+              >
+                {isDeleting ? 'Удаляем...' : 'Удалить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

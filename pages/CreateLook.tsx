@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { withApiOrigin } from "../utils/withApiOrigin";
 import { useAppState } from '../store';
 import { ICONS } from '../constants';
@@ -13,6 +13,46 @@ const STAGES = [
   "Финализируем результат..."
 ];
 
+type UsageInfo = {
+  plan: string;
+  isAdmin: boolean;
+  dailyUsed: number;
+  dailyLimit: number;
+  dailyRemaining: number;
+  monthlyUsed: number;
+  monthlyLimit: number;
+  monthlyRemaining: number;
+  generationCreditsRemaining: number;
+};
+
+function sourceItemToWardrobeItem(item: any): WardrobeItem {
+  const id = String(item?.id || `look-item-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const image = Array.isArray(item?.images) && item.images[0]
+    ? item.images[0]
+    : item?.imageUrl || item?.cutoutUrl || item?.originalUrl || '';
+
+  return {
+    id,
+    title: String(item?.title || 'Вещь из образа'),
+    price: Number(item?.price || 0),
+    currency: item?.currency || 'RUB',
+    gender: item?.gender || 'UNISEX',
+    category: item?.category || 'Верх',
+    sizes: Array.isArray(item?.sizes) ? item.sizes : ['ONE'],
+    images: image ? [image] : [],
+    storeId: item?.storeId || item?.merchant || 'look-source',
+    storeName: item?.storeName || item?.merchant || undefined,
+    brand: item?.brand || undefined,
+    productUrl: item?.productUrl || undefined,
+    affiliateUrl: item?.affiliateUrl || undefined,
+    availability: true,
+    isCatalog: item?.isCatalog !== false,
+    userId: item?.userId,
+    addedAt: item?.addedAt || new Date().toISOString(),
+    sourceType: item?.sourceType || 'catalog',
+  } as WardrobeItem;
+}
+
 const CreateLook = () => {
   const { wardrobe, user, actions, aiError } = useAppState();
   const navigate = useNavigate();
@@ -22,16 +62,111 @@ const CreateLook = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [genStep, setGenStep] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [limitModal, setLimitModal] = useState<any | null>(null);
+  const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const qualityMode: 'quality' = 'quality';
   const selfie = user?.selfieUrl || user?.avatarUrl;
   const selectedItems = wardrobe.filter((i) => selectedIds.has(i.id));
+  const processedPreselectRef = useRef<string>('');
 
   const filteredItems = activeCategory === 'all' 
     ? wardrobe 
     : wardrobe.filter(i => i.category === activeCategory);
 
+  const freeGenerationsAvailable = usageInfo
+    ? usageInfo.dailyRemaining > 0 && usageInfo.monthlyRemaining > 0
+    : true;
+  const bonusGenerationsAvailable = (usageInfo?.generationCreditsRemaining || 0) > 0;
+  const knownLimitBlocked = !!usageInfo && !freeGenerationsAvailable && !bonusGenerationsAvailable;
+
+  const usageStatusText = usageInfo
+    ? knownLimitBlocked
+      ? 'Лимит исчерпан'
+      : bonusGenerationsAvailable && !freeGenerationsAvailable
+        ? 'Следующая генерация — бонусная'
+        : 'Генерация доступна'
+    : usageLoading
+      ? 'Загружаем лимиты'
+      : 'Лимиты не загружены';
+
+  useEffect(() => {
+    if (!user) {
+      setUsageInfo(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadUsage = async () => {
+      try {
+        setUsageLoading(true);
+        setUsageError(null);
+
+        const res = await fetch('/api/usage/me', {
+          credentials: 'include',
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data?.error || 'Не удалось загрузить лимиты');
+        }
+
+        if (!cancelled) {
+          setUsageInfo(data?.usage || null);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setUsageError(e?.message || 'Не удалось загрузить лимиты');
+        }
+        console.warn('[CreateLook usage] failed', e);
+      } finally {
+        if (!cancelled) {
+          setUsageLoading(false);
+        }
+      }
+    };
+
+    loadUsage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
   useEffect(() => {
     const state = (location.state || {}) as any;
+    const preselectedItems = Array.isArray(state?.preselectedItems) ? state.preselectedItems.slice(0, 5) : [];
     const preselectedItemId = state?.preselectedItemId;
+
+    const stateKey = preselectedItems.length
+      ? `items:${preselectedItems.map((i: any) => String(i?.id || i?.title || i?.imageUrl || '')).join('|')}`
+      : preselectedItemId
+        ? `item:${preselectedItemId}`
+        : '';
+
+    if (!stateKey) return;
+    if (processedPreselectRef.current === stateKey) return;
+    processedPreselectRef.current = stateKey;
+
+    if (preselectedItems.length) {
+      const normalized = preselectedItems
+        .map(sourceItemToWardrobeItem)
+        .filter((i: any) => i.images?.[0]);
+
+      normalized.forEach((item) => {
+        actions.upsertWardrobeItem(item);
+      });
+
+      setSelectedIds(new Set(normalized.map((i) => i.id)));
+
+      if (normalized[0]?.category) {
+        setActiveCategory(normalized[0].category as any);
+      }
+
+      return;
+    }
 
     if (!preselectedItemId) return;
     if (!wardrobe.some((i) => i.id === preselectedItemId)) return;
@@ -47,9 +182,7 @@ const CreateLook = () => {
     if (state?.preselectedCategory) {
       setActiveCategory(state.preselectedCategory);
     }
-
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state, location.pathname, navigate, wardrobe]);
+  }, [location.state, wardrobe, actions]);
 
   const toggleItem = (item: WardrobeItem) => {
     const next = new Set(selectedIds);
@@ -73,6 +206,17 @@ const CreateLook = () => {
       return;
     }
 
+    if (knownLimitBlocked) {
+      const monthlyBlocked = (usageInfo?.monthlyRemaining || 0) <= 0;
+      setLimitModal({
+        message: monthlyBlocked
+          ? 'Месячный лимит генераций исчерпан.'
+          : 'Лимит генераций на сегодня исчерпан. Завтра вам снова будут доступны бесплатные генерации.',
+        usage: usageInfo,
+      });
+      return;
+    }
+
     setIsGenerating(true);
     setGenStep(0);
     setProgress(5);
@@ -86,20 +230,27 @@ const CreateLook = () => {
     }, 2200);
 
     try {
-      const lookId = await actions.createLook(selectedItems);
+      const lookId = await actions.createLook(selectedItems, qualityMode);
+      console.log("[CreateLook] generation finished", { lookId });
+
       clearInterval(interval);
       clearInterval(progressInterval);
       setGenStep(STAGES.length - 1);
       setProgress(100);
-      setTimeout(() => {
-        setIsGenerating(false);
-        setGenStep(0);
-        setProgress(0);
-        if (lookId) {
-          navigate(`/look/${lookId}`);
-        } else {
+
+      window.setTimeout(() => {
+        if (!lookId) {
+          setIsGenerating(false);
+          setGenStep(0);
+          setProgress(0);
           alert("Сервер не вернул идентификатор образа.");
+          return;
         }
+
+        // Hard navigation is intentional here.
+        // It clears any stuck overlay/state after a long generation request
+        // and guarantees that the newly created look opens.
+        window.location.assign(`${window.location.origin}/#/look/${lookId}`);
       }, 350);
     } catch (err: any) {
       clearInterval(interval);
@@ -115,7 +266,18 @@ const CreateLook = () => {
         return;
       }
 
-      alert(err?.message || aiError || "Не удалось сгенерировать образ. Проверьте соединение и настройки сервера.");
+      if (err?.code === 'LOOK_GENERATION_LIMIT_REACHED') {
+        if (err?.usage) {
+          setUsageInfo(err.usage);
+        }
+        setLimitModal({
+          message: err?.message || 'Лимит генераций на сегодня исчерпан',
+          usage: err?.usage || null,
+        });
+      } else {
+        alert(err?.message || aiError || "Не удалось сгенерировать образ. Проверьте соединение и настройки сервера.");
+      }
+
       setIsGenerating(false);
       setGenStep(0);
       setProgress(0);
@@ -153,6 +315,62 @@ const CreateLook = () => {
           </div>
         </div>
       </div>
+
+      {user && (
+        <div className="px-4 pt-4">
+          <div className={`rounded-[28px] border p-4 space-y-3 ${
+            knownLimitBlocked
+              ? 'bg-rose-50 border-rose-100'
+              : 'bg-white border-zinc-100 shadow-sm'
+          }`}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-zinc-400">
+                  Лимиты генераций
+                </div>
+                <div className={`text-sm font-black uppercase tracking-tight mt-1 ${
+                  knownLimitBlocked ? 'text-rose-700' : 'text-zinc-900'
+                }`}>
+                  {usageStatusText}
+                </div>
+              </div>
+              <Link
+                to="/profile"
+                className="shrink-0 rounded-full bg-zinc-900 px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white"
+              >
+                Профиль
+              </Link>
+            </div>
+
+            {usageInfo ? (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-2xl bg-zinc-50 p-3">
+                  <div className="text-lg font-black">{usageInfo.dailyRemaining}</div>
+                  <div className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">
+                    сегодня из {usageInfo.dailyLimit}
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-zinc-50 p-3">
+                  <div className="text-lg font-black">{usageInfo.monthlyRemaining}</div>
+                  <div className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">
+                    месяц из {usageInfo.monthlyLimit}
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-zinc-50 p-3">
+                  <div className="text-lg font-black">{usageInfo.generationCreditsRemaining}</div>
+                  <div className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">
+                    бонусы
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-zinc-400">
+                {usageLoading ? 'Загружаем ваши лимиты...' : usageError || 'Лимиты пока не загружены.'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Categories Filter */}
       <div className="sticky top-[64px] z-30 bg-white border-b border-zinc-50 p-4">
@@ -210,11 +428,68 @@ const CreateLook = () => {
             </div>
             <button 
               onClick={handleGenerate}
-              disabled={selectedIds.size < 1}
-              className="bg-zinc-900 text-white px-8 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all disabled:opacity-40"
+              disabled={selectedIds.size < 1 || isGenerating}
+              className={`px-8 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all disabled:opacity-40 ${
+                knownLimitBlocked
+                  ? 'bg-rose-600 text-white'
+                  : 'bg-zinc-900 text-white'
+              }`}
             >
-              Стилизовать ({selectedIds.size})
+              {knownLimitBlocked ? 'Лимит исчерпан' : `Стилизовать (${selectedIds.size})`}
             </button>
+          </div>
+        </div>
+      )}
+
+      {limitModal && (
+        <div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-[32px] bg-white p-6 shadow-2xl border border-zinc-100 space-y-5">
+            <div className="space-y-2">
+              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-400">
+                Лимит генераций
+              </div>
+              <h2 className="text-xl font-black uppercase tracking-tight">
+                Лимит исчерпан
+              </h2>
+              <p className="text-sm text-zinc-500 leading-relaxed">
+                {limitModal.message || 'Лимит генераций на сегодня исчерпан. Завтра вам снова будут доступны бесплатные генерации.'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4 space-y-2">
+              <p className="text-xs font-bold text-zinc-700">
+                Хотите продолжить сейчас?
+              </p>
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                Пригласите друга в TopTry — получите 3 дополнительные генерации после его регистрации.
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                Пакеты генераций скоро появятся.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setLimitModal(null);
+                  navigate('/profile');
+                }}
+                className="w-full h-12 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.2em]"
+              >
+                Пригласить друга
+              </button>
+              <button
+                type="button"
+                onClick={() => setLimitModal(null)}
+                className="w-full h-12 rounded-full bg-zinc-100 text-zinc-600 text-[10px] font-black uppercase tracking-[0.2em]"
+              >
+                Закрыть
+              </button>
+            </div>
           </div>
         </div>
       )}
