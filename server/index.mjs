@@ -1600,6 +1600,9 @@ app.get("/media/:key(*)", async (req, res) => {
 
 // ---------- USAGE / ENTITLEMENTS ----------
 const TOPTRY_USAGE_EVENT_TYPE_LOOK_GENERATION = "LOOK_GENERATION";
+const TOPTRY_DISABLE_LOOK_LIMITS = /^(1|true|yes)$/i.test(
+  String(process.env.TOPTRY_DISABLE_LOOK_LIMITS || "").trim()
+);
 
 const TOPTRY_PLAN_LIMITS = {
   FREE: { dailyLookLimit: 3, monthlyLookLimit: 20, isAdmin: false },
@@ -1716,6 +1719,16 @@ async function getLookGenerationUsageSummary(userId) {
 
 async function assertCanGenerateLook({ userId, qualityMode, itemCount }) {
   const summary = await getLookGenerationUsageSummary(userId);
+
+  // Staging remains a free test sandbox. Successful runs are still recorded for
+  // diagnostics, but they never consume or block against a user-facing limit.
+  if (TOPTRY_DISABLE_LOOK_LIMITS) {
+    return {
+      ...summary,
+      willUseGenerationCredit: false,
+      limitsBypassed: true,
+    };
+  }
 
   const dailyBlocked = summary.dailyLimit > 0 && summary.dailyUsed >= summary.dailyLimit;
   const monthlyBlocked = summary.monthlyLimit > 0 && summary.monthlyUsed >= summary.monthlyLimit;
@@ -3768,6 +3781,20 @@ async function generateImageWithRetry(ai, payload, { primaryModel, fallbackModel
   throw lastError || new Error("Gemini image generation failed");
 }
 
+const GEMINI_TRYON_FLASH_MODEL = String(
+  process.env.GEMINI_TRYON_FLASH_MODEL || "gemini-3.1-flash-image"
+).trim();
+const GEMINI_TRYON_PRO_MODEL = String(
+  process.env.GEMINI_TRYON_PRO_MODEL || "gemini-3-pro-image"
+).trim();
+
+function getGeminiTryonModelConfig() {
+  return {
+    primaryModel: GEMINI_TRYON_FLASH_MODEL,
+    fallbackModel: GEMINI_TRYON_PRO_MODEL,
+  };
+}
+
 async function generateTryOnImageDataUrl({ selfieDataUrl, itemImageUrls, aspectRatio, reqForAbsUrl = null }) {
   if (!GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not configured on the server");
@@ -3788,8 +3815,11 @@ async function generateTryOnImageDataUrl({ selfieDataUrl, itemImageUrls, aspectR
   const selfieAbs = reqForAbsUrl ? absUrlFromReq(reqForAbsUrl, selfieDataUrl) : selfieDataUrl;
   const itemsAbs = reqForAbsUrl ? itemImageUrls.map((u) => absUrlFromReq(reqForAbsUrl, u)) : itemImageUrls;
 
-  console.log("[toptry] using Gemini quality try-on", {
+  const tryonModelConfig = getGeminiTryonModelConfig();
+  console.log("[toptry] using Gemini try-on", {
     itemCount: itemsAbs.length,
+    primaryModel: tryonModelConfig.primaryModel,
+    fallbackModel: tryonModelConfig.fallbackModel,
   });
 
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -3849,8 +3879,7 @@ Avoid brand logos and text.`;
       },
     },
     {
-      primaryModel: process.env.GEMINI_MODEL_IMAGE || "gemini-3-pro-image-preview",
-      fallbackModel: process.env.GEMINI_MODEL_IMAGE_FALLBACK || "gemini-2.5-flash-image",
+      ...tryonModelConfig,
       retries: Number(process.env.GEMINI_IMAGE_RETRIES || 1),
     }
   );
