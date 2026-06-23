@@ -825,56 +825,78 @@ register: async (email: string, username: string, password: string) => {
           selectedIds: selectedItems.map((i) => i.id),
         });
 
-        const rawItemImageUrls = selectedItems
-          .map((i) => {
-            const maybe =
-              (i as any).cutoutUrl ||
-              (i as any).originalUrl ||
-              (i as any).imageUrl ||
-              (i.images && i.images[0]);
+        // Keep the visual reference and its metadata in the same record. Filtering
+        // URLs separately used to shift indexes when one selected item had no image.
+        const selectedItemRefs = selectedItems.map((item) => {
+          const maybe =
+            (item as any).cutoutUrl ||
+            (item as any).originalUrl ||
+            (item as any).imageUrl ||
+            (item.images && item.images[0]);
 
-            return typeof maybe === 'string' ? withApiOrigin(maybe) : null;
-          })
-          .filter(Boolean) as string[];
+          return {
+            item,
+            url: typeof maybe === 'string' ? withApiOrigin(maybe) : '',
+          };
+        });
 
-        console.log('[createLook] rawItemImageUrls', rawItemImageUrls);
-
-        if (!rawItemImageUrls.length) {
-          throw new Error('CREATE_LOOK_IMAGES: no usable image urls');
+        const missingImageItem = selectedItemRefs.find(({ url }) => !url);
+        if (missingImageItem) {
+          throw new Error(`CREATE_LOOK_IMAGES: no usable image for ${missingImageItem.item.title || 'selected item'}`);
         }
 
+        console.log('[createLook] item refs', selectedItemRefs.map(({ item, url }, index) => ({
+          index,
+          id: item.id,
+          title: item.title,
+          category: item.category,
+          imagePrefix: String(url).slice(0, 80),
+        })));
+
         const itemImageUrls = await Promise.all(
-          rawItemImageUrls.map(async (url, idx) => {
+          selectedItemRefs.map(async ({ url, item }, idx) => {
             try {
               const prepared = await urlToDataUrlIfMock(url);
               console.log('[createLook] prepared item image', {
                 idx,
+                title: item.title,
                 originalPrefix: String(url).slice(0, 80),
                 preparedPrefix: String(prepared).slice(0, 80),
               });
               return prepared;
             } catch (err: any) {
-              console.error('[createLook] prepare item image failed', idx, url, err);
+              console.error('[createLook] prepare item image failed', idx, item.title, url, err);
               throw new Error(`CREATE_LOOK_PREPARE_IMAGE_${idx}: ${err?.message || err}`);
             }
           })
         );
 
-        const itemIds = selectedItems.map((i) => i.id);
-        const sourceItems = selectedItems.map((i) => ({
-          id: i.id,
-          title: i.title,
-          price: i.price || 0,
-          currency: i.currency || 'RUB',
-          category: i.category,
-          gender: i.gender,
-          images: Array.isArray(i.images) ? i.images : [],
-          brand: (i as any).brand || undefined,
-          storeId: i.storeId,
-          storeName: (i as any).storeName || undefined,
-          isCatalog: !!i.isCatalog,
-          affiliateUrl: (i as any).affiliateUrl || undefined,
-          productUrl: (i as any).productUrl || undefined,
+        const itemIds = selectedItemRefs.map(({ item }) => item.id);
+        const sourceItems = selectedItemRefs.map(({ item }) => ({
+          id: item.id,
+          title: item.title,
+          price: item.price || 0,
+          currency: item.currency || 'RUB',
+          category: item.category,
+          gender: item.gender,
+          images: Array.isArray(item.images) ? item.images : [],
+          brand: (item as any).brand || undefined,
+          storeId: item.storeId,
+          storeName: (item as any).storeName || undefined,
+          isCatalog: !!item.isCatalog,
+          affiliateUrl: (item as any).affiliateUrl || undefined,
+          productUrl: (item as any).productUrl || undefined,
+        }));
+
+        const tryonItems = selectedItemRefs.map(({ item }) => ({
+          id: item.id,
+          title: item.title,
+          category: item.category,
+          taxonomyGroup: (item as any).taxonomyGroup || undefined,
+          taxonomySubgroup: (item as any).taxonomySubgroup || undefined,
+          gender: item.gender,
+          brand: (item as any).brand || undefined,
+          isCatalog: !!item.isCatalog,
         }));
 
         const priceBuyNowRUB = selectedItems
@@ -886,6 +908,7 @@ register: async (email: string, username: string, password: string) => {
           itemImageUrls,
           itemIds,
           sourceItems,
+          tryonItems,
           aspectRatio: '3:4',
           qualityMode: 'quality',
           priceBuyNowRUB,

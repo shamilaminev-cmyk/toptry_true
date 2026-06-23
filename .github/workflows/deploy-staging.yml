@@ -1,0 +1,250 @@
+name: Deploy staging API and AI gateway
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'server/**'
+      - 'prisma/**'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: staging-api
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image variables
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "image_api=ghcr.io/${GITHUB_REPOSITORY_OWNER}/toptry-ai" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push staging API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image_api }}:${{ steps.vars.outputs.sha_tag }}
+            ${{ steps.vars.outputs.image_api }}:staging
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy staging AI gateway on DigitalOcean
+        env:
+          IMAGE_API: ${{ steps.vars.outputs.image_api }}
+          SHA_TAG: ${{ steps.vars.outputs.sha_tag }}
+          HOST: ${{ secrets.SSH_HOST }}
+          USER: ${{ secrets.SSH_USER }}
+          PORT: ${{ secrets.SSH_PORT }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          printf "%s" "$SSH_KEY" > ~/.ssh/id_ed25519
+          echo >> ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          touch ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/id_ed25519 -p "$PORT" \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=20 \
+            -o ConnectionAttempts=3 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=8 \
+            -o TCPKeepAlive=yes \
+            "$USER@$HOST" \
+            "env IMAGE_API='$IMAGE_API' SHA_TAG='$SHA_TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          echo "Gateway deploy user: $(id -un), uid: $(id -u)"
+
+          CONTAINER='toptry-ai-gateway-staging'
+          ENV_FILE='/opt/toptry-ai-gateway-staging.env'
+          PORT_BIND='127.0.0.1:8091:5174'
+          NETWORK='toptry-ai_default'
+          PREVIOUS_IMAGE=''
+          REPLACED=0
+
+          test -f "$ENV_FILE"
+
+          if docker inspect "$CONTAINER" >/dev/null 2>&1; then
+            PREVIOUS_IMAGE="$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')"
+            NETWORK="$(docker inspect "$CONTAINER" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{printf "%s" $name}}{{end}}')"
+            NETWORK="${NETWORK:-toptry-ai_default}"
+          fi
+
+          rollback() {
+            status=$?
+            if [ "$REPLACED" = '1' ]; then
+              docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+              if [ -n "$PREVIOUS_IMAGE" ]; then
+                docker run -d \
+                  --name "$CONTAINER" \
+                  --restart unless-stopped \
+                  --network "$NETWORK" \
+                  --env-file "$ENV_FILE" \
+                  -e AI_GATEWAY_ROLE=gateway \
+                  -p "$PORT_BIND" \
+                  "$PREVIOUS_IMAGE" >/dev/null || true
+              fi
+            fi
+            exit "$status"
+          }
+
+          trap rollback ERR
+
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          docker pull "$IMAGE_API:$SHA_TAG"
+
+          docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+          docker run -d \
+            --name "$CONTAINER" \
+            --restart unless-stopped \
+            --network "$NETWORK" \
+            --env-file "$ENV_FILE" \
+            -e AI_GATEWAY_ROLE=gateway \
+            -p "$PORT_BIND" \
+            "$IMAGE_API:$SHA_TAG" >/dev/null
+
+          REPLACED=1
+          sleep 3
+
+          SECRET="$(sed -n 's/^AI_GATEWAY_SECRET=//p' "$ENV_FILE" | head -n 1)"
+          test -n "$SECRET"
+
+          CODE="$(curl -sS -o /tmp/toptry-staging-gateway-smoke.json -w '%{http_code}' \
+            --connect-timeout 10 --max-time 25 \
+            -X POST http://127.0.0.1:8091/internal/ai/tryon \
+            -H 'content-type: application/json' \
+            -H "x-toptry-internal-secret: $SECRET" \
+            --data '{}')"
+
+          test "$CODE" = '400'
+          trap - ERR
+          echo 'Staging AI gateway deployed and smoke-tested'
+          REMOTE
+
+      - name: Deploy staging API on Russian VPS
+        env:
+          IMAGE_API: ${{ steps.vars.outputs.image_api }}
+          SHA_TAG: ${{ steps.vars.outputs.sha_tag }}
+          HOST: ${{ secrets.TOPTRY_PROD_HOST }}
+          USER: ${{ secrets.TOPTRY_PROD_USER }}
+          PORT: ${{ secrets.TOPTRY_PROD_PORT }}
+          SSH_KEY: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          printf "%s" "$SSH_KEY" > ~/.ssh/id_ed25519
+          echo >> ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          touch ~/.ssh/known_hosts
+
+          REMOTE_SCRIPT="$(mktemp)"
+          trap 'rm -f "$REMOTE_SCRIPT"' EXIT
+
+          cat > "$REMOTE_SCRIPT" <<'REMOTE'
+          set -euo pipefail
+
+          CONTAINER='toptry-ai-staging'
+          ENV_FILE='/root/toptry-ai-staging.env'
+          PORT_BIND='127.0.0.1:8081:5174'
+
+          test -f "$ENV_FILE"
+
+          echo "$GHCR_TOKEN" | sudo -n /usr/bin/docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          sudo -n /usr/bin/docker pull "$IMAGE_API:$SHA_TAG"
+
+          sudo -n /usr/bin/docker run --rm \
+            --network toptry-ai_default \
+            --env-file "$ENV_FILE" \
+            "$IMAGE_API:$SHA_TAG" \
+            npx prisma db push --skip-generate
+
+          sudo -n /usr/bin/docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+
+          sudo -n /usr/bin/docker run -d \
+            --name "$CONTAINER" \
+            --restart unless-stopped \
+            --network toptry-ai_default \
+            --network-alias ai-staging \
+            --env-file "$ENV_FILE" \
+            -e TOPTRY_DISABLE_LOOK_LIMITS=1 \
+            -p "$PORT_BIND" \
+            "$IMAGE_API:$SHA_TAG"
+
+          sleep 3
+
+          curl -fsS --connect-timeout 10 --max-time 25 \
+            http://127.0.0.1:8081/api/health >/dev/null
+
+          echo 'Staging API deployed and smoke-tested'
+          REMOTE
+
+          SSH_OPTS=(
+            -i "$HOME/.ssh/id_ed25519"
+            -p "$PORT"
+            -o StrictHostKeyChecking=accept-new
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o ConnectTimeout=20
+            -o ConnectionAttempts=3
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=8
+            -o TCPKeepAlive=yes
+          )
+
+          status=1
+          for attempt in 1 2; do
+            echo "Staging API deploy attempt ${attempt}/2"
+            if timeout 420 ssh "${SSH_OPTS[@]}" "$USER@$HOST" \
+              "IMAGE_API='$IMAGE_API' SHA_TAG='$SHA_TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" \
+              < "$REMOTE_SCRIPT"; then
+              exit 0
+            else
+              status=$?
+            fi
+            echo "Staging API deploy attempt ${attempt} failed with status ${status}"
+            if [ "$attempt" -lt 2 ]; then
+              sleep 15
+            fi
+          done
+
+          exit "$status"

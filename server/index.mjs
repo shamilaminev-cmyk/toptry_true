@@ -440,7 +440,17 @@ function normalizeBaseUrl(v) {
 }
 
 const AI_GATEWAY_URL = normalizeBaseUrl(process.env.AI_GATEWAY_URL || process.env.AI_PROXY_URL || "");
-const AI_GATEWAY_SECRET = String(process.env.AI_GATEWAY_SECRET || process.env.PROXY_SHARED_SECRET || "").trim();
+const AI_GATEWAY_SECRET = String(
+  process.env.AI_GATEWAY_SECRET || process.env.PROXY_SHARED_SECRET || ""
+).trim();
+
+function authCookieDomainOption() {
+  const configured = String(process.env.AUTH_COOKIE_DOMAIN || "").trim();
+  if (configured) return { domain: configured };
+
+  // Legacy production behavior remains unchanged unless explicitly overridden.
+  return process.env.NODE_ENV === "production" ? { domain: ".toptry.ru" } : {};
+}
 
 async function proxyJsonPost(upstreamUrl, bodyObj, extraHeaders = {}) {
   const resp = await fetch(upstreamUrl, {
@@ -553,14 +563,74 @@ function toAiGatewayStableImageUrls(urls) {
   return (Array.isArray(urls) ? urls : []).map(toAiGatewayStableImageUrl);
 }
 
-function prepareAiGatewayTryonPayload(payload) {
-  const p = payload || {};
+// TOPTRY_TRYON_FIDELITY_V2
+function normalizeTryonItemMeta(item, index) {
+  const raw = item && typeof item === "object" ? item : {};
+
   return {
-    ...p,
-    itemImageUrls: toAiGatewayStableImageUrls(p.itemImageUrls),
+    index,
+    id: String(raw.id || "").trim() || null,
+    title: String(raw.title || "").trim().slice(0, 220) || `Item ${index + 1}`,
+    category: String(raw.category || "").trim().toUpperCase() || null,
+    taxonomyGroup: String(raw.taxonomyGroup || "").trim().toUpperCase() || null,
+    taxonomySubgroup: String(raw.taxonomySubgroup || "").trim().toUpperCase() || null,
+    gender: String(raw.gender || "").trim().toUpperCase() || null,
+    brand: String(raw.brand || "").trim().slice(0, 120) || null,
   };
 }
 
+function prepareAiGatewayTryonPayload(payload) {
+  const p = payload || {};
+  const itemImageUrls = toAiGatewayStableImageUrls(p.itemImageUrls);
+  const rawTryonItems = Array.isArray(p.tryonItems)
+    ? p.tryonItems
+    : Array.isArray(p.sourceItems)
+      ? p.sourceItems
+      : [];
+
+  // Keep image N and item metadata N inseparable all the way to the gateway.
+  const tryonItems = itemImageUrls.map((_, index) =>
+    normalizeTryonItemMeta(rawTryonItems[index], index)
+  );
+
+  return {
+    ...p,
+    itemImageUrls,
+    tryonItems,
+  };
+}
+
+
+const AI_GATEWAY_FETCH_MAX_ATTEMPTS = Math.max(
+  1,
+  Math.min(2, Number(process.env.AI_GATEWAY_FETCH_MAX_ATTEMPTS || 2))
+);
+
+function sleepForAiGatewayRetry(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getAiGatewayFetchErrorDetails(error) {
+  return {
+    name: error?.name || null,
+    message: error?.message || String(error || ""),
+    code: error?.cause?.code || error?.code || null,
+    cause: error?.cause?.message || null,
+  };
+}
+
+function isRetryableAiGatewayFetchError(error) {
+  const code = String(error?.cause?.code || error?.code || "").trim().toUpperCase();
+  return new Set([
+    "EAI_AGAIN",
+    "ENOTFOUND",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "UND_ERR_CONNECT_TIMEOUT",
+    "UND_ERR_SOCKET",
+  ]).has(code);
+}
 
 async function callAiGatewayTryon(payload) {
   if (!AI_GATEWAY_URL) return null;
@@ -571,6 +641,7 @@ async function callAiGatewayTryon(payload) {
     : {};
 
   const stablePayload = prepareAiGatewayTryonPayload(payload);
+  const requestBody = JSON.stringify(stablePayload || {});
 
   console.log("[toptry] AI gateway payload prepared", {
     itemCount: Array.isArray(stablePayload.itemImageUrls) ? stablePayload.itemImageUrls.length : 0,
@@ -579,15 +650,46 @@ async function callAiGatewayTryon(payload) {
       : null,
   });
 
-  const resp = await fetch(upstream, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-      ...headers,
-    },
-    body: JSON.stringify(stablePayload || {}),
-  });
+  let resp;
+  for (let attempt = 1; attempt <= AI_GATEWAY_FETCH_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      resp = await fetch(upstream, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          ...headers,
+        },
+        body: requestBody,
+      });
+      break;
+    } catch (error) {
+      const details = getAiGatewayFetchErrorDetails(error);
+      const retryable = isRetryableAiGatewayFetchError(error);
+
+      console.warn("[toptry] AI gateway network fetch failed", {
+        upstream,
+        attempt,
+        maxAttempts: AI_GATEWAY_FETCH_MAX_ATTEMPTS,
+        retryable,
+        ...details,
+      });
+
+      if (!retryable || attempt >= AI_GATEWAY_FETCH_MAX_ATTEMPTS) {
+        const wrapped = new Error(
+          `AI gateway network request failed${details.code ? ` (${details.code})` : ""}: ${details.message}`
+        );
+        wrapped.cause = error;
+        throw wrapped;
+      }
+
+      await sleepForAiGatewayRetry(700 * attempt);
+    }
+  }
+
+  if (!resp) {
+    throw new Error("AI gateway returned no response");
+  }
 
   const text = await resp.text();
   let data = null;
@@ -596,7 +698,12 @@ async function callAiGatewayTryon(payload) {
   } catch {}
 
   if (!resp.ok) {
-    throw new Error(`AI gateway ${resp.status}: ${(data?.error || text || "").slice(0, 500)}`);
+    const err = new Error(`AI gateway ${resp.status}: ${(data?.error || text || "").slice(0, 500)}`);
+    err.statusCode = resp.status;
+    err.code = data?.code || null;
+    err.itemIndex = data?.itemIndex ?? null;
+    err.itemTitle = data?.itemTitle || null;
+    throw err;
   }
 
   if (!data?.imageDataUrl) {
@@ -753,12 +860,71 @@ async function normalizeToWebp(buffer) {
  * Convert a remote image URL or a data URL to base64 (without data: prefix),
  * and normalize it (resize + compress) to speed up Gemini try-on.
  */
-async function imageToBase64(input) {
+const TRYON_ITEM_IMAGE_FETCH_MAX_ATTEMPTS = Math.max(
+  1,
+  Math.min(3, Number(process.env.TRYON_ITEM_IMAGE_FETCH_MAX_ATTEMPTS || 2))
+);
+
+function sleepForTryonItemImageRetry(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function tryonImageHost(value) {
+  try {
+    const url = new URL(String(value || ""));
+    const sourceUrl = url.searchParams.get("url");
+    return sourceUrl ? new URL(sourceUrl).hostname : url.hostname;
+  } catch {
+    return null;
+  }
+}
+
+function tryonImageErrorCode(error) {
+  return String(error?.cause?.code || error?.code || error?.statusCode || "")
+    .trim()
+    .toUpperCase() || null;
+}
+
+function isRetryableTryonItemImageError(error) {
+  const code = tryonImageErrorCode(error);
+  if ([
+    "EAI_AGAIN",
+    "ENOTFOUND",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "UND_ERR_CONNECT_TIMEOUT",
+    "UND_ERR_SOCKET",
+  ].includes(code)) return true;
+
+  const status = Number(error?.statusCode || 0);
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function unavailableTryonItemImageError({ url, context, cause }) {
+  const itemTitle = String(context?.itemTitle || "").trim();
+  const itemIndex = Number.isFinite(Number(context?.itemIndex))
+    ? Number(context.itemIndex) + 1
+    : null;
+  const label = itemTitle ? `«${itemTitle}»` : itemIndex ? `№${itemIndex}` : "одного из выбранных товаров";
+
+  const err = new Error(
+    `Не удалось получить фото товара ${label}. Выберите другую вещь или повторите попытку.`
+  );
+  err.statusCode = 422;
+  err.code = "TRYON_ITEM_IMAGE_UNAVAILABLE";
+  err.itemIndex = itemIndex;
+  err.itemTitle = itemTitle || null;
+  err.host = tryonImageHost(url);
+  err.cause = cause;
+  return err;
+}
+
+async function imageToBase64(input, options = {}) {
   if (typeof input !== "string") throw new Error("Invalid image input");
 
-  // ✅ важно: убираем пробелы/переводы строк, которые ломают new URL(...)
   const clean = input.trim();
-
+  const context = options?.context || {};
   let buf;
   let mimeType = "image/jpeg";
 
@@ -768,29 +934,64 @@ async function imageToBase64(input) {
 
     const meta = clean.slice(0, comma);
     const raw = clean.slice(comma + 1);
-
     const m = meta.match(/data:([^;]+);base64/i);
     mimeType = m?.[1] || "image/png";
-
     buf = Buffer.from(raw, "base64");
   } else {
-    // ✅ Node fetch не умеет относительные URL типа "/media/..."
-    // поэтому делаем абсолютный URL через base.
-    const base =
-      process.env.INTERNAL_BASE_URL ||
-      `http://127.0.0.1:5174`;
-
+    const base = process.env.INTERNAL_BASE_URL || `http://127.0.0.1:5174`;
     const url =
       clean.startsWith("http://") || clean.startsWith("https://")
         ? clean
         : new URL(clean, base).toString();
 
-    const res = await fetch(url);
-    if (!res.ok)
-      throw new Error(`Failed to fetch image: ${res.status} (${url})`);
-    const arrayBuffer = await res.arrayBuffer();
-    buf = Buffer.from(arrayBuffer);
-    mimeType = res.headers.get("content-type") || "image/jpeg";
+    const maxAttempts = context?.kind === "tryon_item"
+      ? TRYON_ITEM_IMAGE_FETCH_MAX_ATTEMPTS
+      : 1;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const httpError = new Error(`Failed to fetch image: ${res.status} (${url})`);
+          httpError.statusCode = res.status;
+          throw httpError;
+        }
+
+        const arrayBuffer = await res.arrayBuffer();
+        buf = Buffer.from(arrayBuffer);
+        mimeType = res.headers.get("content-type") || "image/jpeg";
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        const retryable = isRetryableTryonItemImageError(error);
+
+        console.warn("[toptry] try-on item image fetch failed", {
+          itemIndex: context?.itemIndex ?? null,
+          itemTitle: context?.itemTitle || null,
+          host: tryonImageHost(url),
+          attempt,
+          maxAttempts,
+          retryable,
+          code: tryonImageErrorCode(error),
+          message: String(error?.message || error).slice(0, 260),
+        });
+
+        if (attempt < maxAttempts && retryable) {
+          await sleepForTryonItemImageRetry(600 * attempt);
+          continue;
+        }
+        break;
+      }
+    }
+
+    if (lastError || !buf) {
+      if (context?.kind === "tryon_item") {
+        throw unavailableTryonItemImageError({ url, context, cause: lastError });
+      }
+      throw lastError || new Error(`Failed to fetch image (${url})`);
+    }
   }
 
   const norm = await normalizeToWebp(buf);
@@ -934,14 +1135,12 @@ app.post("/api/auth/register", async (req, res) => {
 
     const token = signSession(user);
     const { cookieName, cookieOptions } = getAuthConfig();
-    const isProd = process.env.NODE_ENV === "production";
-
     // Важно для prod (toptry.ru <-> api.toptry.ru):
     // domain: .toptry.ru нужен чтобы cookie была доступна на поддоменах,
     // sameSite/secure должны быть уже в cookieOptions (проверь auth.mjs)
     res.cookie(cookieName, token, {
       ...cookieOptions,
-      ...(isProd ? { domain: ".toptry.ru" } : {}),
+      ...authCookieDomainOption(),
     });
 
     res.json({ user });
@@ -971,11 +1170,9 @@ app.post("/api/auth/login", async (req, res) => {
 
     const token = signSession(user);
     const { cookieName, cookieOptions } = getAuthConfig();
-    const isProd = process.env.NODE_ENV === "production";
-
     res.cookie(cookieName, token, {
       ...cookieOptions,
-      ...(isProd ? { domain: ".toptry.ru" } : {}),
+      ...authCookieDomainOption(),
     });
 
     res.json({ user });
@@ -1115,11 +1312,9 @@ app.post("/api/auth/phone/verify", async (req, res) => {
 
     const token = signSession(user);
     const { cookieName, cookieOptions } = getAuthConfig();
-    const isProd = process.env.NODE_ENV === "production";
-
     res.cookie(cookieName, token, {
       ...cookieOptions,
-      ...(isProd ? { domain: ".toptry.ru" } : {}),
+      ...authCookieDomainOption(),
     });
 
     return res.json({
@@ -1148,11 +1343,9 @@ app.post("/api/auth/phone/verify", async (req, res) => {
 
 app.post("/api/auth/logout", (req, res) => {
   const { cookieName } = getAuthConfig();
-  const isProd = process.env.NODE_ENV === "production";
-
   res.clearCookie(cookieName, {
     path: "/",
-    ...(isProd ? { domain: ".toptry.ru" } : {}),
+    ...authCookieDomainOption(),
   });
 
   res.json({ ok: true });
@@ -1598,6 +1791,9 @@ app.get("/media/:key(*)", async (req, res) => {
 
 // ---------- USAGE / ENTITLEMENTS ----------
 const TOPTRY_USAGE_EVENT_TYPE_LOOK_GENERATION = "LOOK_GENERATION";
+const TOPTRY_DISABLE_LOOK_LIMITS = /^(1|true|yes)$/i.test(
+  String(process.env.TOPTRY_DISABLE_LOOK_LIMITS || "").trim()
+);
 
 const TOPTRY_PLAN_LIMITS = {
   FREE: { dailyLookLimit: 3, monthlyLookLimit: 20, isAdmin: false },
@@ -1695,8 +1891,16 @@ async function getLookGenerationUsageSummary(userId) {
     }),
   ]);
 
-  const dailyLimit = Math.max(0, Number(entitlement.dailyLookLimit || 0));
-  const monthlyLimit = Math.max(0, Number(entitlement.monthlyLookLimit || 0));
+  const persistedDailyLimit = Math.max(0, Number(entitlement.dailyLookLimit || 0));
+  const persistedMonthlyLimit = Math.max(0, Number(entitlement.monthlyLookLimit || 0));
+
+  // The backend bypass alone is not enough: CreateLook reads /api/usage/me
+  // before submitting a request and disables its CTA when the remaining quota
+  // is zero. Give the staging client a deliberately high display quota while
+  // retaining the real usage counters for diagnostics.
+  const stagingDisplayLimit = 999999;
+  const dailyLimit = TOPTRY_DISABLE_LOOK_LIMITS ? stagingDisplayLimit : persistedDailyLimit;
+  const monthlyLimit = TOPTRY_DISABLE_LOOK_LIMITS ? stagingDisplayLimit : persistedMonthlyLimit;
 
   return {
     entitlement,
@@ -1707,6 +1911,7 @@ async function getLookGenerationUsageSummary(userId) {
     dailyRemaining: Math.max(0, dailyLimit - dailyUsed),
     monthlyRemaining: Math.max(0, monthlyLimit - monthlyUsed),
     generationCredits: credits,
+    limitsBypassed: TOPTRY_DISABLE_LOOK_LIMITS,
     dayStart,
     monthStart,
   };
@@ -1714,6 +1919,16 @@ async function getLookGenerationUsageSummary(userId) {
 
 async function assertCanGenerateLook({ userId, qualityMode, itemCount }) {
   const summary = await getLookGenerationUsageSummary(userId);
+
+  // Staging remains a free test sandbox. Successful runs are still recorded for
+  // diagnostics, but they never consume or block against a user-facing limit.
+  if (TOPTRY_DISABLE_LOOK_LIMITS) {
+    return {
+      ...summary,
+      willUseGenerationCredit: false,
+      limitsBypassed: true,
+    };
+  }
 
   const dailyBlocked = summary.dailyLimit > 0 && summary.dailyUsed >= summary.dailyLimit;
   const monthlyBlocked = summary.monthlyLimit > 0 && summary.monthlyUsed >= summary.monthlyLimit;
@@ -2084,6 +2299,7 @@ app.get("/api/usage/me", requireAuth, async (req, res) => {
         monthlyRemaining: summary.monthlyRemaining,
         generationCreditsRemaining: summary.generationCredits?.remaining || 0,
         generationCreditGrants: summary.generationCredits?.grants || [],
+        limitsBypassed: !!summary.limitsBypassed,
       },
     });
   } catch (e) {
@@ -3766,7 +3982,82 @@ async function generateImageWithRetry(ai, payload, { primaryModel, fallbackModel
   throw lastError || new Error("Gemini image generation failed");
 }
 
-async function generateTryOnImageDataUrl({ selfieDataUrl, itemImageUrls, aspectRatio, reqForAbsUrl = null }) {
+const GEMINI_TRYON_FLASH_MODEL = String(
+  process.env.GEMINI_TRYON_FLASH_MODEL || "gemini-3.1-flash-image"
+).trim();
+const GEMINI_TRYON_PRO_MODEL = String(
+  process.env.GEMINI_TRYON_PRO_MODEL || "gemini-3-pro-image"
+).trim();
+
+function getGeminiTryonModelConfig() {
+  return {
+    primaryModel: GEMINI_TRYON_FLASH_MODEL,
+    fallbackModel: GEMINI_TRYON_PRO_MODEL,
+  };
+}
+
+function tryonItemFocusInstruction(item) {
+  const value = [item?.title, item?.category, item?.taxonomyGroup, item?.taxonomySubgroup]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (/(blazer|пиджак|жакет)/i.test(value)) {
+    return "Use only the blazer or jacket. Ignore any trousers, shirt, shoes, bag, model pose and background shown in this product image.";
+  }
+  if (/(trouser|pants|брюк|джинс|denim|skirt|юбк|short)/i.test(value)) {
+    return "Use only the trousers, jeans, skirt or shorts. Ignore every top, jacket, shoe, bag, model pose and background shown in this product image.";
+  }
+  if (/(shoe|sneaker|trainer|boot|loafer|кед|кроссов|ботин|лофер|балетк|сандал|туфл|сапог)/i.test(value)) {
+    return "Use only the selected footwear. Ignore all garments, model pose and background shown in this product image.";
+  }
+  if (/(outerwear|куртк|пальто|плащ|тренч|бомбер|ветровк|пуховик)/i.test(value)) {
+    return "Use only the selected outer layer. Ignore all other garments, model pose and background shown in this product image.";
+  }
+  return "Use only the declared target garment. Ignore all other garments, accessories, model pose and background shown in this product image.";
+}
+
+function buildTryonReferenceText(item) {
+  return [
+    `REFERENCE ITEM ${Number(item.index) + 1}`,
+    `target title: ${item.title || `Item ${Number(item.index) + 1}`}`,
+    item.category ? `declared category: ${item.category}` : null,
+    item.taxonomyGroup ? `taxonomy group: ${item.taxonomyGroup}` : null,
+    item.taxonomySubgroup ? `taxonomy subgroup: ${item.taxonomySubgroup}` : null,
+    item.brand ? `brand: ${item.brand}` : null,
+    tryonItemFocusInstruction(item),
+  ].filter(Boolean).join("\n");
+}
+
+function buildProductAccurateTryonPrompt(itemRefs) {
+  const requiredItems = itemRefs
+    .map((item) => `- ITEM ${Number(item.index) + 1}: ${item.title || `selected item ${Number(item.index) + 1}`}`)
+    .join("\n");
+
+  return `Create a product-accurate virtual try-on image, not a styling inspiration image.
+
+REFERENCE 0 is the person. Preserve this person's identity, face, body proportions and natural pose.
+
+Every numbered item below is mandatory and must appear on the person:
+${requiredItems}
+
+Rules:
+- Preserve each selected item's actual color, silhouette, length, material, pattern, construction details and visible branding when present.
+- Do not omit, replace, simplify, recolor or invent any selected item.
+- Product photos are garment references only. Never copy unselected garments, accessories, model, pose, background, styling or a complete outfit from a product photo.
+- When a product image shows a complete look, extract only the target garment declared for that numbered reference.
+- If product accuracy conflicts with aesthetics, product accuracy wins.
+- Do not add text, watermarks, unrelated logos or extra garments.
+- Output a realistic full-body studio e-commerce image with a clean neutral background.`;
+}
+
+async function generateTryOnImageDataUrl({
+  selfieDataUrl,
+  itemImageUrls,
+  tryonItems = [],
+  aspectRatio,
+  reqForAbsUrl = null,
+}) {
   if (!GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not configured on the server");
   }
@@ -3785,9 +4076,21 @@ async function generateTryOnImageDataUrl({ selfieDataUrl, itemImageUrls, aspectR
 
   const selfieAbs = reqForAbsUrl ? absUrlFromReq(reqForAbsUrl, selfieDataUrl) : selfieDataUrl;
   const itemsAbs = reqForAbsUrl ? itemImageUrls.map((u) => absUrlFromReq(reqForAbsUrl, u)) : itemImageUrls;
+  const itemRefs = itemsAbs.map((_, index) =>
+    normalizeTryonItemMeta(Array.isArray(tryonItems) ? tryonItems[index] : null, index)
+  );
 
-  console.log("[toptry] using Gemini quality try-on", {
+  const tryonModelConfig = getGeminiTryonModelConfig();
+  console.log("[toptry] using Gemini try-on", {
     itemCount: itemsAbs.length,
+    primaryModel: tryonModelConfig.primaryModel,
+    fallbackModel: tryonModelConfig.fallbackModel,
+    itemRefs: itemRefs.map((item) => ({
+      index: item.index,
+      title: item.title,
+      category: item.category,
+      taxonomySubgroup: item.taxonomySubgroup,
+    })),
   });
 
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -3807,38 +4110,53 @@ async function generateTryOnImageDataUrl({ selfieDataUrl, itemImageUrls, aspectR
 
   const itemParts = await Promise.all(
     itemsAbs.map(async (url, idx) => {
+      const item = itemRefs[idx];
       console.log("[debug ai/tryon] preparing item", {
         idx,
+        title: item?.title || null,
+        category: item?.category || null,
         prefix: typeof url === "string" ? url.slice(0, 64) : null,
       });
-      const img = await imageToBase64(url);
+
+      const img = await imageToBase64(url, {
+        context: {
+          kind: "tryon_item",
+          itemIndex: idx,
+          itemTitle: item?.title || null,
+        },
+      });
+
       console.log("[debug ai/tryon] item prepared", {
         idx,
+        title: item?.title || null,
         mimeType: img?.mimeType || null,
         base64Len: img?.base64 ? String(img.base64).length : null,
       });
-      return { inlineData: { data: img.base64, mimeType: img.mimeType } };
+
+      return {
+        item,
+        inlineData: { data: img.base64, mimeType: img.mimeType },
+      };
     })
   );
 
-  const prompt = `Act as a professional fashion photographer and AI stylist.
-I am providing a selfie of a person and images of ${itemsAbs.length} clothing items.
-Generate a high-quality studio-style catalog image of this person wearing ALL the provided items.
-The person should have the same face as in the selfie.
-Style: premium e-commerce, professional lighting, consistent with luxury fashion brands.
-Result should be front view, clean neutral background.
-Avoid brand logos and text.`;
+  const contentParts = [
+    {
+      text: "REFERENCE 0 — PERSON SELFIE. Preserve this person's identity, face and body proportions. Do not treat this as a clothing reference.",
+    },
+    { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
+  ];
+
+  for (const part of itemParts) {
+    contentParts.push({ text: buildTryonReferenceText(part.item) });
+    contentParts.push({ inlineData: part.inlineData });
+  }
+  contentParts.push({ text: buildProductAccurateTryonPrompt(itemRefs) });
 
   const response = await generateImageWithRetry(
     ai,
     {
-      contents: {
-        parts: [
-          { inlineData: { data: selfie.base64, mimeType: selfie.mimeType } },
-          ...itemParts,
-          { text: prompt },
-        ],
-      },
+      contents: { parts: contentParts },
       config: {
         imageConfig: {
           aspectRatio: aspectRatio || "3:4",
@@ -3847,8 +4165,7 @@ Avoid brand logos and text.`;
       },
     },
     {
-      primaryModel: process.env.GEMINI_MODEL_IMAGE || "gemini-3-pro-image-preview",
-      fallbackModel: process.env.GEMINI_MODEL_IMAGE_FALLBACK || "gemini-2.5-flash-image",
+      ...tryonModelConfig,
       retries: Number(process.env.GEMINI_IMAGE_RETRIES || 1),
     }
   );
@@ -3874,10 +4191,11 @@ app.post("/internal/ai/tryon", async (req, res) => {
   try {
     if (!assertInternalAiRequest(req, res)) return;
 
-    const { selfieDataUrl, itemImageUrls, aspectRatio } = req.body || {};
+    const { selfieDataUrl, itemImageUrls, tryonItems, aspectRatio } = req.body || {};
     const imageDataUrl = await generateTryOnImageDataUrl({
       selfieDataUrl,
       itemImageUrls,
+      tryonItems,
       aspectRatio,
       reqForAbsUrl: null,
     });
@@ -3885,7 +4203,12 @@ app.post("/internal/ai/tryon", async (req, res) => {
     return res.json({ imageDataUrl });
   } catch (err) {
     console.error("[toptry] /internal/ai/tryon error", err?.stack || err);
-    return res.status(err?.statusCode || 500).json({ error: err?.message || "AI gateway error" });
+    return res.status(err?.statusCode || 500).json({
+      error: err?.message || "AI gateway error",
+      code: err?.code || null,
+      itemIndex: err?.itemIndex ?? null,
+      itemTitle: err?.itemTitle || null,
+    });
   }
 });
 
@@ -3916,6 +4239,7 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
     const qualityMode = String(b.qualityMode || "quality").trim().toLowerCase();
     const useOpenAI = false;
     const sourceItems = Array.isArray(b.sourceItems) ? b.sourceItems : [];
+    const tryonItems = Array.isArray(b.tryonItems) ? b.tryonItems : sourceItems;
     const itemIds = Array.isArray(b.itemIds) ? b.itemIds.map(String) : [];
     const priceBuyNowRUB = Number(b.priceBuyNowRUB || 0);
 
@@ -3969,6 +4293,7 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
       imageDataUrl = await callAiGatewayTryon({
         selfieDataUrl: selfieAbs,
         itemImageUrls: itemsAbs,
+        tryonItems,
         aspectRatio,
       });
     } else if (useOpenAI) {
@@ -3990,6 +4315,7 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
       imageDataUrl = await generateTryOnImageDataUrl({
         selfieDataUrl: selfieAbs,
         itemImageUrls: itemsAbs,
+        tryonItems,
         aspectRatio,
         reqForAbsUrl: null,
       });
@@ -4091,13 +4417,27 @@ app.post("/api/looks/create", requireAuth, async (req, res) => {
       });
     }
 
+    if (Number(e?.statusCode) >= 400 && Number(e?.statusCode) < 500) {
+      return res.status(e.statusCode).json({
+        error: e.message || "Не удалось подготовить выбранный товар для примерки",
+        code: e.code || null,
+        itemIndex: e.itemIndex ?? null,
+        itemTitle: e.itemTitle || null,
+      });
+    }
+
     return res.status(500).json({ error: (e && e.message) ? e.message : String(e) });
   }
 });
 
 app.post("/api/tryon", async (req, res) => {
   try {
-    const { selfieDataUrl, itemImageUrls, aspectRatio } = req.body || {};
+    const { selfieDataUrl, itemImageUrls, tryonItems, sourceItems, aspectRatio } = req.body || {};
+    const resolvedTryonItems = Array.isArray(tryonItems)
+      ? tryonItems
+      : Array.isArray(sourceItems)
+        ? sourceItems
+        : [];
 
     let imageDataUrl = "";
 
@@ -4105,12 +4445,14 @@ app.post("/api/tryon", async (req, res) => {
       imageDataUrl = await callAiGatewayTryon({
         selfieDataUrl,
         itemImageUrls,
+        tryonItems: resolvedTryonItems,
         aspectRatio,
       });
     } else {
       imageDataUrl = await generateTryOnImageDataUrl({
         selfieDataUrl,
         itemImageUrls,
+        tryonItems: resolvedTryonItems,
         aspectRatio,
         reqForAbsUrl: null,
       });
@@ -8139,9 +8481,17 @@ function inferCatalogTaxonomy(product) {
     /(^|[\\/])обувь([\\/]|$)/i.test(sourceText) ||
     /женская\s+обувь|мужская\s+обувь/i.test(sourceText);
 
+  // "Blazer" is a footwear model name for Nike, Demix and Northland as well as
+  // a garment type. A direct product-name shoe signal must win over the word
+  // "blazer" so these items never leak into the blazer filter.
+  const explicitShoeTitleRe =
+    /(кед|кроссовк|ботин|ботильон|лофер|мокас|балетк|сандал|босонож|туфл|сапог|угг|sneakers?|trainers?|trail\s+blazer|nike\s+blazer|demix\s+blazer|northland\s+trail\s+blazer)/i;
+  // rules_v5_blazer_shoes_guard
+  const hasExplicitShoeTitle = explicitShoeTitleRe.test(String(product?.title || ""));
+
   if (explicitShoeAccessoryRe.test(sourceText) || explicitNonTryOnAccessoryRe.test(sourceText)) {
     sourceCategory = "ACCESSORIES";
-  } else if (hasSourceShoePath) {
+  } else if (hasExplicitShoeTitle || hasSourceShoePath) {
     sourceCategory = "SHOES";
   }
 
@@ -9350,8 +9700,20 @@ function normalizeCatalogAiReviewItem(rawItem, sourceProduct = {}) {
 
   const outerwearTitleRe = /(верхн[яе][яе]\s+одежд|куртк|пуховик|ветровк|пальто|плащ|жилет|jacket|coat|parka|vest|gilet)/i;
   const blazerTitleRe = /(пиджак|жакет|blazer)/i;
+  const explicitShoeTitleRe =
+    /(кед|кроссовк|ботин|ботильон|лофер|мокас|балетк|сандал|босонож|туфл|сапог|угг|sneakers?|trainers?|trail\s+blazer|nike\s+blazer|demix\s+blazer|northland\s+trail\s+blazer)/i;
 
-  if (blazerTitleRe.test(title)) {
+  if (explicitShoeTitleRe.test(title)) {
+    item.taxonomyGroup = "SHOES";
+    if (/балетк|ballet/i.test(title)) item.taxonomySubgroup = "BALLET";
+    else if (/угг|ботфорт|высок.*сапог|tall boot|ugg/i.test(title)) item.taxonomySubgroup = "TALL_BOOTS";
+    else if (/ботин|ботильон|boot|chelsea|chukka|сапог/i.test(title)) item.taxonomySubgroup = "BOOTS";
+    else if (/лофер|loafer|мокас/i.test(title)) item.taxonomySubgroup = "LOAFERS";
+    else if (/сандал|босонож|сабо|эспадриль|тапоч|slip[-\s]?on|sand|espadrille/i.test(title)) item.taxonomySubgroup = "SANDALS";
+    else if (/туф|oxford|дерби|монк|brogue|formal shoe/i.test(title)) item.taxonomySubgroup = "SHOES_CLASSIC";
+    else item.taxonomySubgroup = "SNEAKERS";
+    item.isTryOnRelevant = true;
+  } else if (blazerTitleRe.test(title)) {
     item.taxonomyGroup = "CLOTHING";
     item.taxonomySubgroup = "BLAZERS";
     item.isTryOnRelevant = true;
@@ -10370,6 +10732,7 @@ const CATALOG_AI_SAFE_TAXONOMY_RULES = [
     toGroup: "CLOTHING",
     toSubgroup: "BLAZERS",
     titleRe: /(пиджак|жакет|blazer)/i,
+    rejectTitleRe: /(кед|кроссовк|ботин|ботильон|лофер|мокас|балетк|сандал|босонож|туфл|сапог|угг|sneakers?|trainers?|trail\s+blazer|nike\s+blazer|demix\s+blazer|northland\s+trail\s+blazer)/i,
   },
   {
     code: "TITLE_TSHIRTS",

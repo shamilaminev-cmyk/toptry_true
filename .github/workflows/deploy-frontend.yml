@@ -2,7 +2,7 @@ name: Deploy frontend
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'pages/**'
       - 'components/**'
@@ -13,12 +13,17 @@ on:
       - 'App.tsx'
       - 'store.tsx'
       - 'fetchPatch.ts'
+      - 'withApiOrigin.ts'
       - 'types.ts'
       - 'package.json'
       - 'package-lock.json'
       - 'vite.config.*'
       - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
+
+concurrency:
+  group: frontend-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
@@ -27,6 +32,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set deployment variables
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_REF_NAME}" = 'main' ]; then
+            echo 'vite_api_origin=https://api.toptry.ru' >> "$GITHUB_OUTPUT"
+            echo 'target_dir=/var/www/toptry' >> "$GITHUB_OUTPUT"
+            echo 'temp_dir=/tmp/toptry-frontend-deploy-prod' >> "$GITHUB_OUTPUT"
+          else
+            echo 'vite_api_origin=https://staging.toptry.ru' >> "$GITHUB_OUTPUT"
+            echo 'target_dir=/var/www/toptry-staging' >> "$GITHUB_OUTPUT"
+            echo 'temp_dir=/tmp/toptry-frontend-deploy-staging' >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -39,28 +60,35 @@ jobs:
 
       - name: Build frontend
         env:
-          VITE_API_ORIGIN: https://api.toptry.ru
+          VITE_API_ORIGIN: ${{ steps.vars.outputs.vite_api_origin }}
         run: npm run build
 
-      - name: Write version
+      - name: Write build identity
+        shell: bash
         run: |
-          BUILD_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          printf '{"ok":true,"buildTime":"%s","sha":"%s"}\n' "$BUILD_TIME" "$GITHUB_SHA" > dist/version.json
+          BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          printf '{"ok":true,"branch":"%s","buildTime":"%s","sha":"%s"}\n' \
+            "$GITHUB_REF_NAME" "$BUILD_TIME" "$GITHUB_SHA" > dist/version.json
           printf '%s\n' "$BUILD_TIME" > dist/version.txt
 
-      - name: Upload dist to server
+      # Production path remains unchanged. The staging path below uses native OpenSSH
+      # with bounded retries because the appleboy SCP transport occasionally loses
+      # the runner-to-VPS connection after a successful remote operation.
+      - name: Upload production dist to server
+        if: github.ref_name == 'main'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.TOPTRY_PROD_HOST }}
           username: ${{ secrets.TOPTRY_PROD_USER }}
           key: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
           port: ${{ secrets.TOPTRY_PROD_PORT }}
-          source: "dist/*"
-          target: "/tmp/toptry-frontend-deploy"
+          source: 'dist/*'
+          target: ${{ steps.vars.outputs.temp_dir }}
           strip_components: 1
           rm: true
 
-      - name: Promote frontend atomically
+      - name: Promote production frontend atomically
+        if: github.ref_name == 'main'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.TOPTRY_PROD_HOST }}
@@ -70,17 +98,78 @@ jobs:
           script: |
             set -euo pipefail
 
-            test -f /tmp/toptry-frontend-deploy/index.html
+            TEMP_DIR='${{ steps.vars.outputs.temp_dir }}'
+            TARGET_DIR='${{ steps.vars.outputs.target_dir }}'
 
-            rm -rf /var/www/toptry.new
-            mkdir -p /var/www/toptry.new
-            cp -a /tmp/toptry-frontend-deploy/. /var/www/toptry.new/
+            test -f "${TEMP_DIR}/index.html"
 
-            if [ -d /var/www/toptry ]; then
-              rm -rf /var/www/toptry.prev
-              mv /var/www/toptry /var/www/toptry.prev
+            rm -rf "${TARGET_DIR}.new"
+            mkdir -p "${TARGET_DIR}.new"
+            cp -a "${TEMP_DIR}/." "${TARGET_DIR}.new/"
+
+            if [ -d "${TARGET_DIR}" ]; then
+              rm -rf "${TARGET_DIR}.prev"
+              mv "${TARGET_DIR}" "${TARGET_DIR}.prev"
             fi
 
-            mv /var/www/toptry.new /var/www/toptry
+            mv "${TARGET_DIR}.new" "${TARGET_DIR}"
+            test -f "${TARGET_DIR}/index.html"
 
-            ls -la /var/www/toptry | head
+      - name: Deploy staging frontend with resilient SSH
+        if: github.ref_name == 'develop'
+        env:
+          HOST: ${{ secrets.TOPTRY_PROD_HOST }}
+          USER: ${{ secrets.TOPTRY_PROD_USER }}
+          PORT: ${{ secrets.TOPTRY_PROD_PORT }}
+          SSH_KEY: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          TEMP_DIR: ${{ steps.vars.outputs.temp_dir }}
+          TARGET_DIR: ${{ steps.vars.outputs.target_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          printf "%s" "$SSH_KEY" > ~/.ssh/id_ed25519
+          echo >> ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          touch ~/.ssh/known_hosts
+
+          SSH_OPTS=(
+            -i "$HOME/.ssh/id_ed25519"
+            -p "$PORT"
+            -o StrictHostKeyChecking=accept-new
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o BatchMode=yes
+            -o ConnectTimeout=20
+            -o ConnectionAttempts=3
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=8
+            -o TCPKeepAlive=yes
+          )
+
+          status=1
+          for attempt in 1 2 3; do
+            echo "Staging frontend deploy attempt ${attempt}/3"
+
+            # Stream the built dist directory directly over SSH. This avoids the
+            # broken SCP archive source observed in the previous workflow run.
+            if tar -C dist -czf - . | timeout 240 ssh "${SSH_OPTS[@]}" "$USER@$HOST" \
+              "set -euo pipefail; rm -rf '$TEMP_DIR'; mkdir -p '$TEMP_DIR'; tar -xzf - -C '$TEMP_DIR'; test -f '$TEMP_DIR/index.html'"; then
+
+              if timeout 180 ssh "${SSH_OPTS[@]}" "$USER@$HOST" \
+                "set -euo pipefail; test -f '$TEMP_DIR/index.html'; rm -rf '${TARGET_DIR}.new'; mkdir -p '${TARGET_DIR}.new'; cp -a '$TEMP_DIR/.' '${TARGET_DIR}.new/'; if [ -d '$TARGET_DIR' ]; then rm -rf '${TARGET_DIR}.prev'; mv '$TARGET_DIR' '${TARGET_DIR}.prev'; fi; mv '${TARGET_DIR}.new' '$TARGET_DIR'; test -f '$TARGET_DIR/index.html'; echo 'Staging frontend deployed and smoke-checked'"; then
+                exit 0
+              else
+                status=$?
+              fi
+            else
+              status=$?
+            fi
+
+            echo "Staging frontend deploy attempt ${attempt} failed with status ${status}"
+            if [ "$attempt" -lt 3 ]; then
+              sleep "$((attempt * 10))"
+            fi
+          done
+
+          exit "$status"
