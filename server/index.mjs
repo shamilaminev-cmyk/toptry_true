@@ -440,7 +440,17 @@ function normalizeBaseUrl(v) {
 }
 
 const AI_GATEWAY_URL = normalizeBaseUrl(process.env.AI_GATEWAY_URL || process.env.AI_PROXY_URL || "");
-const AI_GATEWAY_SECRET = String(process.env.AI_GATEWAY_SECRET || process.env.PROXY_SHARED_SECRET || "").trim();
+const AI_GATEWAY_SECRET = String(
+  process.env.AI_GATEWAY_SECRET || process.env.PROXY_SHARED_SECRET || ""
+).trim();
+
+function authCookieDomainOption() {
+  const configured = String(process.env.AUTH_COOKIE_DOMAIN || "").trim();
+  if (configured) return { domain: configured };
+
+  // Legacy production behavior remains unchanged unless explicitly overridden.
+  return process.env.NODE_ENV === "production" ? { domain: ".toptry.ru" } : {};
+}
 
 async function proxyJsonPost(upstreamUrl, bodyObj, extraHeaders = {}) {
   const resp = await fetch(upstreamUrl, {
@@ -934,14 +944,12 @@ app.post("/api/auth/register", async (req, res) => {
 
     const token = signSession(user);
     const { cookieName, cookieOptions } = getAuthConfig();
-    const isProd = process.env.NODE_ENV === "production";
-
     // Важно для prod (toptry.ru <-> api.toptry.ru):
     // domain: .toptry.ru нужен чтобы cookie была доступна на поддоменах,
     // sameSite/secure должны быть уже в cookieOptions (проверь auth.mjs)
     res.cookie(cookieName, token, {
       ...cookieOptions,
-      ...(isProd ? { domain: ".toptry.ru" } : {}),
+      ...authCookieDomainOption(),
     });
 
     res.json({ user });
@@ -971,11 +979,9 @@ app.post("/api/auth/login", async (req, res) => {
 
     const token = signSession(user);
     const { cookieName, cookieOptions } = getAuthConfig();
-    const isProd = process.env.NODE_ENV === "production";
-
     res.cookie(cookieName, token, {
       ...cookieOptions,
-      ...(isProd ? { domain: ".toptry.ru" } : {}),
+      ...authCookieDomainOption(),
     });
 
     res.json({ user });
@@ -1115,11 +1121,9 @@ app.post("/api/auth/phone/verify", async (req, res) => {
 
     const token = signSession(user);
     const { cookieName, cookieOptions } = getAuthConfig();
-    const isProd = process.env.NODE_ENV === "production";
-
     res.cookie(cookieName, token, {
       ...cookieOptions,
-      ...(isProd ? { domain: ".toptry.ru" } : {}),
+      ...authCookieDomainOption(),
     });
 
     return res.json({
@@ -1148,11 +1152,9 @@ app.post("/api/auth/phone/verify", async (req, res) => {
 
 app.post("/api/auth/logout", (req, res) => {
   const { cookieName } = getAuthConfig();
-  const isProd = process.env.NODE_ENV === "production";
-
   res.clearCookie(cookieName, {
     path: "/",
-    ...(isProd ? { domain: ".toptry.ru" } : {}),
+    ...authCookieDomainOption(),
   });
 
   res.json({ ok: true });

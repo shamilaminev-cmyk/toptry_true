@@ -2,7 +2,7 @@ name: Deploy frontend
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'pages/**'
       - 'components/**'
@@ -13,12 +13,17 @@ on:
       - 'App.tsx'
       - 'store.tsx'
       - 'fetchPatch.ts'
+      - 'withApiOrigin.ts'
       - 'types.ts'
       - 'package.json'
       - 'package-lock.json'
       - 'vite.config.*'
       - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
+
+concurrency:
+  group: frontend-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
@@ -27,6 +32,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set deployment variables
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_REF_NAME}" = 'main' ]; then
+            echo 'vite_api_origin=https://api.toptry.ru' >> "$GITHUB_OUTPUT"
+            echo 'target_dir=/var/www/toptry' >> "$GITHUB_OUTPUT"
+            echo 'temp_dir=/tmp/toptry-frontend-deploy-prod' >> "$GITHUB_OUTPUT"
+          else
+            echo 'vite_api_origin=https://staging.toptry.ru' >> "$GITHUB_OUTPUT"
+            echo 'target_dir=/var/www/toptry-staging' >> "$GITHUB_OUTPUT"
+            echo 'temp_dir=/tmp/toptry-frontend-deploy-staging' >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -39,13 +60,15 @@ jobs:
 
       - name: Build frontend
         env:
-          VITE_API_ORIGIN: https://api.toptry.ru
+          VITE_API_ORIGIN: ${{ steps.vars.outputs.vite_api_origin }}
         run: npm run build
 
-      - name: Write version
+      - name: Write build identity
+        shell: bash
         run: |
-          BUILD_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          printf '{"ok":true,"buildTime":"%s","sha":"%s"}\n' "$BUILD_TIME" "$GITHUB_SHA" > dist/version.json
+          BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          printf '{"ok":true,"branch":"%s","buildTime":"%s","sha":"%s"}\n' \
+            "$GITHUB_REF_NAME" "$BUILD_TIME" "$GITHUB_SHA" > dist/version.json
           printf '%s\n' "$BUILD_TIME" > dist/version.txt
 
       - name: Upload dist to server
@@ -55,8 +78,8 @@ jobs:
           username: ${{ secrets.TOPTRY_PROD_USER }}
           key: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
           port: ${{ secrets.TOPTRY_PROD_PORT }}
-          source: "dist/*"
-          target: "/tmp/toptry-frontend-deploy"
+          source: 'dist/*'
+          target: ${{ steps.vars.outputs.temp_dir }}
           strip_components: 1
           rm: true
 
@@ -70,17 +93,19 @@ jobs:
           script: |
             set -euo pipefail
 
-            test -f /tmp/toptry-frontend-deploy/index.html
+            TEMP_DIR='${{ steps.vars.outputs.temp_dir }}'
+            TARGET_DIR='${{ steps.vars.outputs.target_dir }}'
 
-            rm -rf /var/www/toptry.new
-            mkdir -p /var/www/toptry.new
-            cp -a /tmp/toptry-frontend-deploy/. /var/www/toptry.new/
+            test -f "${TEMP_DIR}/index.html"
 
-            if [ -d /var/www/toptry ]; then
-              rm -rf /var/www/toptry.prev
-              mv /var/www/toptry /var/www/toptry.prev
+            rm -rf "${TARGET_DIR}.new"
+            mkdir -p "${TARGET_DIR}.new"
+            cp -a "${TEMP_DIR}/." "${TARGET_DIR}.new/"
+
+            if [ -d "${TARGET_DIR}" ]; then
+              rm -rf "${TARGET_DIR}.prev"
+              mv "${TARGET_DIR}" "${TARGET_DIR}.prev"
             fi
 
-            mv /var/www/toptry.new /var/www/toptry
-
-            ls -la /var/www/toptry | head
+            mv "${TARGET_DIR}.new" "${TARGET_DIR}"
+            test -f "${TARGET_DIR}/index.html"
