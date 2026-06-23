@@ -1700,8 +1700,16 @@ async function getLookGenerationUsageSummary(userId) {
     }),
   ]);
 
-  const dailyLimit = Math.max(0, Number(entitlement.dailyLookLimit || 0));
-  const monthlyLimit = Math.max(0, Number(entitlement.monthlyLookLimit || 0));
+  const persistedDailyLimit = Math.max(0, Number(entitlement.dailyLookLimit || 0));
+  const persistedMonthlyLimit = Math.max(0, Number(entitlement.monthlyLookLimit || 0));
+
+  // The backend bypass alone is not enough: CreateLook reads /api/usage/me
+  // before submitting a request and disables its CTA when the remaining quota
+  // is zero. Give the staging client a deliberately high display quota while
+  // retaining the real usage counters for diagnostics.
+  const stagingDisplayLimit = 999999;
+  const dailyLimit = TOPTRY_DISABLE_LOOK_LIMITS ? stagingDisplayLimit : persistedDailyLimit;
+  const monthlyLimit = TOPTRY_DISABLE_LOOK_LIMITS ? stagingDisplayLimit : persistedMonthlyLimit;
 
   return {
     entitlement,
@@ -1712,6 +1720,7 @@ async function getLookGenerationUsageSummary(userId) {
     dailyRemaining: Math.max(0, dailyLimit - dailyUsed),
     monthlyRemaining: Math.max(0, monthlyLimit - monthlyUsed),
     generationCredits: credits,
+    limitsBypassed: TOPTRY_DISABLE_LOOK_LIMITS,
     dayStart,
     monthStart,
   };
@@ -2099,6 +2108,7 @@ app.get("/api/usage/me", requireAuth, async (req, res) => {
         monthlyRemaining: summary.monthlyRemaining,
         generationCreditsRemaining: summary.generationCredits?.remaining || 0,
         generationCreditGrants: summary.generationCredits?.grants || [],
+        limitsBypassed: !!summary.limitsBypassed,
       },
     });
   } catch (e) {
