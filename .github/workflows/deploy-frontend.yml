@@ -134,15 +134,12 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           touch ~/.ssh/known_hosts
 
-          ARCHIVE="/tmp/toptry-staging-frontend-${GITHUB_SHA}.tar.gz"
-          REMOTE_ARCHIVE="${TEMP_DIR}.tar.gz"
-          tar -C dist -czf "$ARCHIVE" .
-
           SSH_OPTS=(
             -i "$HOME/.ssh/id_ed25519"
             -p "$PORT"
             -o StrictHostKeyChecking=accept-new
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o BatchMode=yes
             -o ConnectTimeout=20
             -o ConnectionAttempts=3
             -o ServerAliveInterval=15
@@ -154,33 +151,13 @@ jobs:
           for attempt in 1 2 3; do
             echo "Staging frontend deploy attempt ${attempt}/3"
 
-            if timeout 180 scp "${SSH_OPTS[@]}" "$ARCHIVE" "$USER@$HOST:$REMOTE_ARCHIVE"; then
+            # Stream the built dist directory directly over SSH. This avoids the
+            # broken SCP archive source observed in the previous workflow run.
+            if tar -C dist -czf - . | timeout 240 ssh "${SSH_OPTS[@]}" "$USER@$HOST" \
+              "set -euo pipefail; rm -rf '$TEMP_DIR'; mkdir -p '$TEMP_DIR'; tar -xzf - -C '$TEMP_DIR'; test -f '$TEMP_DIR/index.html'"; then
+
               if timeout 180 ssh "${SSH_OPTS[@]}" "$USER@$HOST" \
-                "TEMP_DIR='$TEMP_DIR' TARGET_DIR='$TARGET_DIR' REMOTE_ARCHIVE='$REMOTE_ARCHIVE' bash -s" <<'REMOTE'
-          set -euo pipefail
-
-          test -f "$REMOTE_ARCHIVE"
-          rm -rf "$TEMP_DIR"
-          mkdir -p "$TEMP_DIR"
-          tar -xzf "$REMOTE_ARCHIVE" -C "$TEMP_DIR"
-          rm -f "$REMOTE_ARCHIVE"
-          test -f "$TEMP_DIR/index.html"
-
-          rm -rf "${TARGET_DIR}.new"
-          mkdir -p "${TARGET_DIR}.new"
-          cp -a "${TEMP_DIR}/." "${TARGET_DIR}.new/"
-
-          if [ -d "${TARGET_DIR}" ]; then
-            rm -rf "${TARGET_DIR}.prev"
-            mv "${TARGET_DIR}" "${TARGET_DIR}.prev"
-          fi
-
-          mv "${TARGET_DIR}.new" "${TARGET_DIR}"
-          test -f "${TARGET_DIR}/index.html"
-          echo "Staging frontend deployed and smoke-checked"
-          REMOTE
-              then
-                rm -f "$ARCHIVE"
+                "set -euo pipefail; test -f '$TEMP_DIR/index.html'; rm -rf '${TARGET_DIR}.new'; mkdir -p '${TARGET_DIR}.new'; cp -a '$TEMP_DIR/.' '${TARGET_DIR}.new/'; if [ -d '$TARGET_DIR' ]; then rm -rf '${TARGET_DIR}.prev'; mv '$TARGET_DIR' '${TARGET_DIR}.prev'; fi; mv '${TARGET_DIR}.new' '$TARGET_DIR'; test -f '$TARGET_DIR/index.html'; echo 'Staging frontend deployed and smoke-checked'"; then
                 exit 0
               else
                 status=$?
@@ -188,11 +165,11 @@ jobs:
             else
               status=$?
             fi
+
             echo "Staging frontend deploy attempt ${attempt} failed with status ${status}"
             if [ "$attempt" -lt 3 ]; then
               sleep "$((attempt * 10))"
             fi
           done
 
-          rm -f "$ARCHIVE"
           exit "$status"
