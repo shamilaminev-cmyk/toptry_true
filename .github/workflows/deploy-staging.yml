@@ -84,8 +84,9 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -o ConnectTimeout=20 \
             "$USER@$HOST" \
-            "IMAGE_API='$IMAGE_API' SHA_TAG='$SHA_TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" <<'REMOTE'
+            "sudo -n env IMAGE_API='$IMAGE_API' SHA_TAG='$SHA_TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" <<'REMOTE'
           set -euo pipefail
+          echo "Gateway deploy user: $(id -un), uid: $(id -u)"
 
           CONTAINER='toptry-ai-gateway-staging'
           ENV_FILE='/root/toptry-ai-gateway-staging.env'
