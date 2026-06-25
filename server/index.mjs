@@ -4219,7 +4219,7 @@ function bourbakiVisualizationSecretMatches(providedSecret) {
 
   return (
     expected.length === received.length &&
-    timingSafeEqual(expected, received)
+    crypto.timingSafeEqual(expected, received)
   );
 }
 
