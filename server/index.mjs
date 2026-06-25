@@ -4187,6 +4187,237 @@ async function generateTryOnImageDataUrl({
   throw new Error("Gemini did not return an image");
 }
 
+
+
+// toptry-bourbaki-visualization-gateway-v1
+const BOURBAKI_VISUALIZATION_MODEL = "gemini-3.1-flash-image";
+const BOURBAKI_VISUALIZATION_MAX_PROMPT_CHARS = 14_000;
+const BOURBAKI_VISUALIZATION_MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
+const BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+function bourbakiVisualizationError(res, status, code, message) {
+  return res.status(status).json({
+    ok: false,
+    error: { code, message },
+  });
+}
+
+function bourbakiVisualizationSecretMatches(providedSecret) {
+  const configuredSecret = (process.env.AI_GATEWAY_SECRET ?? "").trim();
+  const receivedSecret = typeof providedSecret === "string" ? providedSecret.trim() : "";
+
+  if (!configuredSecret || !receivedSecret) {
+    return false;
+  }
+
+  const expected = Buffer.from(configuredSecret);
+  const received = Buffer.from(receivedSecret);
+
+  return (
+    expected.length === received.length &&
+    timingSafeEqual(expected, received)
+  );
+}
+
+function parseBourbakiVisualizationInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("INVALID_BODY");
+  }
+
+  const prompt = typeof value.prompt === "string" ? value.prompt.trim() : "";
+  const referenceImage = value.referenceImage;
+
+  if (!prompt || prompt.length > BOURBAKI_VISUALIZATION_MAX_PROMPT_CHARS) {
+    throw new Error("INVALID_PROMPT");
+  }
+
+  if (!referenceImage || typeof referenceImage !== "object" || Array.isArray(referenceImage)) {
+    throw new Error("INVALID_REFERENCE_IMAGE");
+  }
+
+  const mimeType =
+    typeof referenceImage.mimeType === "string"
+      ? referenceImage.mimeType.trim().toLowerCase()
+      : "";
+  const data = typeof referenceImage.data === "string" ? referenceImage.data.trim() : "";
+
+  if (!BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES.has(mimeType)) {
+    throw new Error("UNSUPPORTED_REFERENCE_IMAGE");
+  }
+
+  if (!data || data.length > 12_000_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    throw new Error("INVALID_REFERENCE_IMAGE");
+  }
+
+  const referenceBytes = Buffer.from(data, "base64");
+
+  if (!referenceBytes.length || referenceBytes.length > BOURBAKI_VISUALIZATION_MAX_REFERENCE_BYTES) {
+    throw new Error("REFERENCE_IMAGE_TOO_LARGE");
+  }
+
+  return {
+    prompt,
+    referenceImage: {
+      mimeType,
+      data,
+    },
+  };
+}
+
+function findBourbakiInlineImage(response) {
+  const topLevel = response && response.output_image;
+
+  if (topLevel && typeof topLevel.data === "string") {
+    return topLevel;
+  }
+
+  const steps = Array.isArray(response?.steps) ? response.steps : [];
+
+  for (const step of steps) {
+    const content = Array.isArray(step?.content) ? step.content : [];
+    const image = content.find(
+      (part) => part?.type === "image" && typeof part?.data === "string",
+    );
+
+    if (image) {
+      return image;
+    }
+  }
+
+  return null;
+}
+
+app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
+  if (!bourbakiVisualizationSecretMatches(req.get("x-bourbaki-visualization-secret"))) {
+    return bourbakiVisualizationError(
+      res,
+      403,
+      "BOURBAKI_GATEWAY_ACCESS_DENIED",
+      "Внутренний доступ к визуализации не подтверждён.",
+    );
+  }
+
+  const apiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+
+  if (!apiKey) {
+    return bourbakiVisualizationError(
+      res,
+      503,
+      "BOURBAKI_GATEWAY_NOT_CONFIGURED",
+      "Сервис визуализации временно недоступен.",
+    );
+  }
+
+  let input;
+  try {
+    input = parseBourbakiVisualizationInput(req.body);
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "INVALID_BODY";
+    const status = code === "REFERENCE_IMAGE_TOO_LARGE" ? 413 : 400;
+    return bourbakiVisualizationError(
+      res,
+      status,
+      code,
+      "Параметры визуализации некорректны.",
+    );
+  }
+
+  try {
+    const upstream = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/interactions",
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: BOURBAKI_VISUALIZATION_MODEL,
+          input: [
+            { type: "text", text: input.prompt },
+            {
+              type: "image",
+              mime_type: input.referenceImage.mimeType,
+              data: input.referenceImage.data,
+            },
+          ],
+          response_format: {
+            type: "image",
+            mime_type: "image/jpeg",
+            delivery: "inline",
+            aspect_ratio: "3:4",
+            image_size: "1K",
+          },
+          generation_config: {
+            thinking_level: "minimal",
+          },
+        }),
+      },
+    );
+
+    const payload = await upstream.json().catch(() => null);
+
+    if (!upstream.ok) {
+      console.error("Bourbaki visualization Gemini request failed", {
+        status: upstream.status,
+        gatewayRequestId: req.get("x-request-id") ?? null,
+        providerMessage:
+          typeof payload?.error?.message === "string"
+            ? payload.error.message.slice(0, 500)
+            : null,
+      });
+      return bourbakiVisualizationError(
+        res,
+        502,
+        "BOURBAKI_VISUALIZATION_UPSTREAM_FAILED",
+        "Сервис визуализации временно недоступен.",
+      );
+    }
+
+    const image = findBourbakiInlineImage(payload);
+    const mimeType = typeof image?.mime_type === "string" ? image.mime_type : "";
+    const data = typeof image?.data === "string" ? image.data : "";
+
+    if (!data || !BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES.has(mimeType)) {
+      console.error("Bourbaki visualization Gemini response is missing an inline image", {
+        gatewayRequestId: req.get("x-request-id") ?? null,
+      });
+      return bourbakiVisualizationError(
+        res,
+        502,
+        "BOURBAKI_VISUALIZATION_INVALID_RESPONSE",
+        "Сервис визуализации вернул некорректный ответ.",
+      );
+    }
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        model: BOURBAKI_VISUALIZATION_MODEL,
+        image: {
+          mimeType,
+          data,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Bourbaki visualization gateway failed", {
+      gatewayRequestId: req.get("x-request-id") ?? null,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return bourbakiVisualizationError(
+      res,
+      502,
+      "BOURBAKI_VISUALIZATION_GATEWAY_FAILED",
+      "Сервис визуализации временно недоступен.",
+    );
+  }
+});
+
 app.post("/internal/ai/tryon", async (req, res) => {
   try {
     if (!assertInternalAiRequest(req, res)) return;
