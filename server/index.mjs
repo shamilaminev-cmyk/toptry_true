@@ -4201,6 +4201,24 @@ const BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES = new Set([
   "image/webp",
 ]);
 
+// toptry-bourbaki-visualization-strict-contract-v1
+const BOURBAKI_VISUALIZATION_RENDER_CONTRACT_VERSION =
+  "bourbaki-suit-render-contract-v1";
+const BOURBAKI_VISUALIZATION_VERIFIER_MODEL = "gemini-3.1-flash-image";
+const BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA = {
+  type: "object",
+  properties: {
+    approved: { type: "boolean" },
+    violations: {
+      type: "array",
+      items: { type: "string" },
+    },
+    summary: { type: "string" },
+  },
+  required: ["approved", "violations", "summary"],
+  additionalProperties: false,
+};
+
 function bourbakiVisualizationError(res, status, code, message) {
   return res.status(status).json({
     ok: false,
@@ -4225,20 +4243,79 @@ function bourbakiVisualizationSecretMatches(providedSecret) {
   );
 }
 
+function bourbakiVisualizationInputError(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
+}
+
+function parseBourbakiVisualizationRenderContract(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+  }
+
+  const scene = value.scene;
+  const critical = value.critical;
+
+  if (
+    value.version !== BOURBAKI_VISUALIZATION_RENDER_CONTRACT_VERSION ||
+    !scene ||
+    typeof scene !== "object" ||
+    Array.isArray(scene) ||
+    !critical ||
+    typeof critical !== "object" ||
+    Array.isArray(critical)
+  ) {
+    throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+  }
+
+  const sceneIsValid =
+    scene.camera === "FRONT_FULL_LENGTH" &&
+    scene.pose === "FRONTAL_STANDING" &&
+    scene.jacketState === "OPEN_UNBUTTONED" &&
+    scene.shirt === "WHITE_DRESS_SHIRT" &&
+    scene.shoes === "BLACK_OXFORDS";
+
+  if (
+    !sceneIsValid ||
+    typeof critical.ticketPocket !== "boolean" ||
+    typeof critical.trouserCuffs !== "boolean" ||
+    typeof critical.waistcoat !== "boolean"
+  ) {
+    throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+  }
+
+  return {
+    version: BOURBAKI_VISUALIZATION_RENDER_CONTRACT_VERSION,
+    scene: {
+      camera: "FRONT_FULL_LENGTH",
+      pose: "FRONTAL_STANDING",
+      jacketState: "OPEN_UNBUTTONED",
+      shirt: "WHITE_DRESS_SHIRT",
+      shoes: "BLACK_OXFORDS",
+    },
+    critical: {
+      ticketPocket: critical.ticketPocket,
+      trouserCuffs: critical.trouserCuffs,
+      waistcoat: critical.waistcoat,
+    },
+  };
+}
+
 function parseBourbakiVisualizationInput(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("INVALID_BODY");
+    throw bourbakiVisualizationInputError("INVALID_BODY");
   }
 
   const prompt = typeof value.prompt === "string" ? value.prompt.trim() : "";
   const referenceImage = value.referenceImage;
 
   if (!prompt || prompt.length > BOURBAKI_VISUALIZATION_MAX_PROMPT_CHARS) {
-    throw new Error("INVALID_PROMPT");
+    throw bourbakiVisualizationInputError("INVALID_PROMPT");
   }
 
   if (!referenceImage || typeof referenceImage !== "object" || Array.isArray(referenceImage)) {
-    throw new Error("INVALID_REFERENCE_IMAGE");
+    throw bourbakiVisualizationInputError("INVALID_REFERENCE_IMAGE");
   }
 
   const mimeType =
@@ -4248,21 +4325,22 @@ function parseBourbakiVisualizationInput(value) {
   const data = typeof referenceImage.data === "string" ? referenceImage.data.trim() : "";
 
   if (!BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES.has(mimeType)) {
-    throw new Error("UNSUPPORTED_REFERENCE_IMAGE");
+    throw bourbakiVisualizationInputError("UNSUPPORTED_REFERENCE_IMAGE");
   }
 
   if (!data || data.length > 12_000_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
-    throw new Error("INVALID_REFERENCE_IMAGE");
+    throw bourbakiVisualizationInputError("INVALID_REFERENCE_IMAGE");
   }
 
   const referenceBytes = Buffer.from(data, "base64");
 
   if (!referenceBytes.length || referenceBytes.length > BOURBAKI_VISUALIZATION_MAX_REFERENCE_BYTES) {
-    throw new Error("REFERENCE_IMAGE_TOO_LARGE");
+    throw bourbakiVisualizationInputError("REFERENCE_IMAGE_TOO_LARGE");
   }
 
   return {
     prompt,
+    renderContract: parseBourbakiVisualizationRenderContract(value.renderContract),
     referenceImage: {
       mimeType,
       data,
@@ -4293,6 +4371,230 @@ function findBourbakiInlineImage(response) {
   return null;
 }
 
+function findBourbakiOutputText(response) {
+  if (typeof response?.output_text === "string" && response.output_text.trim()) {
+    return response.output_text.trim();
+  }
+
+  const steps = Array.isArray(response?.steps) ? response.steps : [];
+
+  for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
+    const content = Array.isArray(steps[stepIndex]?.content)
+      ? steps[stepIndex].content
+      : [];
+    const text = content.find(
+      (part) => part?.type === "text" && typeof part?.text === "string" && part.text.trim(),
+    );
+
+    if (text) {
+      return text.text.trim();
+    }
+  }
+
+  return "";
+}
+
+function normalizeBourbakiGeneratedImage(image) {
+  const mimeType =
+    typeof image?.mime_type === "string"
+      ? image.mime_type
+      : typeof image?.mimeType === "string"
+        ? image.mimeType
+        : "";
+  const data = typeof image?.data === "string" ? image.data : "";
+
+  if (!data || !BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES.has(mimeType)) {
+    throw new Error("BOURBAKI_VISUALIZATION_INVALID_IMAGE");
+  }
+
+  return { data, mimeType };
+}
+
+function bourbakiRenderContractInstructions(contract) {
+  return [
+    "NON-NEGOTIABLE BOURBAKI RENDER CONTRACT. This contract overrides any aesthetic improvisation.",
+    "Render exactly one full-length adult male model facing directly forward. The torso, hips and both shoes must face the camera; no back view, profile or three-quarter view.",
+    "The jacket must be OPEN and UNBUTTONED, so the white shirt, waistband and front construction of the trousers remain visible.",
+    "Under the jacket, use only a plain white classic dress shirt without a tie. On the feet, use only black Oxford shoes.",
+    `Ticket pocket: ${contract.critical.ticketPocket ? "REQUIRED — visibly present above one main hip pocket." : "FORBIDDEN — do not add any ticket pocket."}`,
+    `Trouser cuffs / turn-ups: ${contract.critical.trouserCuffs ? "REQUIRED — visibly present at both trouser hems." : "FORBIDDEN — use plain hems with no cuffs or turn-ups."}`,
+    `Matching waistcoat: ${contract.critical.waistcoat ? "REQUIRED — visible beneath the open jacket." : "FORBIDDEN — do not add a waistcoat."}`,
+    "Do not invent, remove, substitute or reinterpret any saved construction detail. Do not add tie, pocket square, scarf, bag, watch, jewellery, belt ornament, outerwear, accessories, text or logos.",
+  ].join("\n");
+}
+
+function bourbakiVerificationPrompt(contract) {
+  return [
+    "You are the strict visual compliance inspector for a bespoke suit configurator.",
+    "Inspect the supplied generated image against the contract below. Do not be generous.",
+    "Set approved=true only when every observable requirement is clearly satisfied.",
+    "If a critical element is hidden, ambiguous, missing, added when forbidden, or visually inconsistent, set approved=false and list concise violations.",
+    "Verify: full-length direct front view; jacket open and unbuttoned; plain white dress shirt; black Oxford shoes; ticket pocket exactly as required or forbidden; trouser cuffs exactly as required or forbidden; waistcoat exactly as required or forbidden; no extra accessories.",
+    "",
+    bourbakiRenderContractInstructions(contract),
+  ].join("\n");
+}
+
+function bourbakiCorrectionPrompt(violations) {
+  const safeViolations = Array.isArray(violations)
+    ? violations.map((item) => String(item).slice(0, 240)).filter(Boolean).slice(0, 12)
+    : [];
+
+  return [
+    "RETAKE REQUIRED. The prior candidate is supplied as an edit reference but is rejected.",
+    "Generate a replacement image, not a commentary. Correct every listed violation while preserving the selected fabric and all saved construction.",
+    safeViolations.length
+      ? `Detected violations: ${safeViolations.join("; ")}.`
+      : "The prior candidate failed strict visual compliance.",
+  ].join("\n");
+}
+
+async function requestBourbakiGemini({ apiKey, body, requestId, stage }) {
+  const upstream = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/interactions",
+    {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": apiKey,
+        "Content-Type": "application/json",
+        "Api-Revision": "2026-05-20",
+      },
+      body: JSON.stringify(body),
+    },
+  );
+
+  const payload = await upstream.json().catch(() => null);
+
+  if (!upstream.ok) {
+    const providerMessage =
+      typeof payload?.error?.message === "string"
+        ? payload.error.message.slice(0, 500)
+        : null;
+    const error = new Error(providerMessage || `Gemini request failed with status ${upstream.status}.`);
+    error.code = "BOURBAKI_VISUALIZATION_UPSTREAM_FAILED";
+    error.stage = stage;
+    error.providerStatus = upstream.status;
+    error.providerMessage = providerMessage;
+    error.gatewayRequestId = requestId ?? null;
+    throw error;
+  }
+
+  return payload;
+}
+
+async function generateBourbakiCandidate({
+  apiKey,
+  input,
+  requestId,
+  priorCandidate,
+  correction,
+}) {
+  const parts = [
+    {
+      type: "text",
+      text: [
+        input.prompt,
+        "",
+        bourbakiRenderContractInstructions(input.renderContract),
+        correction ? `\n${correction}` : "",
+      ].join("\n"),
+    },
+    {
+      type: "image",
+      mime_type: input.referenceImage.mimeType,
+      data: input.referenceImage.data,
+    },
+  ];
+
+  if (priorCandidate) {
+    parts.push({
+      type: "image",
+      mime_type: priorCandidate.mimeType,
+      data: priorCandidate.data,
+    });
+  }
+
+  const payload = await requestBourbakiGemini({
+    apiKey,
+    requestId,
+    stage: priorCandidate ? "corrective_render" : "initial_render",
+    body: {
+      model: BOURBAKI_VISUALIZATION_MODEL,
+      store: false,
+      input: parts,
+      response_format: {
+        type: "image",
+        mime_type: "image/jpeg",
+        aspect_ratio: "3:4",
+        image_size: "1K",
+      },
+      generation_config: {
+        thinking_level: "high",
+      },
+    },
+  });
+
+  return normalizeBourbakiGeneratedImage(findBourbakiInlineImage(payload));
+}
+
+async function verifyBourbakiCandidate({
+  apiKey,
+  candidate,
+  contract,
+  requestId,
+}) {
+  const payload = await requestBourbakiGemini({
+    apiKey,
+    requestId,
+    stage: "verification",
+    body: {
+      model: BOURBAKI_VISUALIZATION_VERIFIER_MODEL,
+      store: false,
+      input: [
+        { type: "text", text: bourbakiVerificationPrompt(contract) },
+        {
+          type: "image",
+          mime_type: candidate.mimeType,
+          data: candidate.data,
+        },
+      ],
+      response_format: {
+        type: "text",
+        mime_type: "application/json",
+        schema: BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA,
+      },
+      generation_config: {
+        thinking_level: "low",
+      },
+    },
+  });
+
+  const outputText = findBourbakiOutputText(payload);
+
+  try {
+    const parsed = JSON.parse(outputText);
+    const violations = Array.isArray(parsed?.violations)
+      ? parsed.violations
+          .map((item) => String(item).trim())
+          .filter(Boolean)
+          .slice(0, 12)
+      : [];
+    const approved = parsed?.approved === true && violations.length === 0;
+
+    return {
+      approved,
+      violations: approved ? [] : violations.length ? violations : ["Невозможно подтвердить все критичные детали."],
+      summary: typeof parsed?.summary === "string" ? parsed.summary.slice(0, 500) : "",
+    };
+  } catch {
+    return {
+      approved: false,
+      violations: ["Проверка визуального соответствия не вернула корректный результат."],
+      summary: "",
+    };
+  }
+}
+
 app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
   if (!bourbakiVisualizationSecretMatches(req.get("x-bourbaki-visualization-secret"))) {
     return bourbakiVisualizationError(
@@ -4318,7 +4620,7 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
   try {
     input = parseBourbakiVisualizationInput(req.body);
   } catch (error) {
-    const code = error instanceof Error ? error.message : "INVALID_BODY";
+    const code = error?.code || (error instanceof Error ? error.message : "INVALID_BODY");
     const status = code === "REFERENCE_IMAGE_TOO_LARGE" ? 413 : 400;
     return bourbakiVisualizationError(
       res,
@@ -4328,96 +4630,88 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
     );
   }
 
+  const requestId = req.get("x-request-id") ?? null;
+  let candidate;
+  let verification;
+  let attempts = 0;
+
   try {
-    const upstream = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/interactions",
-      {
-        method: "POST",
-        headers: {
-          "x-goog-api-key": apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: BOURBAKI_VISUALIZATION_MODEL,
-          store: false,
-          input: [
-            { type: "text", text: input.prompt },
-            {
-              type: "image",
-              mime_type: input.referenceImage.mimeType,
-              data: input.referenceImage.data,
-            },
-          ],
-          response_format: {
-            type: "image",
-            mime_type: "image/jpeg",
-            aspect_ratio: "3:4",
-            image_size: "1K",
-          },
-          generation_config: {
-            thinking_level: "low",
-          },
-        }),
-      },
-    );
-
-    const payload = await upstream.json().catch(() => null);
-
-    if (!upstream.ok) {
-      console.error("Bourbaki visualization Gemini request failed", {
-        status: upstream.status,
-        gatewayRequestId: req.get("x-request-id") ?? null,
-        providerMessage:
-          typeof payload?.error?.message === "string"
-            ? payload.error.message.slice(0, 500)
-            : null,
-      });
-      return bourbakiVisualizationError(
-        res,
-        502,
-        "BOURBAKI_VISUALIZATION_UPSTREAM_FAILED",
-        "Сервис визуализации временно недоступен.",
-      );
-    }
-
-    const image = findBourbakiInlineImage(payload);
-    const mimeType = typeof image?.mime_type === "string" ? image.mime_type : "";
-    const data = typeof image?.data === "string" ? image.data : "";
-
-    if (!data || !BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES.has(mimeType)) {
-      console.error("Bourbaki visualization Gemini response is missing an inline image", {
-        gatewayRequestId: req.get("x-request-id") ?? null,
-      });
-      return bourbakiVisualizationError(
-        res,
-        502,
-        "BOURBAKI_VISUALIZATION_INVALID_RESPONSE",
-        "Сервис визуализации вернул некорректный ответ.",
-      );
-    }
-
-    return res.status(200).json({
-      ok: true,
-      data: {
-        model: BOURBAKI_VISUALIZATION_MODEL,
-        image: {
-          mimeType,
-          data,
-        },
-      },
+    attempts += 1;
+    candidate = await generateBourbakiCandidate({
+      apiKey,
+      input,
+      requestId,
+      priorCandidate: null,
+      correction: null,
     });
+
+    verification = await verifyBourbakiCandidate({
+      apiKey,
+      candidate,
+      contract: input.renderContract,
+      requestId,
+    });
+
+    if (!verification.approved) {
+      attempts += 1;
+      candidate = await generateBourbakiCandidate({
+        apiKey,
+        input,
+        requestId,
+        priorCandidate: candidate,
+        correction: bourbakiCorrectionPrompt(verification.violations),
+      });
+
+      verification = await verifyBourbakiCandidate({
+        apiKey,
+        candidate,
+        contract: input.renderContract,
+        requestId,
+      });
+    }
   } catch (error) {
-    console.error("Bourbaki visualization gateway failed", {
-      gatewayRequestId: req.get("x-request-id") ?? null,
-      message: error instanceof Error ? error.message : "Unknown error",
+    console.error("Bourbaki visualization Gemini request failed", {
+      stage: error?.stage ?? "unknown",
+      status: error?.providerStatus ?? null,
+      gatewayRequestId: requestId,
+      providerMessage: error?.providerMessage ?? (error instanceof Error ? error.message.slice(0, 500) : null),
     });
     return bourbakiVisualizationError(
       res,
       502,
-      "BOURBAKI_VISUALIZATION_GATEWAY_FAILED",
+      "BOURBAKI_VISUALIZATION_UPSTREAM_FAILED",
       "Сервис визуализации временно недоступен.",
     );
   }
+
+  if (!verification?.approved) {
+    console.warn("Bourbaki visualization rejected by strict verification", {
+      gatewayRequestId: requestId,
+      attempts,
+      violationCount: Array.isArray(verification?.violations) ? verification.violations.length : 0,
+    });
+    return bourbakiVisualizationError(
+      res,
+      422,
+      "BOURBAKI_VISUALIZATION_SPEC_MISMATCH",
+      "Не удалось подтвердить точное соответствие выбранной спецификации. Создайте ещё один вариант.",
+    );
+  }
+
+  return res.status(200).json({
+    ok: true,
+    data: {
+      model: BOURBAKI_VISUALIZATION_MODEL,
+      image: {
+        mimeType: candidate.mimeType,
+        data: candidate.data,
+      },
+      verification: {
+        approved: true,
+        attempts,
+      },
+    },
+  });
 });
 
 app.post("/internal/ai/tryon", async (req, res) => {
