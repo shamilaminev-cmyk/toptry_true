@@ -4191,6 +4191,7 @@ async function generateTryOnImageDataUrl({
 
 // toptry-bourbaki-visualization-gateway-v1
 // toptry-bourbaki-visualization-image-delivery-fix-v1
+// toptry-bourbaki-visualization-thinking-level-fix-v1
 const BOURBAKI_VISUALIZATION_MODEL = "gemini-3.1-flash-image";
 const BOURBAKI_VISUALIZATION_MAX_PROMPT_CHARS = 14_000;
 const BOURBAKI_VISUALIZATION_MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
@@ -4354,7 +4355,7 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
             image_size: "1K",
           },
           generation_config: {
-            thinking_level: "minimal",
+            thinking_level: "low",
           },
         }),
       },
