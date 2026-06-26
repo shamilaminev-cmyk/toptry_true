@@ -4192,7 +4192,8 @@ async function generateTryOnImageDataUrl({
 // toptry-bourbaki-visualization-gateway-v1
 // toptry-bourbaki-visualization-image-delivery-fix-v1
 // toptry-bourbaki-visualization-thinking-level-fix-v1
-const BOURBAKI_VISUALIZATION_MODEL = "gemini-3.1-flash-image";
+// toptry-bourbaki-visualization-pro-verifier-v2
+const BOURBAKI_VISUALIZATION_MODEL = "gemini-3-pro-image";
 const BOURBAKI_VISUALIZATION_MAX_PROMPT_CHARS = 14_000;
 const BOURBAKI_VISUALIZATION_MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
 const BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES = new Set([
@@ -4203,7 +4204,7 @@ const BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES = new Set([
 
 // toptry-bourbaki-visualization-strict-contract-v1
 const BOURBAKI_VISUALIZATION_RENDER_CONTRACT_VERSION =
-  "bourbaki-suit-render-contract-v2";
+  "bourbaki-suit-render-contract-v3";
 const BOURBAKI_VISUALIZATION_VARIANTS = [
   {
     viewKey: "OPEN",
@@ -4216,18 +4217,63 @@ const BOURBAKI_VISUALIZATION_VARIANTS = [
     title: "Buttoned jacket",
   },
 ];
-const BOURBAKI_VISUALIZATION_VERIFIER_MODEL = "gemini-3.1-flash-image";
+const BOURBAKI_VISUALIZATION_VERIFIER_MODEL = "gemini-3.5-flash";
+const BOURBAKI_VISUALIZATION_IMAGE_SIZE = "2K";
+const BOURBAKI_VISUALIZATION_MAX_RENDER_ATTEMPTS = 2;
+const BOURBAKI_VISUALIZATION_VERIFICATION_CHECKS = [
+  "frontView",
+  "fullHeadVisible",
+  "bothShoesVisible",
+  "jacketStateCorrect",
+  "whiteShirt",
+  "blackOxfords",
+  "ticketPocketCorrect",
+  "chestPocketCorrect",
+  "trouserCuffsCorrect",
+  "waistcoatCorrect",
+  "noExtraAccessories",
+];
 const BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA = {
   type: "object",
   properties: {
     approved: { type: "boolean" },
+    checks: {
+      type: "object",
+      properties: {
+        frontView: { type: "boolean" },
+        fullHeadVisible: { type: "boolean" },
+        bothShoesVisible: { type: "boolean" },
+        jacketStateCorrect: { type: "boolean" },
+        whiteShirt: { type: "boolean" },
+        blackOxfords: { type: "boolean" },
+        ticketPocketCorrect: { type: "boolean" },
+        chestPocketCorrect: { type: "boolean" },
+        trouserCuffsCorrect: { type: "boolean" },
+        waistcoatCorrect: { type: "boolean" },
+        noExtraAccessories: { type: "boolean" },
+      },
+      required: [
+        "frontView",
+        "fullHeadVisible",
+        "bothShoesVisible",
+        "jacketStateCorrect",
+        "whiteShirt",
+        "blackOxfords",
+        "ticketPocketCorrect",
+        "chestPocketCorrect",
+        "trouserCuffsCorrect",
+        "waistcoatCorrect",
+        "noExtraAccessories",
+      ],
+      additionalProperties: false,
+    },
     violations: {
       type: "array",
       items: { type: "string" },
     },
     summary: { type: "string" },
   },
-  required: ["approved", "violations", "summary"],
+  required: ["approved", "checks", "violations", "summary"],
   additionalProperties: false,
 };
 
@@ -4287,8 +4333,14 @@ function parseBourbakiVisualizationRenderContract(value) {
   const sceneIsValid =
     scene.camera === "FRONT_FULL_LENGTH" &&
     scene.pose === "FRONTAL_STANDING" &&
+    scene.framing === "FULL_HEAD_AND_SHOES" &&
     scene.shirt === "WHITE_DRESS_SHIRT" &&
     scene.shoes === "BLACK_OXFORDS";
+
+  const chestPocket =
+    typeof critical.chestPocket === "string"
+      ? critical.chestPocket.trim().toUpperCase().slice(0, 80)
+      : "";
 
   const normalizedDeliverables = deliverables.map((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
@@ -4319,6 +4371,7 @@ function parseBourbakiVisualizationRenderContract(value) {
   if (
     !sceneIsValid ||
     variantKeys !== "BUTTONED,OPEN" ||
+    !chestPocket ||
     typeof critical.ticketPocket !== "boolean" ||
     typeof critical.trouserCuffs !== "boolean" ||
     typeof critical.waistcoat !== "boolean"
@@ -4331,12 +4384,14 @@ function parseBourbakiVisualizationRenderContract(value) {
     scene: {
       camera: "FRONT_FULL_LENGTH",
       pose: "FRONTAL_STANDING",
+      framing: "FULL_HEAD_AND_SHOES",
       shirt: "WHITE_DRESS_SHIRT",
       shoes: "BLACK_OXFORDS",
     },
     deliverables: normalizedDeliverables,
     critical: {
       ticketPocket: critical.ticketPocket,
+      chestPocket,
       trouserCuffs: critical.trouserCuffs,
       waistcoat: critical.waistcoat,
     },
@@ -4459,6 +4514,14 @@ function bourbakiJacketStateInstruction(jacketState) {
   return "The jacket must be OPEN and UNBUTTONED, so the white shirt, waistband and front construction of the trousers remain visible.";
 }
 
+function bourbakiChestPocketInstruction(chestPocket) {
+  if (/BARC/.test(chestPocket)) {
+    return "Breast pocket: REQUIRED. Render one clearly visible curved Barchetta breast pocket on the model's left chest. It must be readable in the direct front view and must not be hidden by the lapel.";
+  }
+
+  return `Breast pocket: REQUIRED. Render the selected ${chestPocket} chest pocket visibly and faithfully on the model's left chest.`;
+}
+
 function bourbakiRenderContractInstructions(contract, deliverable) {
   const jacketState = deliverable?.jacketState === "BUTTONED_CLOSED"
     ? "BUTTONED_CLOSED"
@@ -4467,9 +4530,13 @@ function bourbakiRenderContractInstructions(contract, deliverable) {
   return [
     "NON-NEGOTIABLE BOURBAKI RENDER CONTRACT. This contract overrides any aesthetic improvisation.",
     "Render exactly one full-length adult male model facing directly forward. The torso, hips and both shoes must face the camera; no back view, profile or three-quarter view.",
+    "FRAME THE COMPLETE PERSON: the entire head, hairline, face, both shoes and all trouser hems must be inside the image. Leave a small clean margin above the head and below the shoes. Do not crop any part of the head or footwear.",
     bourbakiJacketStateInstruction(jacketState),
     "Under the jacket, use only a plain white classic dress shirt without a tie. On the feet, use only black Oxford shoes.",
-    `Ticket pocket: ${contract.critical.ticketPocket ? "REQUIRED — visibly present above one main hip pocket." : "FORBIDDEN — do not add any ticket pocket."}`,
+    contract.critical.ticketPocket
+      ? "Ticket pocket: REQUIRED — visibly present above one main hip pocket."
+      : "Ticket pocket: FORBIDDEN — show exactly two lower jacket pockets, one on each side. Do not add any third smaller pocket, flap, welt or opening above or alongside either lower pocket.",
+    bourbakiChestPocketInstruction(contract.critical.chestPocket),
     `Trouser cuffs / turn-ups: ${contract.critical.trouserCuffs ? "REQUIRED — visibly present at both trouser hems." : "FORBIDDEN — use plain hems with no cuffs or turn-ups."}`,
     `Matching waistcoat: ${contract.critical.waistcoat ? "REQUIRED — visible beneath the jacket." : "FORBIDDEN — do not add a waistcoat."}`,
     "Do not invent, remove, substitute or reinterpret any saved construction detail. Do not add tie, pocket square, scarf, bag, watch, jewellery, belt ornament, outerwear, accessories, text or logos.",
@@ -4477,29 +4544,37 @@ function bourbakiRenderContractInstructions(contract, deliverable) {
 }
 
 function bourbakiVerificationPrompt(contract, deliverable) {
+  const expectedJacketState = deliverable?.jacketState === "BUTTONED_CLOSED"
+    ? "buttoned/closed"
+    : "open and unbuttoned";
+
   return [
     "You are the strict visual compliance inspector for a bespoke suit configurator.",
-    "Inspect the supplied generated image against the contract below. Do not be generous.",
-    "Set approved=true only when every observable requirement is clearly satisfied.",
-    "If a critical element is hidden, ambiguous, missing, added when forbidden, or visually inconsistent, set approved=false and list concise violations.",
-    `Verify: full-length direct front view; jacket ${deliverable?.jacketState === "BUTTONED_CLOSED" ? "buttoned/closed" : "open and unbuttoned"}; plain white dress shirt; black Oxford shoes; ticket pocket exactly as required or forbidden; trouser cuffs exactly as required or forbidden; waistcoat exactly as required or forbidden; no extra accessories.`,
+    "Inspect the supplied generated image against the contract below. Do not be generous. Every check must be independently true for approved=true.",
+    "For ticketPocketCorrect, when the ticket pocket is forbidden, confirm that there are exactly two lower jacket pockets and no third small pocket, flap, welt or opening above/alongside them.",
+    "For chestPocketCorrect, confirm that the selected breast pocket is visibly present and its selected style is recognizable; a hidden, absent, ambiguous or wrong pocket is false.",
+    "For fullHeadVisible and bothShoesVisible, any crop of the head, hairline, shoes or trouser hems is false.",
+    `Verify the requested jacket state is ${expectedJacketState}.`,
     "",
     bourbakiRenderContractInstructions(contract, deliverable),
   ].join("\n");
 }
 
-function bourbakiCorrectionPrompt(violations, deliverable) {
-  const safeViolations = Array.isArray(violations)
-    ? violations.map((item) => String(item).slice(0, 240)).filter(Boolean).slice(0, 12)
+function bourbakiCorrectionPrompt(verification, deliverable) {
+  const safeViolations = Array.isArray(verification?.violations)
+    ? verification.violations.map((item) => String(item).slice(0, 240)).filter(Boolean).slice(0, 12)
     : [];
+  const failedChecks = Object.entries(verification?.checks ?? {})
+    .filter(([, passed]) => passed === false)
+    .map(([name]) => name)
+    .slice(0, 12);
 
   return [
-    "RETAKE REQUIRED. The prior candidate is supplied as an edit reference but is rejected.",
-    `Generate a replacement image, not a commentary. Correct every listed violation while preserving the selected fabric, the full saved construction, and the requested jacket state ${deliverable?.jacketState === "BUTTONED_CLOSED" ? "BUTTONED/CLOSED" : "OPEN/UNBUTTONED"}.`,
-    safeViolations.length
-      ? `Detected violations: ${safeViolations.join("; ")}.`
-      : "The prior candidate failed strict visual compliance.",
-  ].join("\n");
+    "RETAKE REQUIRED. The prior candidate is supplied as an edit reference but is rejected for visual compliance.",
+    `Generate a replacement image, not a commentary. Preserve the selected fabric, the full saved construction, the same model identity, the same direct front pose, the same studio and the requested jacket state ${deliverable?.jacketState === "BUTTONED_CLOSED" ? "BUTTONED/CLOSED" : "OPEN/UNBUTTONED"}.`,
+    failedChecks.length ? `Failed verification checks: ${failedChecks.join(", ")}.` : "",
+    safeViolations.length ? `Detected violations: ${safeViolations.join("; ")}.` : "",
+  ].filter(Boolean).join("\n");
 }
 
 async function requestBourbakiGemini({ apiKey, body, requestId, stage }) {
@@ -4592,7 +4667,7 @@ async function generateBourbakiCandidate({
         type: "image",
         mime_type: "image/jpeg",
         aspect_ratio: "3:4",
-        image_size: "1K",
+        image_size: BOURBAKI_VISUALIZATION_IMAGE_SIZE,
       },
       generation_config: {
         thinking_level: "high",
@@ -4631,7 +4706,7 @@ async function verifyBourbakiCandidate({
         schema: BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA,
       },
       generation_config: {
-        thinking_level: "low",
+        thinking_level: "high",
       },
     },
   });
@@ -4640,26 +4715,110 @@ async function verifyBourbakiCandidate({
 
   try {
     const parsed = JSON.parse(outputText);
+    const checks = {};
+
+    for (const name of BOURBAKI_VISUALIZATION_VERIFICATION_CHECKS) {
+      checks[name] = parsed?.checks?.[name] === true;
+    }
+
     const violations = Array.isArray(parsed?.violations)
       ? parsed.violations
           .map((item) => String(item).trim())
           .filter(Boolean)
           .slice(0, 12)
       : [];
-    const approved = parsed?.approved === true && violations.length === 0;
+    const allChecksPassed = Object.values(checks).every(Boolean);
+    const approved = parsed?.approved === true && allChecksPassed && violations.length === 0;
 
     return {
       approved,
-      violations: approved ? [] : violations.length ? violations : ["Невозможно подтвердить все критичные детали."],
+      checks,
+      violations: approved
+        ? []
+        : violations.length
+          ? violations
+          : ["Невозможно подтвердить все критичные детали."],
       summary: typeof parsed?.summary === "string" ? parsed.summary.slice(0, 500) : "",
     };
   } catch {
     return {
       approved: false,
+      checks: Object.fromEntries(
+        BOURBAKI_VISUALIZATION_VERIFICATION_CHECKS.map((name) => [name, false]),
+      ),
       violations: ["Проверка визуального соответствия не вернула корректный результат."],
       summary: "",
     };
   }
+}
+
+async function generateAndReviewBourbakiView({
+  apiKey,
+  input,
+  requestId,
+  deliverable,
+  anchorCandidate,
+}) {
+  let candidate = await generateBourbakiCandidate({
+    apiKey,
+    input,
+    requestId,
+    deliverable,
+    priorCandidate: deliverable.viewKey === "BUTTONED" ? anchorCandidate : null,
+    correction: null,
+  });
+  let verification = null;
+  let attempts = 1;
+
+  try {
+    verification = await verifyBourbakiCandidate({
+      apiKey,
+      candidate,
+      contract: input.renderContract,
+      deliverable,
+      requestId,
+    });
+  } catch (error) {
+    console.warn("Bourbaki visualization verifier unavailable; preserving generated candidate", {
+      gatewayRequestId: requestId,
+      viewKey: deliverable.viewKey,
+      stage: error?.stage ?? "verification",
+      message: error instanceof Error ? error.message.slice(0, 320) : String(error).slice(0, 320),
+    });
+  }
+
+  while (verification && !verification.approved && attempts < BOURBAKI_VISUALIZATION_MAX_RENDER_ATTEMPTS) {
+    attempts += 1;
+    candidate = await generateBourbakiCandidate({
+      apiKey,
+      input,
+      requestId,
+      deliverable,
+      priorCandidate: deliverable.viewKey === "BUTTONED"
+        ? anchorCandidate ?? candidate
+        : candidate,
+      correction: bourbakiCorrectionPrompt(verification, deliverable),
+    });
+
+    try {
+      verification = await verifyBourbakiCandidate({
+        apiKey,
+        candidate,
+        contract: input.renderContract,
+        deliverable,
+        requestId,
+      });
+    } catch (error) {
+      console.warn("Bourbaki visualization verifier unavailable after correction; preserving candidate", {
+        gatewayRequestId: requestId,
+        viewKey: deliverable.viewKey,
+        message: error instanceof Error ? error.message.slice(0, 320) : String(error).slice(0, 320),
+      });
+      verification = null;
+    }
+  }
+
+  return { candidate, verification, attempts };
 }
 
 app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
@@ -4703,77 +4862,37 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
 
   try {
     for (const deliverable of input.renderContract.deliverables) {
-      let candidate;
-      let verification;
-      let attempts = 0;
-
-      attempts += 1;
-      candidate = await generateBourbakiCandidate({
+      const reviewed = await generateAndReviewBourbakiView({
         apiKey,
         input,
         requestId,
         deliverable,
-        priorCandidate: deliverable.viewKey === "BUTTONED" ? anchorCandidate : null,
-        correction: null,
+        anchorCandidate,
       });
-
-      verification = await verifyBourbakiCandidate({
-        apiKey,
-        candidate,
-        contract: input.renderContract,
-        deliverable,
-        requestId,
-      });
-
-      if (!verification.approved) {
-        attempts += 1;
-        candidate = await generateBourbakiCandidate({
-          apiKey,
-          input,
-          requestId,
-          deliverable,
-          priorCandidate:
-            deliverable.viewKey === "BUTTONED"
-              ? anchorCandidate ?? candidate
-              : candidate,
-          correction: bourbakiCorrectionPrompt(verification.violations, deliverable),
-        });
-
-        verification = await verifyBourbakiCandidate({
-          apiKey,
-          candidate,
-          contract: input.renderContract,
-          deliverable,
-          requestId,
-        });
-      }
-
-      if (!verification?.approved) {
-        console.warn("Bourbaki visualization rejected by strict verification", {
-          gatewayRequestId: requestId,
-          viewKey: deliverable.viewKey,
-          attempts,
-          violationCount: Array.isArray(verification?.violations) ? verification.violations.length : 0,
-        });
-        return bourbakiVisualizationError(
-          res,
-          422,
-          "BOURBAKI_VISUALIZATION_SPEC_MISMATCH",
-          "Не удалось подтвердить точное соответствие выбранной спецификации. Создайте ещё один вариант.",
-        );
-      }
 
       if (deliverable.viewKey === "OPEN") {
-        anchorCandidate = candidate;
+        anchorCandidate = reviewed.candidate;
+      }
+
+      if (reviewed.verification && !reviewed.verification.approved) {
+        console.warn("Bourbaki visualization retained after internal review", {
+          gatewayRequestId: requestId,
+          viewKey: deliverable.viewKey,
+          attempts: reviewed.attempts,
+          failedChecks: Object.entries(reviewed.verification.checks)
+            .filter(([, passed]) => passed === false)
+            .map(([name]) => name),
+        });
       }
 
       results.push({
         viewKey: deliverable.viewKey,
         jacketState: deliverable.jacketState,
         title: deliverable.title,
-        mimeType: candidate.mimeType,
-        data: candidate.data,
-        attempts,
+        mimeType: reviewed.candidate.mimeType,
+        data: reviewed.candidate.data,
+        attempts: reviewed.attempts,
+        verification: reviewed.verification,
       });
     }
   } catch (error) {
@@ -4803,10 +4922,12 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
         data: item.data,
       })),
       verification: {
-        approved: true,
+        approved: results.every((item) => item.verification?.approved === true),
         views: results.map((item) => ({
           viewKey: item.viewKey,
           attempts: item.attempts,
+          approved: item.verification?.approved ?? null,
+          checks: item.verification?.checks ?? null,
         })),
       },
     },
