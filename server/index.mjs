@@ -4204,7 +4204,7 @@ const BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES = new Set([
 
 // toptry-bourbaki-visualization-strict-contract-v1
 const BOURBAKI_VISUALIZATION_RENDER_CONTRACT_VERSION =
-  "bourbaki-suit-render-contract-v3";
+  "bourbaki-suit-render-contract-v5";
 const BOURBAKI_VISUALIZATION_VARIANTS = [
   {
     viewKey: "OPEN",
@@ -4229,6 +4229,7 @@ const BOURBAKI_VISUALIZATION_VERIFICATION_CHECKS = [
   "blackOxfords",
   "ticketPocketCorrect",
   "chestPocketCorrect",
+  "buttonLayoutCorrect",
   "trouserCuffsCorrect",
   "waistcoatCorrect",
   "noExtraAccessories",
@@ -4248,6 +4249,7 @@ const BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA = {
         blackOxfords: { type: "boolean" },
         ticketPocketCorrect: { type: "boolean" },
         chestPocketCorrect: { type: "boolean" },
+        buttonLayoutCorrect: { type: "boolean" },
         trouserCuffsCorrect: { type: "boolean" },
         waistcoatCorrect: { type: "boolean" },
         noExtraAccessories: { type: "boolean" },
@@ -4261,6 +4263,7 @@ const BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA = {
         "blackOxfords",
         "ticketPocketCorrect",
         "chestPocketCorrect",
+        "buttonLayoutCorrect",
         "trouserCuffsCorrect",
         "waistcoatCorrect",
         "noExtraAccessories",
@@ -4281,6 +4284,7 @@ const BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA = {
 // These normalized crops make the verifier inspect the exact areas at a readable scale.
 const BOURBAKI_VISUALIZATION_INSPECTION_CROPS = [
   { key: "CHEST", label: "Close-up of the left chest and breast pocket", left: 0.24, top: 0.20, width: 0.52, height: 0.27 },
+  { key: "BUTTON_FRONT", label: "Close-up of the complete front button layout", left: 0.31, top: 0.27, width: 0.38, height: 0.36 },
   { key: "LOWER_JACKET", label: "Close-up of both lower jacket pockets", left: 0.19, top: 0.34, width: 0.62, height: 0.27 },
   { key: "TROUSER_HEMS", label: "Close-up of both trouser hems and shoes", left: 0.20, top: 0.70, width: 0.60, height: 0.25 },
 ];
@@ -4349,6 +4353,14 @@ function parseBourbakiVisualizationRenderContract(value) {
     typeof critical.chestPocket === "string"
       ? critical.chestPocket.trim().toUpperCase().slice(0, 80)
       : "";
+  const buttoning =
+    typeof critical.buttoning === "string"
+      ? critical.buttoning.trim().toUpperCase().slice(0, 80)
+      : "";
+  const buttonLayout =
+    typeof critical.buttonLayout === "string"
+      ? critical.buttonLayout.trim().toUpperCase().slice(0, 80)
+      : "";
 
   const normalizedDeliverables = deliverables.map((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
@@ -4380,6 +4392,8 @@ function parseBourbakiVisualizationRenderContract(value) {
     !sceneIsValid ||
     variantKeys !== "BUTTONED,OPEN" ||
     !chestPocket ||
+    !buttoning ||
+    !buttonLayout ||
     typeof critical.ticketPocket !== "boolean" ||
     typeof critical.trouserCuffs !== "boolean" ||
     typeof critical.waistcoat !== "boolean"
@@ -4400,6 +4414,8 @@ function parseBourbakiVisualizationRenderContract(value) {
     critical: {
       ticketPocket: critical.ticketPocket,
       chestPocket,
+      buttoning,
+      buttonLayout,
       trouserCuffs: critical.trouserCuffs,
       waistcoat: critical.waistcoat,
     },
@@ -4530,6 +4546,75 @@ function bourbakiChestPocketInstruction(chestPocket) {
   return `Breast pocket: REQUIRED. Render the selected ${chestPocket} chest pocket visibly and faithfully on the model's left chest. It must remain readable in the direct front view and must not disappear behind the lapel.`;
 }
 
+function bourbakiButtonLayoutInstruction(contract) {
+  const buttoning = String(contract?.critical?.buttoning ?? "").toUpperCase();
+  const buttonLayout = String(contract?.critical?.buttonLayout ?? "").toUpperCase();
+
+  if (/DOUBLE/.test(buttoning) && /SIX/.test(buttonLayout)) {
+    return "Fastening: DOUBLE-BREASTED 6x2. Show exactly six visible exterior buttons in two symmetrical vertical columns of three. Do not add an isolated centre button, a seventh button, or any extra visible fastener.";
+  }
+
+  return `Fastening: render exactly the saved ${buttoning || "jacket"} / ${buttonLayout || "button"} configuration. Do not add extra visible buttons or fasteners.`;
+}
+
+function bourbakiConstructionReferenceSvg(contract) {
+  const isBarchetta = /BARC/.test(String(contract?.critical?.chestPocket ?? ""));
+  const hasTicketPocket = contract?.critical?.ticketPocket === true;
+  const hasCuffs = contract?.critical?.trouserCuffs === true;
+  const isSixByTwo = /DOUBLE/.test(String(contract?.critical?.buttoning ?? "")) && /SIX/.test(String(contract?.critical?.buttonLayout ?? ""));
+
+  const buttons = isSixByTwo
+    ? [[440, 490], [560, 490], [440, 570], [560, 570], [440, 650], [560, 650]]
+        .map(([x, y]) => `<circle cx="${x}" cy="${y}" r="15" fill="#171717"/>`)
+        .join("")
+    : `<circle cx="500" cy="560" r="15" fill="#171717"/>`;
+  const chestPocket = isBarchetta
+    ? `<path d="M385 385 Q470 350 555 385" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="round"/>`
+    : `<path d="M390 380 L555 380" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="round"/>`;
+  const ticketPocket = hasTicketPocket
+    ? `<path d="M600 610 L700 585" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="round"/>`
+    : "";
+  const cuffLines = hasCuffs
+    ? `<path d="M350 1130 L455 1130 M545 1130 L650 1130" fill="none" stroke="#171717" stroke-width="15"/>`
+    : "";
+  const chestText = isBarchetta ? "BREAST POCKET: BARCETTA / CURVED WELT" : "BREAST POCKET: SELECTED STYLE";
+  const ticketText = hasTicketPocket ? "TICKET POCKET: PRESENT" : "TICKET POCKET: NONE";
+  const hemText = hasCuffs ? "HEMS: TURN-UPS" : "HEMS: PLAIN / NO CUFFS";
+  const buttonText = isSixByTwo ? "BUTTONS: DOUBLE-BREASTED 6x2 / EXACTLY SIX" : "BUTTONS: SAVED CONFIGURATION";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1400" viewBox="0 0 1000 1400">
+    <rect width="1000" height="1400" fill="#faf9f6"/>
+    <text x="500" y="72" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#171717">TECHNICAL CONSTRUCTION MAP</text>
+    <text x="500" y="112" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#5f5b54">REFERENCE ONLY — DO NOT RENDER TEXT OR DIAGRAM</text>
+    <path d="M335 270 L430 220 L570 220 L665 270 L720 755 L620 830 L380 830 L280 755 Z" fill="none" stroke="#171717" stroke-width="14" stroke-linejoin="round"/>
+    <path d="M430 220 L500 425 L570 220" fill="none" stroke="#171717" stroke-width="12"/>
+    ${chestPocket}
+    <path d="M300 690 L420 650 M700 690 L580 650" fill="none" stroke="#171717" stroke-width="14" stroke-linecap="round"/>
+    ${ticketPocket}
+    ${buttons}
+    <path d="M385 830 L350 1160 L455 1160 L500 850 L545 1160 L650 1160 L615 830" fill="none" stroke="#171717" stroke-width="14" stroke-linejoin="round"/>
+    ${cuffLines}
+    <path d="M315 1185 L490 1185 M510 1185 L685 1185" fill="none" stroke="#171717" stroke-width="10"/>
+    <g font-family="Arial, sans-serif" fill="#171717">
+      <text x="72" y="930" font-size="25" font-weight="700">${chestText}</text>
+      <text x="72" y="980" font-size="25" font-weight="700">${ticketText}</text>
+      <text x="72" y="1030" font-size="25" font-weight="700">${buttonText}</text>
+      <text x="72" y="1080" font-size="25" font-weight="700">${hemText}</text>
+    </g>
+  </svg>`;
+}
+
+async function buildBourbakiConstructionReference(contract) {
+  const png = await sharp(Buffer.from(bourbakiConstructionReferenceSvg(contract)))
+    .png()
+    .toBuffer();
+
+  return {
+    mimeType: "image/png",
+    data: png.toString("base64"),
+  };
+}
+
 function bourbakiRenderContractInstructions(contract, deliverable) {
   const jacketState = deliverable?.jacketState === "BUTTONED_CLOSED"
     ? "BUTTONED_CLOSED"
@@ -4539,6 +4624,7 @@ function bourbakiRenderContractInstructions(contract, deliverable) {
     "NON-NEGOTIABLE BOURBAKI RENDER CONTRACT. This contract overrides any aesthetic improvisation.",
     "Render exactly one full-length adult male model facing directly forward. The torso, hips and both shoes must face the camera; no back view, profile or three-quarter view.",
     "FRAME THE COMPLETE PERSON: the entire head, hairline, face, both shoes and all trouser hems must be inside the image. Leave a small clean margin above the head and below the shoes. Do not crop any part of the head or footwear.",
+    "The supplied technical construction map is a spatial reference. Follow its placement of the breast pocket, lower pockets, button arrangement and trouser hems exactly. Never show the diagram, annotations or any text in the final render.",
     "POCKET ACCURACY HAS PRIORITY OVER STYLING. Keep the jacket front clean and readable enough to inspect the breast pocket and both lower pockets. Do not hide these pockets behind the lapel, strong shadow, extreme wrinkle, or exaggerated drape.",
     bourbakiJacketStateInstruction(jacketState),
     "Under the jacket, use only a plain white classic dress shirt without a tie. On the feet, use only black Oxford shoes.",
@@ -4546,6 +4632,7 @@ function bourbakiRenderContractInstructions(contract, deliverable) {
       ? "Ticket pocket: REQUIRED — visibly present above one main hip pocket."
       : "Ticket pocket: FORBIDDEN — show exactly two lower jacket pockets, one on each side. Do not add any third smaller pocket, flap, welt or opening above or alongside either lower pocket.",
     bourbakiChestPocketInstruction(contract.critical.chestPocket),
+    bourbakiButtonLayoutInstruction(contract),
     `Trouser cuffs / turn-ups: ${contract.critical.trouserCuffs ? "REQUIRED — visibly present at both trouser hems." : "FORBIDDEN — use plain hems with no cuffs or turn-ups."}`,
     `Matching waistcoat: ${contract.critical.waistcoat ? "REQUIRED — visible beneath the jacket." : "FORBIDDEN — do not add a waistcoat."}`,
     "For the BUTTONED deliverable, the jacket must read as genuinely buttoned/closed, not half-open or loosely overlapped.",
@@ -4561,11 +4648,12 @@ function bourbakiVerificationPrompt(contract, deliverable) {
 
   return [
     "You are the strict visual compliance inspector for a bespoke suit configurator.",
-    "Inspect the supplied full image and the three enlarged diagnostic crops. Any uncertainty is a failure. Every check must be independently true for approved=true.",
-    "Input order after this instruction: IMAGE 1 is the complete full-body render; IMAGE 2 is the left chest / breast-pocket crop; IMAGE 3 is the lower-jacket-pocket crop; IMAGE 4 is the trouser-hems-and-shoes crop.",
-    "Use the enlarged crops as the primary evidence for chestPocketCorrect, ticketPocketCorrect and trouserCuffsCorrect. A detail that is absent, hidden, ambiguous, merely implied, or not recognizable in the relevant crop is false.",
+    "Inspect the supplied full image and the enlarged diagnostic crops. Any uncertainty is a failure. Every check must be independently true for approved=true.",
+    "Input order after this instruction: IMAGE 1 is the complete full-body render; IMAGE 2 is the left chest / breast-pocket crop; IMAGE 3 is the complete front-button-layout crop; IMAGE 4 is the lower-jacket-pocket crop; IMAGE 5 is the trouser-hems-and-shoes crop.",
+    "Use the enlarged crops as the primary evidence for chestPocketCorrect, buttonLayoutCorrect, ticketPocketCorrect and trouserCuffsCorrect. A detail that is absent, hidden, ambiguous, merely implied, or not recognizable in the relevant crop is false.",
     "For ticketPocketCorrect, when the ticket pocket is forbidden, confirm that there are exactly two lower jacket pockets and no third small pocket, flap, welt or opening above or alongside them.",
     "For chestPocketCorrect, confirm that the selected breast pocket is visibly present and its selected style is recognizable; a hidden, absent, ambiguous or wrong pocket is false.",
+    "For buttonLayoutCorrect, apply the saved fastening exactly. For double-breasted 6x2, require exactly six visible exterior buttons in two symmetrical vertical columns of three and reject any isolated centre button, seventh button or extra fastener.",
     "For trouserCuffsCorrect, when cuffs are forbidden, confirm there is no horizontal folded band, turn-up edge or second hemline above either trouser hem. The trouser fabric must run continuously down to one clean, plain hem.",
     "For fullHeadVisible and bothShoesVisible, any crop of the head, hairline, shoes or trouser hems is false.",
     `Verify the requested jacket state is ${expectedJacketState}.`,
@@ -4598,6 +4686,14 @@ function bourbakiCorrectionPrompt(verification, contract, deliverable) {
       contract?.critical?.ticketPocket
         ? "Add the selected ticket pocket above one lower jacket pocket."
         : "Remove every extra ticket pocket, small flap, welt or opening above the two lower jacket pockets. Leave exactly two lower jacket pockets total.",
+    );
+  }
+
+  if (checks.buttonLayoutCorrect === false) {
+    structuralEdits.push(
+      /DOUBLE/.test(contract?.critical?.buttoning ?? "") && /SIX/.test(contract?.critical?.buttonLayout ?? "")
+        ? "Correct the front button arrangement to exactly six visible exterior buttons in two symmetrical vertical columns of three. Remove any isolated centre button, seventh button or extra visible fastener."
+        : "Correct the visible button arrangement to match the saved fastening exactly and remove every extra visible fastener.",
     );
   }
 
@@ -4677,6 +4773,7 @@ async function generateBourbakiCandidate({
     promptBlocks.push(`\n${correction}`);
   }
 
+  const constructionReference = await buildBourbakiConstructionReference(input.renderContract);
   const parts = [
     {
       type: "text",
@@ -4686,6 +4783,15 @@ async function generateBourbakiCandidate({
       type: "image",
       mime_type: input.referenceImage.mimeType,
       data: input.referenceImage.data,
+    },
+    {
+      type: "text",
+      text: "TECHNICAL CONSTRUCTION MAP REFERENCE — use this only to place and shape the selected construction details. Do not reproduce any diagram, labels or text in the final image.",
+    },
+    {
+      type: "image",
+      mime_type: constructionReference.mimeType,
+      data: constructionReference.data,
     },
   ];
 
