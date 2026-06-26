@@ -4219,7 +4219,7 @@ const BOURBAKI_VISUALIZATION_VARIANTS = [
 ];
 const BOURBAKI_VISUALIZATION_VERIFIER_MODEL = "gemini-3.5-flash";
 const BOURBAKI_VISUALIZATION_IMAGE_SIZE = "2K";
-const BOURBAKI_VISUALIZATION_MAX_RENDER_ATTEMPTS = 3;
+const BOURBAKI_VISUALIZATION_MAX_RENDER_ATTEMPTS = 4;
 const BOURBAKI_VISUALIZATION_VERIFICATION_CHECKS = [
   "frontView",
   "fullHeadVisible",
@@ -4276,6 +4276,14 @@ const BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA = {
   required: ["approved", "checks", "violations", "summary"],
   additionalProperties: false,
 };
+
+// Full-body inspection is not reliable enough for bespoke pocket geometry.
+// These normalized crops make the verifier inspect the exact areas at a readable scale.
+const BOURBAKI_VISUALIZATION_INSPECTION_CROPS = [
+  { key: "CHEST", label: "Close-up of the left chest and breast pocket", left: 0.24, top: 0.20, width: 0.52, height: 0.27 },
+  { key: "LOWER_JACKET", label: "Close-up of both lower jacket pockets", left: 0.19, top: 0.34, width: 0.62, height: 0.27 },
+  { key: "TROUSER_HEMS", label: "Close-up of both trouser hems and shoes", left: 0.20, top: 0.70, width: 0.60, height: 0.25 },
+];
 
 function bourbakiVisualizationError(res, status, code, message) {
   return res.status(status).json({
@@ -4553,30 +4561,59 @@ function bourbakiVerificationPrompt(contract, deliverable) {
 
   return [
     "You are the strict visual compliance inspector for a bespoke suit configurator.",
-    "Inspect the supplied generated image against the contract below. Do not be generous. Any uncertainty is a failure. Every check must be independently true for approved=true.",
-    "For ticketPocketCorrect, when the ticket pocket is forbidden, confirm that there are exactly two lower jacket pockets and no third small pocket, flap, welt or opening above/alongside them.",
+    "Inspect the supplied full image and the three enlarged diagnostic crops. Any uncertainty is a failure. Every check must be independently true for approved=true.",
+    "Input order after this instruction: IMAGE 1 is the complete full-body render; IMAGE 2 is the left chest / breast-pocket crop; IMAGE 3 is the lower-jacket-pocket crop; IMAGE 4 is the trouser-hems-and-shoes crop.",
+    "Use the enlarged crops as the primary evidence for chestPocketCorrect, ticketPocketCorrect and trouserCuffsCorrect. A detail that is absent, hidden, ambiguous, merely implied, or not recognizable in the relevant crop is false.",
+    "For ticketPocketCorrect, when the ticket pocket is forbidden, confirm that there are exactly two lower jacket pockets and no third small pocket, flap, welt or opening above or alongside them.",
     "For chestPocketCorrect, confirm that the selected breast pocket is visibly present and its selected style is recognizable; a hidden, absent, ambiguous or wrong pocket is false.",
+    "For trouserCuffsCorrect, when cuffs are forbidden, confirm there is no horizontal folded band, turn-up edge or second hemline above either trouser hem. The trouser fabric must run continuously down to one clean, plain hem.",
     "For fullHeadVisible and bothShoesVisible, any crop of the head, hairline, shoes or trouser hems is false.",
     `Verify the requested jacket state is ${expectedJacketState}.`,
-    "When a required pocket is weak, half-hidden, or only vaguely implied, fail the image.",
     "",
     bourbakiRenderContractInstructions(contract, deliverable),
   ].join("\n");
 }
 
-function bourbakiCorrectionPrompt(verification, deliverable) {
+function bourbakiCorrectionPrompt(verification, contract, deliverable) {
   const safeViolations = Array.isArray(verification?.violations)
     ? verification.violations.map((item) => String(item).slice(0, 240)).filter(Boolean).slice(0, 12)
     : [];
-  const failedChecks = Object.entries(verification?.checks ?? {})
+  const checks = verification?.checks ?? {};
+  const failedChecks = Object.entries(checks)
     .filter(([, passed]) => passed === false)
     .map(([name]) => name)
     .slice(0, 12);
+  const structuralEdits = [];
+
+  if (checks.chestPocketCorrect === false) {
+    structuralEdits.push(
+      /BARC/.test(contract?.critical?.chestPocket ?? "")
+        ? "Add or make clearly visible one curved Barchetta breast pocket on the model's left chest. It must be a distinct curved welt seam, not a pocket square and not hidden by the lapel."
+        : `Add or make clearly visible the selected ${contract?.critical?.chestPocket ?? "breast"} pocket on the model's left chest.`,
+    );
+  }
+
+  if (checks.ticketPocketCorrect === false) {
+    structuralEdits.push(
+      contract?.critical?.ticketPocket
+        ? "Add the selected ticket pocket above one lower jacket pocket."
+        : "Remove every extra ticket pocket, small flap, welt or opening above the two lower jacket pockets. Leave exactly two lower jacket pockets total.",
+    );
+  }
+
+  if (checks.trouserCuffsCorrect === false) {
+    structuralEdits.push(
+      contract?.critical?.trouserCuffs
+        ? "Add clear matching turn-ups at both trouser hems."
+        : "Remove all trouser turn-ups, cuffs, folded bands and horizontal second hemlines. Make both trouser legs end in one clean, plain uninterrupted hem.",
+    );
+  }
 
   return [
-    "RETAKE REQUIRED. The prior candidate is supplied as an edit reference but is rejected for visual compliance.",
-    `Generate a replacement image, not a commentary. Preserve the selected fabric, the full saved construction, the same model identity, the same direct front pose, the same studio and the requested jacket state ${deliverable?.jacketState === "BUTTONED_CLOSED" ? "BUTTONED/CLOSED" : "OPEN/UNBUTTONED"}.`,
-    "Prioritize pocket accuracy over styling polish. Make the breast pocket and both lower jacket pockets explicit and readable.",
+    "RETAKE REQUIRED. EDIT THE SUPPLIED PRIOR IMAGE; do not redesign the person, fabric, pose, background or suit.",
+    `Preserve the selected fabric, the full saved construction, the same model identity, the same direct front pose, the same studio and the requested jacket state ${deliverable?.jacketState === "BUTTONED_CLOSED" ? "BUTTONED/CLOSED" : "OPEN/UNBUTTONED"}.`,
+    "Correct only the failed construction details below. Pocket accuracy and trouser hem accuracy outrank styling polish.",
+    structuralEdits.length ? `Required structural edits: ${structuralEdits.join(" ")}` : "",
     failedChecks.length ? `Failed verification checks: ${failedChecks.join(", ")}.` : "",
     safeViolations.length ? `Detected violations: ${safeViolations.join("; ")}.` : "",
   ].filter(Boolean).join("\n");
@@ -4683,6 +4720,38 @@ async function generateBourbakiCandidate({
   return normalizeBourbakiGeneratedImage(findBourbakiInlineImage(payload));
 }
 
+async function buildBourbakiInspectionCrops(candidate) {
+  const normalized = sharp(Buffer.from(candidate.data, "base64")).rotate();
+  const metadata = await normalized.metadata();
+  const width = Number(metadata.width ?? 0);
+  const height = Number(metadata.height ?? 0);
+
+  if (width < 80 || height < 80) {
+    throw new Error("BOURBAKI_VISUALIZATION_INVALID_IMAGE_DIMENSIONS");
+  }
+
+  return Promise.all(
+    BOURBAKI_VISUALIZATION_INSPECTION_CROPS.map(async (crop) => {
+      const left = Math.max(0, Math.min(width - 1, Math.floor(width * crop.left)));
+      const top = Math.max(0, Math.min(height - 1, Math.floor(height * crop.top)));
+      const cropWidth = Math.max(1, Math.min(width - left, Math.floor(width * crop.width)));
+      const cropHeight = Math.max(1, Math.min(height - top, Math.floor(height * crop.height)));
+      const data = await sharp(Buffer.from(candidate.data, "base64"))
+        .rotate()
+        .extract({ left, top, width: cropWidth, height: cropHeight })
+        .jpeg({ quality: 96, chromaSubsampling: "4:4:4" })
+        .toBuffer();
+
+      return {
+        key: crop.key,
+        label: crop.label,
+        mimeType: "image/jpeg",
+        data: data.toString("base64"),
+      };
+    }),
+  );
+}
+
 async function verifyBourbakiCandidate({
   apiKey,
   candidate,
@@ -4690,6 +4759,26 @@ async function verifyBourbakiCandidate({
   deliverable,
   requestId,
 }) {
+  const inspectionCrops = await buildBourbakiInspectionCrops(candidate);
+  const verificationInputs = [
+    { type: "text", text: bourbakiVerificationPrompt(contract, deliverable) },
+    { type: "text", text: "IMAGE 1 — complete full-body render" },
+    {
+      type: "image",
+      mime_type: candidate.mimeType,
+      data: candidate.data,
+    },
+  ];
+
+  for (const crop of inspectionCrops) {
+    verificationInputs.push({ type: "text", text: `DIAGNOSTIC CROP — ${crop.key}: ${crop.label}` });
+    verificationInputs.push({
+      type: "image",
+      mime_type: crop.mimeType,
+      data: crop.data,
+    });
+  }
+
   const payload = await requestBourbakiGemini({
     apiKey,
     requestId,
@@ -4697,14 +4786,7 @@ async function verifyBourbakiCandidate({
     body: {
       model: BOURBAKI_VISUALIZATION_VERIFIER_MODEL,
       store: false,
-      input: [
-        { type: "text", text: bourbakiVerificationPrompt(contract, deliverable) },
-        {
-          type: "image",
-          mime_type: candidate.mimeType,
-          data: candidate.data,
-        },
-      ],
+      input: verificationInputs,
       response_format: {
         type: "text",
         mime_type: "application/json",
@@ -4799,10 +4881,8 @@ async function generateAndReviewBourbakiView({
       input,
       requestId,
       deliverable,
-      priorCandidate: deliverable.viewKey === "BUTTONED"
-        ? anchorCandidate ?? candidate
-        : candidate,
-      correction: bourbakiCorrectionPrompt(verification, deliverable),
+      priorCandidate: candidate,
+      correction: bourbakiCorrectionPrompt(verification, input.renderContract, deliverable),
     });
 
     try {
