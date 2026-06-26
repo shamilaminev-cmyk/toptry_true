@@ -4219,7 +4219,7 @@ const BOURBAKI_VISUALIZATION_VARIANTS = [
 ];
 const BOURBAKI_VISUALIZATION_VERIFIER_MODEL = "gemini-3.5-flash";
 const BOURBAKI_VISUALIZATION_IMAGE_SIZE = "2K";
-const BOURBAKI_VISUALIZATION_MAX_RENDER_ATTEMPTS = 4;
+const BOURBAKI_VISUALIZATION_MAX_RENDER_ATTEMPTS = 2;
 const BOURBAKI_VISUALIZATION_VERIFICATION_CHECKS = [
   "frontView",
   "fullHeadVisible",
@@ -4899,7 +4899,7 @@ async function verifyBourbakiCandidate({
         schema: BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA,
       },
       generation_config: {
-        thinking_level: "high",
+        thinking_level: "low",
       },
     },
   });
