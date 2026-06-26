@@ -4219,7 +4219,7 @@ const BOURBAKI_VISUALIZATION_VARIANTS = [
 ];
 const BOURBAKI_VISUALIZATION_VERIFIER_MODEL = "gemini-3.5-flash";
 const BOURBAKI_VISUALIZATION_IMAGE_SIZE = "2K";
-const BOURBAKI_VISUALIZATION_MAX_RENDER_ATTEMPTS = 2;
+const BOURBAKI_VISUALIZATION_MAX_RENDER_ATTEMPTS = 3;
 const BOURBAKI_VISUALIZATION_VERIFICATION_CHECKS = [
   "frontView",
   "fullHeadVisible",
@@ -4516,10 +4516,10 @@ function bourbakiJacketStateInstruction(jacketState) {
 
 function bourbakiChestPocketInstruction(chestPocket) {
   if (/BARC/.test(chestPocket)) {
-    return "Breast pocket: REQUIRED. Render one clearly visible curved Barchetta breast pocket on the model's left chest. It must be readable in the direct front view and must not be hidden by the lapel.";
+    return "Breast pocket: REQUIRED. Render one clearly visible curved Barchetta breast pocket on the model's left chest. It must remain readable in the direct front view, in both deliverables, and it must not be hidden by the lapel, fold or deep shadow.";
   }
 
-  return `Breast pocket: REQUIRED. Render the selected ${chestPocket} chest pocket visibly and faithfully on the model's left chest.`;
+  return `Breast pocket: REQUIRED. Render the selected ${chestPocket} chest pocket visibly and faithfully on the model's left chest. It must remain readable in the direct front view and must not disappear behind the lapel.`;
 }
 
 function bourbakiRenderContractInstructions(contract, deliverable) {
@@ -4531,6 +4531,7 @@ function bourbakiRenderContractInstructions(contract, deliverable) {
     "NON-NEGOTIABLE BOURBAKI RENDER CONTRACT. This contract overrides any aesthetic improvisation.",
     "Render exactly one full-length adult male model facing directly forward. The torso, hips and both shoes must face the camera; no back view, profile or three-quarter view.",
     "FRAME THE COMPLETE PERSON: the entire head, hairline, face, both shoes and all trouser hems must be inside the image. Leave a small clean margin above the head and below the shoes. Do not crop any part of the head or footwear.",
+    "POCKET ACCURACY HAS PRIORITY OVER STYLING. Keep the jacket front clean and readable enough to inspect the breast pocket and both lower pockets. Do not hide these pockets behind the lapel, strong shadow, extreme wrinkle, or exaggerated drape.",
     bourbakiJacketStateInstruction(jacketState),
     "Under the jacket, use only a plain white classic dress shirt without a tie. On the feet, use only black Oxford shoes.",
     contract.critical.ticketPocket
@@ -4539,6 +4540,8 @@ function bourbakiRenderContractInstructions(contract, deliverable) {
     bourbakiChestPocketInstruction(contract.critical.chestPocket),
     `Trouser cuffs / turn-ups: ${contract.critical.trouserCuffs ? "REQUIRED — visibly present at both trouser hems." : "FORBIDDEN — use plain hems with no cuffs or turn-ups."}`,
     `Matching waistcoat: ${contract.critical.waistcoat ? "REQUIRED — visible beneath the jacket." : "FORBIDDEN — do not add a waistcoat."}`,
+    "For the BUTTONED deliverable, the jacket must read as genuinely buttoned/closed, not half-open or loosely overlapped.",
+    "If necessary, prefer a cleaner pose, cleaner drape or flatter shading over losing pocket fidelity.",
     "Do not invent, remove, substitute or reinterpret any saved construction detail. Do not add tie, pocket square, scarf, bag, watch, jewellery, belt ornament, outerwear, accessories, text or logos.",
   ].join("\n");
 }
@@ -4550,11 +4553,12 @@ function bourbakiVerificationPrompt(contract, deliverable) {
 
   return [
     "You are the strict visual compliance inspector for a bespoke suit configurator.",
-    "Inspect the supplied generated image against the contract below. Do not be generous. Every check must be independently true for approved=true.",
+    "Inspect the supplied generated image against the contract below. Do not be generous. Any uncertainty is a failure. Every check must be independently true for approved=true.",
     "For ticketPocketCorrect, when the ticket pocket is forbidden, confirm that there are exactly two lower jacket pockets and no third small pocket, flap, welt or opening above/alongside them.",
     "For chestPocketCorrect, confirm that the selected breast pocket is visibly present and its selected style is recognizable; a hidden, absent, ambiguous or wrong pocket is false.",
     "For fullHeadVisible and bothShoesVisible, any crop of the head, hairline, shoes or trouser hems is false.",
     `Verify the requested jacket state is ${expectedJacketState}.`,
+    "When a required pocket is weak, half-hidden, or only vaguely implied, fail the image.",
     "",
     bourbakiRenderContractInstructions(contract, deliverable),
   ].join("\n");
@@ -4572,6 +4576,7 @@ function bourbakiCorrectionPrompt(verification, deliverable) {
   return [
     "RETAKE REQUIRED. The prior candidate is supplied as an edit reference but is rejected for visual compliance.",
     `Generate a replacement image, not a commentary. Preserve the selected fabric, the full saved construction, the same model identity, the same direct front pose, the same studio and the requested jacket state ${deliverable?.jacketState === "BUTTONED_CLOSED" ? "BUTTONED/CLOSED" : "OPEN/UNBUTTONED"}.`,
+    "Prioritize pocket accuracy over styling polish. Make the breast pocket and both lower jacket pockets explicit and readable.",
     failedChecks.length ? `Failed verification checks: ${failedChecks.join(", ")}.` : "",
     safeViolations.length ? `Detected violations: ${safeViolations.join("; ")}.` : "",
   ].filter(Boolean).join("\n");
