@@ -5125,6 +5125,283 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
   });
 });
 
+
+
+// toptry-bourbaki-technical-drawings-v1
+const BOURBAKI_TECHNICAL_DRAWING_MODEL = "gemini-3-pro-image";
+const BOURBAKI_TECHNICAL_DRAWING_RENDER_CONTRACT_VERSION =
+  "bourbaki-suit-technical-drawing-v1";
+const BOURBAKI_TECHNICAL_DRAWING_VARIANTS = [
+  {
+    viewKey: "JACKET_FRONT",
+    garment: "JACKET",
+    view: "FRONT",
+    title: "Пиджак · вид спереди",
+  },
+  {
+    viewKey: "JACKET_BACK",
+    garment: "JACKET",
+    view: "BACK",
+    title: "Пиджак · вид сзади",
+  },
+  {
+    viewKey: "TROUSERS_FRONT",
+    garment: "TROUSERS",
+    view: "FRONT",
+    title: "Брюки · вид спереди",
+  },
+  {
+    viewKey: "TROUSERS_BACK",
+    garment: "TROUSERS",
+    view: "BACK",
+    title: "Брюки · вид сзади",
+  },
+];
+
+function parseBourbakiTechnicalDrawingRenderContract(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+  }
+
+  const deliverables = Array.isArray(value.deliverables) ? value.deliverables : null;
+
+  if (
+    value.version !== BOURBAKI_TECHNICAL_DRAWING_RENDER_CONTRACT_VERSION ||
+    !deliverables ||
+    deliverables.length !== 4
+  ) {
+    throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+  }
+
+  const normalizedDeliverables = deliverables.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+    }
+
+    const viewKey = typeof item.viewKey === "string" ? item.viewKey.trim().toUpperCase() : "";
+    const garment = typeof item.garment === "string" ? item.garment.trim().toUpperCase() : "";
+    const view = typeof item.view === "string" ? item.view.trim().toUpperCase() : "";
+
+    const allowed = BOURBAKI_TECHNICAL_DRAWING_VARIANTS.find(
+      (variant) =>
+        variant.viewKey === viewKey &&
+        variant.garment === garment &&
+        variant.view === view,
+    );
+
+    if (!allowed) {
+      throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+    }
+
+    return {
+      viewKey: allowed.viewKey,
+      garment: allowed.garment,
+      view: allowed.view,
+      title: allowed.title,
+    };
+  });
+
+  const variantKeys = normalizedDeliverables
+    .map((item) => item.viewKey)
+    .sort()
+    .join(",");
+
+  if (variantKeys !== "JACKET_BACK,JACKET_FRONT,TROUSERS_BACK,TROUSERS_FRONT") {
+    throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+  }
+
+  const critical = value.critical && typeof value.critical === "object" && !Array.isArray(value.critical)
+    ? value.critical
+    : {};
+
+  return {
+    version: BOURBAKI_TECHNICAL_DRAWING_RENDER_CONTRACT_VERSION,
+    deliverables: normalizedDeliverables,
+    critical: {
+      ticketPocket: critical.ticketPocket === true,
+      chestPocket:
+        typeof critical.chestPocket === "string"
+          ? critical.chestPocket.trim().toUpperCase().slice(0, 80)
+          : "STANDARD",
+      trouserCuffs: critical.trouserCuffs === true,
+      jacketBackVent:
+        typeof critical.jacketBackVent === "string"
+          ? critical.jacketBackVent.trim().toUpperCase().slice(0, 80)
+          : "UNSPECIFIED",
+      trouserBackPockets:
+        typeof critical.trouserBackPockets === "string"
+          ? critical.trouserBackPockets.trim().toUpperCase().slice(0, 120)
+          : "UNSPECIFIED",
+    },
+  };
+}
+
+function parseBourbakiTechnicalDrawingInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw bourbakiVisualizationInputError("INVALID_BODY");
+  }
+
+  const prompt = typeof value.prompt === "string" ? value.prompt.trim() : "";
+
+  if (!prompt || prompt.length > BOURBAKI_VISUALIZATION_MAX_PROMPT_CHARS) {
+    throw bourbakiVisualizationInputError("INVALID_PROMPT");
+  }
+
+  return {
+    prompt,
+    renderContract: parseBourbakiTechnicalDrawingRenderContract(value.renderContract),
+  };
+}
+
+function bourbakiTechnicalDrawingInstructions(contract, deliverable) {
+  const ticketPocketRule = contract.critical.ticketPocket
+    ? "A ticket pocket is selected. Show it clearly on the jacket front."
+    : "A ticket pocket is NOT selected. Do not draw any ticket pocket."
+  const chestPocketRule = /BARC/.test(contract.critical.chestPocket)
+    ? "The jacket chest pocket is BARCHEtta / curved Barchetta. Show it clearly on the LEFT chest in the front view."
+    : `The jacket chest pocket style is ${contract.critical.chestPocket}. Show the selected chest pocket in the front view.`;
+  const trouserCuffRule = contract.critical.trouserCuffs
+    ? "Trouser cuffs / turn-ups are selected. Draw cuffs on both trouser hems in the front and back views."
+    : "Plain trouser hems are selected. Do NOT draw cuffs or turn-ups on the trouser hems.";
+
+  return [
+    "OUTPUT FORMAT: one clean technical garment flat drawing only.",
+    "Render black line art on a pure white background. No fabric texture, no colour fill, no shading, no gradients, no studio scene, no human model, no mannequin, no hanger, no hands, no body, no text labels inside the drawing, no dimension arrows.",
+    "Use a centered, orthographic flat technical view with clear, symmetric construction lines and enough margin around the garment.",
+    `DELIVERABLE: ${deliverable.title}.`,
+    deliverable.garment === "JACKET"
+      ? `Draw the suit jacket in ${deliverable.view === "FRONT" ? "front" : "back"} view only.`
+      : `Draw the trousers in ${deliverable.view === "FRONT" ? "front" : "back"} view only.`,
+    ticketPocketRule,
+    chestPocketRule,
+    trouserCuffRule,
+    `Jacket back vent selection: ${contract.critical.jacketBackVent || "UNSPECIFIED"}.`,
+    `Trouser back pocket selection: ${contract.critical.trouserBackPockets || "UNSPECIFIED"}.`,
+    "Show only the construction details that belong to the requested garment and view. Do not invent extra pockets, buttons, seams or decorative elements.",
+  ].join("\n");
+}
+
+async function generateBourbakiTechnicalDrawing({
+  apiKey,
+  input,
+  requestId,
+  deliverable,
+}) {
+  const payload = await requestBourbakiGemini({
+    apiKey,
+    requestId,
+    stage: "technical_drawing",
+    body: {
+      model: BOURBAKI_TECHNICAL_DRAWING_MODEL,
+      store: false,
+      input: [
+        {
+          type: "text",
+          text: [
+            input.prompt,
+            "",
+            bourbakiTechnicalDrawingInstructions(input.renderContract, deliverable),
+          ].join("\n"),
+        },
+      ],
+      response_format: {
+        type: "image",
+        mime_type: "image/png",
+        aspect_ratio: "1:1",
+        image_size: BOURBAKI_VISUALIZATION_IMAGE_SIZE,
+      },
+      generation_config: {
+        thinking_level: "high",
+      },
+    },
+  });
+
+  return normalizeBourbakiGeneratedImage(findBourbakiInlineImage(payload));
+}
+
+app.post("/internal/ai/bourbaki/technical-drawings", async (req, res) => {
+  if (!bourbakiVisualizationSecretMatches(req.get("x-bourbaki-technical-secret") ?? req.get("x-bourbaki-visualization-secret"))) {
+    return bourbakiVisualizationError(
+      res,
+      403,
+      "BOURBAKI_GATEWAY_ACCESS_DENIED",
+      "Внутренний доступ к техническому чертежу не подтверждён.",
+    );
+  }
+
+  const apiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+
+  if (!apiKey) {
+    return bourbakiVisualizationError(
+      res,
+      503,
+      "BOURBAKI_GATEWAY_NOT_CONFIGURED",
+      "Сервис технического чертежа временно недоступен.",
+    );
+  }
+
+  let input;
+  try {
+    input = parseBourbakiTechnicalDrawingInput(req.body);
+  } catch (error) {
+    const code = error?.code || (error instanceof Error ? error.message : "INVALID_BODY");
+    return bourbakiVisualizationError(
+      res,
+      400,
+      code,
+      "Параметры технического чертежа некорректны.",
+    );
+  }
+
+  const requestId = req.get("x-request-id") ?? null;
+
+  try {
+    const images = [];
+
+    for (const deliverable of input.renderContract.deliverables) {
+      const image = await generateBourbakiTechnicalDrawing({
+        apiKey,
+        input,
+        requestId,
+        deliverable,
+      });
+
+      images.push({
+        viewKey: deliverable.viewKey,
+        garment: deliverable.garment,
+        view: deliverable.view,
+        title: deliverable.title,
+        mimeType: image.mimeType,
+        data: image.data,
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        model: BOURBAKI_TECHNICAL_DRAWING_MODEL,
+        images,
+      },
+    });
+  } catch (error) {
+    console.error("Bourbaki technical drawing Gemini request failed", {
+      stage: error?.stage ?? "unknown",
+      status: error?.providerStatus ?? null,
+      gatewayRequestId: requestId,
+      providerMessage:
+        error?.providerMessage ??
+        (error instanceof Error ? error.message.slice(0, 500) : null),
+    });
+
+    return bourbakiVisualizationError(
+      res,
+      502,
+      "BOURBAKI_TECHNICAL_DRAWING_UPSTREAM_FAILED",
+      "Сервис технического чертежа временно недоступен.",
+    );
+  }
+});
+
 app.post("/internal/ai/tryon", async (req, res) => {
   try {
     if (!assertInternalAiRequest(req, res)) return;
