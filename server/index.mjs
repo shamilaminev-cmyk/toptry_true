@@ -4203,7 +4203,19 @@ const BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES = new Set([
 
 // toptry-bourbaki-visualization-strict-contract-v1
 const BOURBAKI_VISUALIZATION_RENDER_CONTRACT_VERSION =
-  "bourbaki-suit-render-contract-v1";
+  "bourbaki-suit-render-contract-v2";
+const BOURBAKI_VISUALIZATION_VARIANTS = [
+  {
+    viewKey: "OPEN",
+    jacketState: "OPEN_UNBUTTONED",
+    title: "Open jacket",
+  },
+  {
+    viewKey: "BUTTONED",
+    jacketState: "BUTTONED_CLOSED",
+    title: "Buttoned jacket",
+  },
+];
 const BOURBAKI_VISUALIZATION_VERIFIER_MODEL = "gemini-3.1-flash-image";
 const BOURBAKI_VISUALIZATION_VERIFICATION_SCHEMA = {
   type: "object",
@@ -4255,6 +4267,7 @@ function parseBourbakiVisualizationRenderContract(value) {
   }
 
   const scene = value.scene;
+  const deliverables = value.deliverables;
   const critical = value.critical;
 
   if (
@@ -4262,6 +4275,8 @@ function parseBourbakiVisualizationRenderContract(value) {
     !scene ||
     typeof scene !== "object" ||
     Array.isArray(scene) ||
+    !Array.isArray(deliverables) ||
+    deliverables.length !== 2 ||
     !critical ||
     typeof critical !== "object" ||
     Array.isArray(critical)
@@ -4272,12 +4287,38 @@ function parseBourbakiVisualizationRenderContract(value) {
   const sceneIsValid =
     scene.camera === "FRONT_FULL_LENGTH" &&
     scene.pose === "FRONTAL_STANDING" &&
-    scene.jacketState === "OPEN_UNBUTTONED" &&
     scene.shirt === "WHITE_DRESS_SHIRT" &&
     scene.shoes === "BLACK_OXFORDS";
 
+  const normalizedDeliverables = deliverables.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+    }
+
+    const viewKey = typeof item.viewKey === "string" ? item.viewKey.trim().toUpperCase() : "";
+    const jacketState =
+      typeof item.jacketState === "string" ? item.jacketState.trim().toUpperCase() : "";
+
+    const allowed = BOURBAKI_VISUALIZATION_VARIANTS.find(
+      (variant) => variant.viewKey === viewKey && variant.jacketState === jacketState,
+    );
+
+    if (!allowed) {
+      throw bourbakiVisualizationInputError("INVALID_RENDER_CONTRACT");
+    }
+
+    return {
+      viewKey: allowed.viewKey,
+      jacketState: allowed.jacketState,
+      title: allowed.title,
+    };
+  });
+
+  const variantKeys = normalizedDeliverables.map((item) => item.viewKey).sort().join(",");
+
   if (
     !sceneIsValid ||
+    variantKeys !== "BUTTONED,OPEN" ||
     typeof critical.ticketPocket !== "boolean" ||
     typeof critical.trouserCuffs !== "boolean" ||
     typeof critical.waistcoat !== "boolean"
@@ -4290,10 +4331,10 @@ function parseBourbakiVisualizationRenderContract(value) {
     scene: {
       camera: "FRONT_FULL_LENGTH",
       pose: "FRONTAL_STANDING",
-      jacketState: "OPEN_UNBUTTONED",
       shirt: "WHITE_DRESS_SHIRT",
       shoes: "BLACK_OXFORDS",
     },
+    deliverables: normalizedDeliverables,
     critical: {
       ticketPocket: critical.ticketPocket,
       trouserCuffs: critical.trouserCuffs,
@@ -4410,39 +4451,51 @@ function normalizeBourbakiGeneratedImage(image) {
   return { data, mimeType };
 }
 
-function bourbakiRenderContractInstructions(contract) {
+function bourbakiJacketStateInstruction(jacketState) {
+  if (jacketState === "BUTTONED_CLOSED") {
+    return "The jacket must be BUTTONED/CLOSED so the front silhouette and fit of the jacket are clearly visible.";
+  }
+
+  return "The jacket must be OPEN and UNBUTTONED, so the white shirt, waistband and front construction of the trousers remain visible.";
+}
+
+function bourbakiRenderContractInstructions(contract, deliverable) {
+  const jacketState = deliverable?.jacketState === "BUTTONED_CLOSED"
+    ? "BUTTONED_CLOSED"
+    : "OPEN_UNBUTTONED";
+
   return [
     "NON-NEGOTIABLE BOURBAKI RENDER CONTRACT. This contract overrides any aesthetic improvisation.",
     "Render exactly one full-length adult male model facing directly forward. The torso, hips and both shoes must face the camera; no back view, profile or three-quarter view.",
-    "The jacket must be OPEN and UNBUTTONED, so the white shirt, waistband and front construction of the trousers remain visible.",
+    bourbakiJacketStateInstruction(jacketState),
     "Under the jacket, use only a plain white classic dress shirt without a tie. On the feet, use only black Oxford shoes.",
     `Ticket pocket: ${contract.critical.ticketPocket ? "REQUIRED — visibly present above one main hip pocket." : "FORBIDDEN — do not add any ticket pocket."}`,
     `Trouser cuffs / turn-ups: ${contract.critical.trouserCuffs ? "REQUIRED — visibly present at both trouser hems." : "FORBIDDEN — use plain hems with no cuffs or turn-ups."}`,
-    `Matching waistcoat: ${contract.critical.waistcoat ? "REQUIRED — visible beneath the open jacket." : "FORBIDDEN — do not add a waistcoat."}`,
+    `Matching waistcoat: ${contract.critical.waistcoat ? "REQUIRED — visible beneath the jacket." : "FORBIDDEN — do not add a waistcoat."}`,
     "Do not invent, remove, substitute or reinterpret any saved construction detail. Do not add tie, pocket square, scarf, bag, watch, jewellery, belt ornament, outerwear, accessories, text or logos.",
   ].join("\n");
 }
 
-function bourbakiVerificationPrompt(contract) {
+function bourbakiVerificationPrompt(contract, deliverable) {
   return [
     "You are the strict visual compliance inspector for a bespoke suit configurator.",
     "Inspect the supplied generated image against the contract below. Do not be generous.",
     "Set approved=true only when every observable requirement is clearly satisfied.",
     "If a critical element is hidden, ambiguous, missing, added when forbidden, or visually inconsistent, set approved=false and list concise violations.",
-    "Verify: full-length direct front view; jacket open and unbuttoned; plain white dress shirt; black Oxford shoes; ticket pocket exactly as required or forbidden; trouser cuffs exactly as required or forbidden; waistcoat exactly as required or forbidden; no extra accessories.",
+    `Verify: full-length direct front view; jacket ${deliverable?.jacketState === "BUTTONED_CLOSED" ? "buttoned/closed" : "open and unbuttoned"}; plain white dress shirt; black Oxford shoes; ticket pocket exactly as required or forbidden; trouser cuffs exactly as required or forbidden; waistcoat exactly as required or forbidden; no extra accessories.`,
     "",
-    bourbakiRenderContractInstructions(contract),
+    bourbakiRenderContractInstructions(contract, deliverable),
   ].join("\n");
 }
 
-function bourbakiCorrectionPrompt(violations) {
+function bourbakiCorrectionPrompt(violations, deliverable) {
   const safeViolations = Array.isArray(violations)
     ? violations.map((item) => String(item).slice(0, 240)).filter(Boolean).slice(0, 12)
     : [];
 
   return [
     "RETAKE REQUIRED. The prior candidate is supplied as an edit reference but is rejected.",
-    "Generate a replacement image, not a commentary. Correct every listed violation while preserving the selected fabric and all saved construction.",
+    `Generate a replacement image, not a commentary. Correct every listed violation while preserving the selected fabric, the full saved construction, and the requested jacket state ${deliverable?.jacketState === "BUTTONED_CLOSED" ? "BUTTONED/CLOSED" : "OPEN/UNBUTTONED"}.`,
     safeViolations.length
       ? `Detected violations: ${safeViolations.join("; ")}.`
       : "The prior candidate failed strict visual compliance.",
@@ -4486,18 +4539,31 @@ async function generateBourbakiCandidate({
   apiKey,
   input,
   requestId,
+  deliverable,
   priorCandidate,
   correction,
 }) {
+  const promptBlocks = [
+    input.prompt,
+    "",
+    `RENDER THIS DELIVERABLE: ${deliverable?.title || deliverable?.viewKey || "Suit view"}.`,
+    bourbakiRenderContractInstructions(input.renderContract, deliverable),
+  ];
+
+  if (priorCandidate && deliverable?.viewKey === "BUTTONED") {
+    promptBlocks.push(
+      "Use the additional image reference as the anchor for the same man, the same studio lighting, the same fabric, and the same suit. Preserve the same model identity, scale, pose, background and garment details. Change only the jacket state from open to buttoned/closed.",
+    );
+  }
+
+  if (correction) {
+    promptBlocks.push(`\n${correction}`);
+  }
+
   const parts = [
     {
       type: "text",
-      text: [
-        input.prompt,
-        "",
-        bourbakiRenderContractInstructions(input.renderContract),
-        correction ? `\n${correction}` : "",
-      ].join("\n"),
+      text: promptBlocks.join("\n"),
     },
     {
       type: "image",
@@ -4541,6 +4607,7 @@ async function verifyBourbakiCandidate({
   apiKey,
   candidate,
   contract,
+  deliverable,
   requestId,
 }) {
   const payload = await requestBourbakiGemini({
@@ -4551,7 +4618,7 @@ async function verifyBourbakiCandidate({
       model: BOURBAKI_VISUALIZATION_VERIFIER_MODEL,
       store: false,
       input: [
-        { type: "text", text: bourbakiVerificationPrompt(contract) },
+        { type: "text", text: bourbakiVerificationPrompt(contract, deliverable) },
         {
           type: "image",
           mime_type: candidate.mimeType,
@@ -4631,42 +4698,82 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
   }
 
   const requestId = req.get("x-request-id") ?? null;
-  let candidate;
-  let verification;
-  let attempts = 0;
+  const results = [];
+  let anchorCandidate = null;
 
   try {
-    attempts += 1;
-    candidate = await generateBourbakiCandidate({
-      apiKey,
-      input,
-      requestId,
-      priorCandidate: null,
-      correction: null,
-    });
+    for (const deliverable of input.renderContract.deliverables) {
+      let candidate;
+      let verification;
+      let attempts = 0;
 
-    verification = await verifyBourbakiCandidate({
-      apiKey,
-      candidate,
-      contract: input.renderContract,
-      requestId,
-    });
-
-    if (!verification.approved) {
       attempts += 1;
       candidate = await generateBourbakiCandidate({
         apiKey,
         input,
         requestId,
-        priorCandidate: candidate,
-        correction: bourbakiCorrectionPrompt(verification.violations),
+        deliverable,
+        priorCandidate: deliverable.viewKey === "BUTTONED" ? anchorCandidate : null,
+        correction: null,
       });
 
       verification = await verifyBourbakiCandidate({
         apiKey,
         candidate,
         contract: input.renderContract,
+        deliverable,
         requestId,
+      });
+
+      if (!verification.approved) {
+        attempts += 1;
+        candidate = await generateBourbakiCandidate({
+          apiKey,
+          input,
+          requestId,
+          deliverable,
+          priorCandidate:
+            deliverable.viewKey === "BUTTONED"
+              ? anchorCandidate ?? candidate
+              : candidate,
+          correction: bourbakiCorrectionPrompt(verification.violations, deliverable),
+        });
+
+        verification = await verifyBourbakiCandidate({
+          apiKey,
+          candidate,
+          contract: input.renderContract,
+          deliverable,
+          requestId,
+        });
+      }
+
+      if (!verification?.approved) {
+        console.warn("Bourbaki visualization rejected by strict verification", {
+          gatewayRequestId: requestId,
+          viewKey: deliverable.viewKey,
+          attempts,
+          violationCount: Array.isArray(verification?.violations) ? verification.violations.length : 0,
+        });
+        return bourbakiVisualizationError(
+          res,
+          422,
+          "BOURBAKI_VISUALIZATION_SPEC_MISMATCH",
+          "Не удалось подтвердить точное соответствие выбранной спецификации. Создайте ещё один вариант.",
+        );
+      }
+
+      if (deliverable.viewKey === "OPEN") {
+        anchorCandidate = candidate;
+      }
+
+      results.push({
+        viewKey: deliverable.viewKey,
+        jacketState: deliverable.jacketState,
+        title: deliverable.title,
+        mimeType: candidate.mimeType,
+        data: candidate.data,
+        attempts,
       });
     }
   } catch (error) {
@@ -4684,31 +4791,23 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
     );
   }
 
-  if (!verification?.approved) {
-    console.warn("Bourbaki visualization rejected by strict verification", {
-      gatewayRequestId: requestId,
-      attempts,
-      violationCount: Array.isArray(verification?.violations) ? verification.violations.length : 0,
-    });
-    return bourbakiVisualizationError(
-      res,
-      422,
-      "BOURBAKI_VISUALIZATION_SPEC_MISMATCH",
-      "Не удалось подтвердить точное соответствие выбранной спецификации. Создайте ещё один вариант.",
-    );
-  }
-
   return res.status(200).json({
     ok: true,
     data: {
       model: BOURBAKI_VISUALIZATION_MODEL,
-      image: {
-        mimeType: candidate.mimeType,
-        data: candidate.data,
-      },
+      images: results.map((item) => ({
+        viewKey: item.viewKey,
+        jacketState: item.jacketState,
+        title: item.title,
+        mimeType: item.mimeType,
+        data: item.data,
+      })),
       verification: {
         approved: true,
-        attempts,
+        views: results.map((item) => ({
+          viewKey: item.viewKey,
+          attempts: item.attempts,
+        })),
       },
     },
   });
