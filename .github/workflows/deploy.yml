@@ -97,8 +97,16 @@ jobs:
           SSH_KEY: ${{ secrets.SSH_KEY }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USER: ${{ secrets.GHCR_USER }}
+          BOURBAKI_OPENAI_API_KEY: ${{ secrets.BOURBAKI_OPENAI_API_KEY }}
+          BOURBAKI_VISUALIZATION_SECRET: ${{ secrets.BOURBAKI_VISUALIZATION_SECRET }}
         run: |
           set -euo pipefail
+
+          test -n "$BOURBAKI_OPENAI_API_KEY"
+          test -n "$BOURBAKI_VISUALIZATION_SECRET"
+
+          OPENAI_KEY_B64="$(printf '%s' "$BOURBAKI_OPENAI_API_KEY" | base64 | tr -d '\n')"
+          BOURBAKI_SECRET_B64="$(printf '%s' "$BOURBAKI_VISUALIZATION_SECRET" | base64 | tr -d '\n')"
 
           mkdir -p ~/.ssh
           printf "%s" "$SSH_KEY" > ~/.ssh/id_ed25519
@@ -107,7 +115,7 @@ jobs:
           ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
 
           ssh -i ~/.ssh/id_ed25519 -p "$PORT" "$USER@$HOST" \
-            "IMAGE_API='$IMAGE_API' TAG='$TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' bash -s" <<'REMOTE'
+            "IMAGE_API='$IMAGE_API' TAG='$TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' OPENAI_KEY_B64='$OPENAI_KEY_B64' BOURBAKI_SECRET_B64='$BOURBAKI_SECRET_B64' bash -s" <<'REMOTE'
           set -euo pipefail
 
           CONTAINER="toptry-ai-gateway"
@@ -117,7 +125,7 @@ jobs:
           REPLACED=0
 
           cleanup() {
-            rm -f "$ENV_FILE" "$BODY_FILE"
+            rm -f "$ENV_FILE" "${ENV_FILE}.next" "$BODY_FILE"
           }
 
           rollback() {
@@ -153,6 +161,17 @@ jobs:
           NETWORK="${NETWORK:-toptry-ai_default}"
           docker inspect "$CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' > "$ENV_FILE"
 
+          OPENAI_API_KEY="$(printf '%s' "$OPENAI_KEY_B64" | base64 -d)"
+          BOURBAKI_VISUALIZATION_SECRET="$(printf '%s' "$BOURBAKI_SECRET_B64" | base64 -d)"
+
+          test -n "$OPENAI_API_KEY"
+          test -n "$BOURBAKI_VISUALIZATION_SECRET"
+
+          grep -vE '^(OPENAI_API_KEY|BOURBAKI_VISUALIZATION_SECRET)=' "$ENV_FILE" > "${ENV_FILE}.next" || true
+          printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" >> "${ENV_FILE}.next"
+          printf 'BOURBAKI_VISUALIZATION_SECRET=%s\n' "$BOURBAKI_VISUALIZATION_SECRET" >> "${ENV_FILE}.next"
+          mv "${ENV_FILE}.next" "$ENV_FILE"
+
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
           docker pull "$IMAGE_API:$TAG"
 
@@ -168,6 +187,13 @@ jobs:
           REPLACED=1
 
           sleep 2
+
+          docker exec "$CONTAINER" sh -lc '
+            test -n "$OPENAI_API_KEY"
+            test -n "$BOURBAKI_VISUALIZATION_SECRET"
+            test "$AI_GATEWAY_ROLE" = "gateway"
+          '
+
           SECRET="$(sed -n 's/^AI_GATEWAY_SECRET=//p' "$ENV_FILE" | head -n 1)"
           if [ -z "$SECRET" ]; then
             SECRET="$(sed -n 's/^PROXY_SHARED_SECRET=//p' "$ENV_FILE" | head -n 1)"
@@ -184,7 +210,16 @@ jobs:
           test "$CODE" = "400"
           grep -q 'photoDataUrl is required' "$BODY_FILE"
 
-          echo "AI gateway deployed and wardrobe endpoint smoke-tested"
+          BOURBAKI_CODE="$(curl -sS -o "$BODY_FILE" -w '%{http_code}' \
+            --connect-timeout 10 --max-time 25 \
+            -X POST http://127.0.0.1:8090/internal/ai/bourbaki/render-v2 \
+            -H 'content-type: application/json' \
+            -H "x-bourbaki-visualization-secret: $BOURBAKI_VISUALIZATION_SECRET" \
+            --data '{}')"
+
+          test "$BOURBAKI_CODE" = "400" || test "$BOURBAKI_CODE" = "422"
+
+          echo "AI gateway deployed; wardrobe and Bourbaki endpoint smoke-tested"
           REMOTE
 
 

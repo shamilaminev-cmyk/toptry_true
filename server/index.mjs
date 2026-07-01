@@ -4318,6 +4318,28 @@ function bourbakiVisualizationSecretMatches(providedSecret) {
   );
 }
 
+function bourbakiOpenAiRenderSecretMatches(providedSecret) {
+  const configuredSecret = String(
+    process.env.BOURBAKI_VISUALIZATION_SECRET ||
+      process.env.AI_GATEWAY_SECRET ||
+      "",
+  ).trim();
+
+  const receivedSecret = typeof providedSecret === "string" ? providedSecret.trim() : "";
+
+  if (!configuredSecret || !receivedSecret) {
+    return false;
+  }
+
+  const expected = Buffer.from(configuredSecret);
+  const received = Buffer.from(receivedSecret);
+
+  return (
+    expected.length === received.length &&
+    crypto.timingSafeEqual(expected, received)
+  );
+}
+
 function bourbakiVisualizationInputError(code) {
   const error = new Error(code);
   error.code = code;
@@ -5134,7 +5156,7 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
 
 // toptry-bourbaki-openai-one-shot-render-v1
 app.post("/internal/ai/bourbaki/render-v2", async (req, res) => {
-  if (!bourbakiVisualizationSecretMatches(req.get("x-bourbaki-visualization-secret"))) {
+  if (!bourbakiOpenAiRenderSecretMatches(req.get("x-bourbaki-visualization-secret"))) {
     return bourbakiVisualizationError(
       res,
       403,
