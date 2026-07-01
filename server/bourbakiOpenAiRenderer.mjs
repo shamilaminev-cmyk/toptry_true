@@ -2,10 +2,10 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v1";
+  "bourbaki-openai-one-shot-v2-full-contract";
 
 const DEFAULT_MODEL = "gpt-image-2";
-const OUTPUT_SIZE = "1152x1536"; // exact 3:4, valid for GPT Image 2
+const OUTPUT_SIZE = "1152x1536";
 const OUTPUT_FORMAT = "webp";
 const OUTPUT_COMPRESSION = 92;
 const MAX_SWATCH_BYTES = 8 * 1024 * 1024;
@@ -19,18 +19,51 @@ const ALLOWED_MIME_TYPES = new Set([
 const ENUMS = {
   suitType: new Set(["TWO_PIECE", "THREE_PIECE"]),
   renderPreset: new Set(["MENSWEAR_THREE_QUARTER_OPEN_V1"]),
-  jacketFront: new Set(["SINGLE_BREASTED"]),
-  buttonConfiguration: new Set(["THREE_ROLL_TWO", "TWO_BUTTON"]),
-  lapels: new Set(["NOTCH_MEDIUM", "PEAK_NARROW"]),
-  shoulders: new Set(["STRUCTURED", "CLASSIC"]),
-  silhouette: new Set(["CLASSIC_BALANCED", "FITTED_SHAPED"]),
-  breastPocket: new Set(["STRAIGHT_WELT", "BARCHETTA"]),
-  lowerPockets: new Set(["PATCH", "JETTED_NO_FLAP"]),
-  vent: new Set(["SINGLE"]),
-  trouserFit: new Set(["RELAXED", "SLIM"]),
-  waistband: new Set(["BELT_LOOPS", "GURKHA"]),
+  jacketFront: new Set(["SINGLE_BREASTED", "DOUBLE_BREASTED"]),
+  buttonConfiguration: new Set([
+    "THREE_ROLL_TWO",
+    "TWO_BUTTON",
+    "FOUR_BY_ONE",
+    "SIX_BY_TWO",
+  ]),
+  lapels: new Set([
+    "NOTCH_NARROW",
+    "NOTCH_MEDIUM",
+    "NOTCH_WIDE",
+    "PEAK_NARROW",
+    "PEAK_MEDIUM",
+    "PEAK_WIDE",
+  ]),
+  shoulders: new Set(["SOFT", "CLASSIC", "STRUCTURED"]),
+  sleeveCharacter: new Set(["CLEAN", "NEAPOLITAN_SPALLA_CAMICIA"]),
+  jacketSilhouette: new Set([
+    "FITTED_SHAPED",
+    "CLASSIC_BALANCED",
+    "RELAXED",
+  ]),
+  breastPocket: new Set(["STRAIGHT_WELT", "BARCHETTA", "PATCH"]),
+  lowerPockets: new Set(["PATCH", "JETTED_NO_FLAP", "FLAP"]),
+  lowerPocketOrientation: new Set(["STRAIGHT", "SLANTED"]),
+  vent: new Set(["SINGLE", "DOUBLE", "NONE"]),
+  trouserFit: new Set(["SLIM", "CLASSIC", "RELAXED"]),
+  trouserRise: new Set(["LOW", "CLASSIC", "HIGH"]),
+  trouserLegLine: new Set(["TAPERED", "MODERATELY_TAPERED", "STRAIGHT"]),
+  trouserPleats: new Set(["NONE", "ONE", "TWO"]),
+  trouserPleatDirection: new Set(["TOWARD_FLY", "TOWARD_POCKETS"]),
+  waistband: new Set([
+    "BELT_LOOPS",
+    "SIDE_ADJUSTERS",
+    "SUSPENDER_BUTTONS",
+    "GURKHA",
+    "HOLLYWOOD",
+  ]),
+  sidePockets: new Set(["SLANTED", "VERTICAL"]),
+  backPockets: new Set(["NONE", "ONE", "TWO"]),
   cuffs: new Set(["TURN_UPS", "NONE"]),
-  length: new Set(["MEDIUM", "LONG"]),
+  length: new Set(["SHORT", "MEDIUM", "LONG"]),
+  vestNeckline: new Set(["HIGH_CLOSED", "CLASSIC"]),
+  vestHem: new Set(["POINTED", "STRAIGHT"]),
+  vestPockets: new Set(["NONE", "TWO_STRAIGHT", "TWO_SLANTED"]),
 };
 
 function inputError(code, message = code) {
@@ -58,11 +91,51 @@ function requiredEnum(value, allowed, code) {
   return normalized;
 }
 
+function optionalEnum(value, allowed, code, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  return requiredEnum(value, allowed, code);
+}
+
+function optionalNullableEnum(value, allowed, code, fallback = null) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  return requiredEnum(value, allowed, code);
+}
+
 function requiredBoolean(value, code) {
   if (typeof value !== "boolean") {
     throw inputError(code);
   }
   return value;
+}
+
+function optionalBoolean(value, code, fallback) {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+
+  return requiredBoolean(value, code);
+}
+
+function optionalNullableBoolean(value, code, fallback = null) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  return requiredBoolean(value, code);
 }
 
 function normalizeQuality(value) {
@@ -114,20 +187,62 @@ function parseFabricSwatch(value) {
   };
 }
 
+function assertButtonConfiguration(front, buttonConfiguration) {
+  const isSingleBreasted = front === "SINGLE_BREASTED";
+  const valid = isSingleBreasted
+    ? ["THREE_ROLL_TWO", "TWO_BUTTON"].includes(buttonConfiguration)
+    : ["FOUR_BY_ONE", "SIX_BY_TWO"].includes(buttonConfiguration);
+
+  if (!valid) {
+    throw inputError("INCONSISTENT_BUTTON_CONFIGURATION");
+  }
+}
+
 function parseJacket(value) {
   const jacket = requiredObject(value, "INVALID_JACKET_CONFIGURATION");
+  const front = requiredEnum(
+    jacket.front,
+    ENUMS.jacketFront,
+    "INVALID_JACKET_FRONT",
+  );
+  const buttonConfiguration = requiredEnum(
+    jacket.buttonConfiguration,
+    ENUMS.buttonConfiguration,
+    "INVALID_BUTTON_CONFIGURATION",
+  );
+  assertButtonConfiguration(front, buttonConfiguration);
+
+  const lowerPockets = requiredEnum(
+    jacket.lowerPockets,
+    ENUMS.lowerPockets,
+    "INVALID_LOWER_POCKETS",
+  );
+  const ticketPocket = requiredBoolean(
+    jacket.ticketPocket,
+    "INVALID_TICKET_POCKET",
+  );
+  const lowerPocketOrientation = optionalNullableEnum(
+    jacket.lowerPocketOrientation,
+    ENUMS.lowerPocketOrientation,
+    "INVALID_LOWER_POCKET_ORIENTATION",
+    lowerPockets === "PATCH" ? null : "STRAIGHT",
+  );
+
+  if (lowerPockets === "PATCH" && lowerPocketOrientation !== null) {
+    throw inputError("INCONSISTENT_LOWER_POCKET_ORIENTATION");
+  }
+
+  if (lowerPockets !== "PATCH" && lowerPocketOrientation === null) {
+    throw inputError("INCONSISTENT_LOWER_POCKET_ORIENTATION");
+  }
+
+  if (lowerPockets === "PATCH" && ticketPocket) {
+    throw inputError("INCONSISTENT_TICKET_POCKET_CONFIGURATION");
+  }
 
   return {
-    front: requiredEnum(
-      jacket.front,
-      ENUMS.jacketFront,
-      "INVALID_JACKET_FRONT",
-    ),
-    buttonConfiguration: requiredEnum(
-      jacket.buttonConfiguration,
-      ENUMS.buttonConfiguration,
-      "INVALID_BUTTON_CONFIGURATION",
-    ),
+    front,
+    buttonConfiguration,
     lapels: requiredEnum(
       jacket.lapels,
       ENUMS.lapels,
@@ -138,9 +253,15 @@ function parseJacket(value) {
       ENUMS.shoulders,
       "INVALID_SHOULDERS",
     ),
+    sleeveCharacter: optionalEnum(
+      jacket.sleeveCharacter,
+      ENUMS.sleeveCharacter,
+      "INVALID_SLEEVE_CHARACTER",
+      "CLEAN",
+    ),
     silhouette: requiredEnum(
       jacket.silhouette,
-      ENUMS.silhouette,
+      ENUMS.jacketSilhouette,
       "INVALID_JACKET_SILHOUETTE",
     ),
     breastPocket: requiredEnum(
@@ -148,15 +269,9 @@ function parseJacket(value) {
       ENUMS.breastPocket,
       "INVALID_BREAST_POCKET",
     ),
-    lowerPockets: requiredEnum(
-      jacket.lowerPockets,
-      ENUMS.lowerPockets,
-      "INVALID_LOWER_POCKETS",
-    ),
-    ticketPocket: requiredBoolean(
-      jacket.ticketPocket,
-      "INVALID_TICKET_POCKET",
-    ),
+    lowerPockets,
+    lowerPocketOrientation,
+    ticketPocket,
     vent: requiredEnum(
       jacket.vent,
       ENUMS.vent,
@@ -171,6 +286,46 @@ function parseJacket(value) {
 
 function parseTrousers(value) {
   const trousers = requiredObject(value, "INVALID_TROUSER_CONFIGURATION");
+  const pleats = optionalEnum(
+    trousers.pleats,
+    ENUMS.trouserPleats,
+    "INVALID_TROUSER_PLEATS",
+    "NONE",
+  );
+  const pleatDirection = optionalNullableEnum(
+    trousers.pleatDirection,
+    ENUMS.trouserPleatDirection,
+    "INVALID_TROUSER_PLEAT_DIRECTION",
+    pleats === "NONE" ? null : "TOWARD_FLY",
+  );
+
+  if (pleats === "NONE" && pleatDirection !== null) {
+    throw inputError("INCONSISTENT_TROUSER_PLEAT_DIRECTION");
+  }
+
+  if (pleats !== "NONE" && pleatDirection === null) {
+    throw inputError("INCONSISTENT_TROUSER_PLEAT_DIRECTION");
+  }
+
+  const backPockets = optionalEnum(
+    trousers.backPockets,
+    ENUMS.backPockets,
+    "INVALID_TROUSER_BACK_POCKETS",
+    "TWO",
+  );
+  const backPocketButton = optionalNullableBoolean(
+    trousers.backPocketButton,
+    "INVALID_TROUSER_BACK_POCKET_BUTTON",
+    backPockets === "NONE" ? null : false,
+  );
+
+  if (backPockets === "NONE" && backPocketButton !== null) {
+    throw inputError("INCONSISTENT_TROUSER_BACK_POCKET_BUTTON");
+  }
+
+  if (backPockets !== "NONE" && backPocketButton === null) {
+    throw inputError("INCONSISTENT_TROUSER_BACK_POCKET_BUTTON");
+  }
 
   return {
     fit: requiredEnum(
@@ -178,11 +333,33 @@ function parseTrousers(value) {
       ENUMS.trouserFit,
       "INVALID_TROUSER_FIT",
     ),
+    rise: optionalEnum(
+      trousers.rise,
+      ENUMS.trouserRise,
+      "INVALID_TROUSER_RISE",
+      "CLASSIC",
+    ),
+    legLine: optionalEnum(
+      trousers.legLine,
+      ENUMS.trouserLegLine,
+      "INVALID_TROUSER_LEG_LINE",
+      "MODERATELY_TAPERED",
+    ),
+    pleats,
+    pleatDirection,
     waistband: requiredEnum(
       trousers.waistband,
       ENUMS.waistband,
       "INVALID_TROUSER_WAISTBAND",
     ),
+    sidePockets: optionalEnum(
+      trousers.sidePockets,
+      ENUMS.sidePockets,
+      "INVALID_TROUSER_SIDE_POCKETS",
+      "SLANTED",
+    ),
+    backPockets,
+    backPocketButton,
     cuffs: requiredEnum(
       trousers.cuffs,
       ENUMS.cuffs,
@@ -192,6 +369,45 @@ function parseTrousers(value) {
       trousers.length,
       ENUMS.length,
       "INVALID_TROUSER_LENGTH",
+    ),
+    watchPocket: optionalBoolean(
+      trousers.watchPocket,
+      "INVALID_TROUSER_WATCH_POCKET",
+      false,
+    ),
+  };
+}
+
+function parseVest(value, waistcoat) {
+  if (!waistcoat) {
+    if (value !== undefined && value !== null) {
+      throw inputError("INCONSISTENT_VEST_CONFIGURATION");
+    }
+    return null;
+  }
+
+  const vest = value === undefined || value === null
+    ? {}
+    : requiredObject(value, "INVALID_VEST_CONFIGURATION");
+
+  return {
+    neckline: optionalEnum(
+      vest.neckline,
+      ENUMS.vestNeckline,
+      "INVALID_VEST_NECKLINE",
+      "CLASSIC",
+    ),
+    hem: optionalEnum(
+      vest.hem,
+      ENUMS.vestHem,
+      "INVALID_VEST_HEM",
+      "POINTED",
+    ),
+    pockets: optionalEnum(
+      vest.pockets,
+      ENUMS.vestPockets,
+      "INVALID_VEST_POCKETS",
+      "TWO_STRAIGHT",
     ),
   };
 }
@@ -225,6 +441,7 @@ export function parseBourbakiOpenAiRenderInput(value) {
   const fabricSwatch = parseFabricSwatch(body.fabricSwatch);
   const jacket = parseJacket(configuration.jacket);
   const trousers = parseTrousers(configuration.trousers);
+  const vest = parseVest(configuration.vest, waistcoat);
   const dryRun = body.dryRun === true;
 
   const normalizedConfiguration = {
@@ -232,6 +449,7 @@ export function parseBourbakiOpenAiRenderInput(value) {
     waistcoat,
     jacket,
     trousers,
+    vest,
   };
 
   const configurationHash = crypto
@@ -253,7 +471,25 @@ export function parseBourbakiOpenAiRenderInput(value) {
   };
 }
 
-function buttonInstruction(buttonConfiguration) {
+function buttonInstruction(front, buttonConfiguration) {
+  if (front === "DOUBLE_BREASTED") {
+    if (buttonConfiguration === "SIX_BY_TWO") {
+      return [
+        "Double-breasted 6x2 construction.",
+        "There are exactly six visible exterior front buttons, arranged in two symmetrical vertical columns of three.",
+        "The jacket is open, but the six-button layout must remain clearly recognisable.",
+        "Do not add a seventh button, an isolated centre button, or a single-breasted closure.",
+      ].join(" ");
+    }
+
+    return [
+      "Double-breasted 4x1 construction.",
+      "There are exactly four visible exterior front buttons, arranged in two symmetrical vertical columns of two.",
+      "The jacket is open, but the 4x1 double-breasted layout must remain clearly recognisable.",
+      "Do not add a fifth button, an isolated centre button, or a single-breasted closure.",
+    ].join(" ");
+  }
+
   if (buttonConfiguration === "THREE_ROLL_TWO") {
     return [
       "Single-breasted true 3-roll-2 construction.",
@@ -270,21 +506,42 @@ function buttonInstruction(buttonConfiguration) {
 }
 
 function lapelInstruction(lapels) {
-  return lapels === "PEAK_NARROW"
-    ? "Use clearly recognisable narrow, elegant peak lapels. They must not read as notch lapels."
-    : "Use medium-width notch lapels with a classic, balanced roll.";
+  const descriptions = {
+    NOTCH_NARROW: "Use clearly recognisable narrow notch lapels.",
+    NOTCH_MEDIUM: "Use medium-width notch lapels with a classic, balanced roll.",
+    NOTCH_WIDE: "Use clearly recognisable wide notch lapels with a fuller, more expressive proportion.",
+    PEAK_NARROW: "Use clearly recognisable narrow, elegant peak lapels. They must not read as notch lapels.",
+    PEAK_MEDIUM: "Use clearly recognisable medium-width peak lapels. They must not read as notch lapels.",
+    PEAK_WIDE: "Use clearly recognisable wide, expressive peak lapels. They must not read as notch lapels.",
+  };
+
+  return descriptions[lapels];
 }
 
-function shoulderInstruction(shoulders) {
-  return shoulders === "STRUCTURED"
-    ? "Use structured, pronounced shoulders with a clear shoulder-to-sleeve transition."
-    : "Use classic shoulder construction with a clean, natural tailored sleeve attachment.";
+function shoulderInstruction(shoulders, sleeveCharacter) {
+  const shoulder = {
+    SOFT: "Use soft, natural shoulders with a relaxed, lightly padded line.",
+    CLASSIC: "Use classic shoulder construction with a clean, natural tailored sleeve attachment.",
+    STRUCTURED: "Use structured, pronounced shoulders with a clear shoulder-to-sleeve transition.",
+  }[shoulders];
+
+  const sleeve = sleeveCharacter === "NEAPOLITAN_SPALLA_CAMICIA"
+    ? "Use a visible Neapolitan spalla camicia sleeve attachment with subtle hand-gathered sleevehead character."
+    : "Keep the sleevehead clean, smooth and tailored with no visible Neapolitan gathering.";
+
+  return `${shoulder} ${sleeve}`;
 }
 
 function silhouetteInstruction(silhouette) {
-  return silhouette === "FITTED_SHAPED"
-    ? "Use a fitted, shaped silhouette with a clean suppressed waist."
-    : "Use a classic balanced tailoring silhouette.";
+  if (silhouette === "FITTED_SHAPED") {
+    return "Use a fitted, shaped silhouette with a clean suppressed waist.";
+  }
+
+  if (silhouette === "RELAXED") {
+    return "Use a relaxed tailored silhouette with more ease through the body while preserving a refined jacket line.";
+  }
+
+  return "Use a classic balanced tailoring silhouette.";
 }
 
 function breastPocketInstruction(breastPocket) {
@@ -296,12 +553,28 @@ function breastPocketInstruction(breastPocket) {
     ].join(" ");
   }
 
+  if (breastPocket === "PATCH") {
+    return [
+      "Render exactly one patch breast pocket on the wearer's left chest.",
+      "It must read as a true applied patch pocket rather than a welt, a flap pocket or a seam line.",
+    ].join(" ");
+  }
+
   return "Render exactly one straight welt breast pocket on the wearer's left chest.";
 }
 
-function lowerPocketInstruction(lowerPockets, ticketPocket) {
+function pocketOrientationInstruction(orientation) {
+  return orientation === "SLANTED"
+    ? "with a clearly slanted opening"
+    : "with a straight horizontal opening";
+}
+
+function lowerPocketInstruction(lowerPockets, lowerPocketOrientation, ticketPocket) {
   const ticketRule = ticketPocket
-    ? "Render exactly one small ticket pocket above the wearer's right lower pocket."
+    ? [
+        "Render exactly one small ticket pocket above the wearer's right lower pocket.",
+        "It must follow the selected lower-pocket construction and stay clearly visible.",
+      ].join(" ")
     : "A ticket pocket is forbidden. Do not add any third small pocket, flap, welt or opening above either lower pocket.";
 
   if (lowerPockets === "PATCH") {
@@ -312,17 +585,31 @@ function lowerPocketInstruction(lowerPockets, ticketPocket) {
     ].join(" ");
   }
 
+  if (lowerPockets === "FLAP") {
+    return [
+      `Render exactly two lower flap pockets, one on each side, ${pocketOrientationInstruction(lowerPocketOrientation)}.`,
+      ticketRule,
+      "Do not replace the selected flap pockets with patch pockets or jetted pockets.",
+    ].join(" ");
+  }
+
   return [
-    "Render exactly two lower jetted pockets without flaps, one on each side.",
+    `Render exactly two lower jetted pockets without flaps, one on each side, ${pocketOrientationInstruction(lowerPocketOrientation)}.`,
     ticketRule,
     "No lower pocket flaps, no patch pockets, no extra welts, no duplicated pockets and no additional pocket layers.",
   ].join(" ");
 }
 
 function ventInstruction(vent) {
-  return vent === "SINGLE"
-    ? "The jacket construction includes one single rear vent."
-    : "Use the selected rear vent configuration.";
+  if (vent === "DOUBLE") {
+    return "The jacket construction includes two rear side vents.";
+  }
+
+  if (vent === "NONE") {
+    return "The jacket construction has no rear vent.";
+  }
+
+  return "The jacket construction includes one single rear vent.";
 }
 
 function milaneseInstruction(selected) {
@@ -332,20 +619,113 @@ function milaneseInstruction(selected) {
 }
 
 function trouserInstruction(trousers) {
-  const fit = trousers.fit === "SLIM"
-    ? "Use a slim, narrow tailored leg."
-    : "Use a slightly fuller, relaxed tailored leg with elegant drape.";
-  const waistband = trousers.waistband === "GURKHA"
-    ? "Use a clearly visible Gurkha waistband with distinctive side fastening straps and buckles, no belt and no belt loops."
-    : "Use a trouser waistband with visible belt loops.";
+  const fit = {
+    SLIM: "Use a slim, narrow tailored leg.",
+    CLASSIC: "Use a classic tailored trouser silhouette with balanced ease.",
+    RELAXED: "Use a slightly fuller, relaxed tailored leg with elegant drape.",
+  }[trousers.fit];
+
+  const rise = {
+    LOW: "Use a lower trouser rise.",
+    CLASSIC: "Use a classic mid rise.",
+    HIGH: "Use a visibly high trouser rise.",
+  }[trousers.rise];
+
+  const legLine = {
+    TAPERED: "Use a clearly tapered leg line.",
+    MODERATELY_TAPERED: "Use a moderately tapered leg line.",
+    STRAIGHT: "Use a straight leg line from thigh to hem.",
+  }[trousers.legLine];
+
+  let pleats = "Use a flat front with no pleats.";
+  if (trousers.pleats === "ONE") {
+    pleats = trousers.pleatDirection === "TOWARD_POCKETS"
+      ? "Use one reverse pleat on each side, opening toward the side pockets."
+      : "Use one forward pleat on each side, opening toward the fly.";
+  } else if (trousers.pleats === "TWO") {
+    pleats = trousers.pleatDirection === "TOWARD_POCKETS"
+      ? "Use two reverse pleats on each side, opening toward the side pockets."
+      : "Use two forward pleats on each side, opening toward the fly.";
+  }
+
+  const waistband = {
+    BELT_LOOPS: "Use a trouser waistband with visible belt loops.",
+    SIDE_ADJUSTERS: "Use clean side adjusters at the trouser waistband, with no belt loops.",
+    SUSPENDER_BUTTONS: "Use a waistband with visible suspender buttons and no belt loops.",
+    GURKHA: "Use a clearly visible Gurkha waistband with distinctive side fastening straps and buckles, no belt and no belt loops.",
+    HOLLYWOOD: "Use a Hollywood waistband with a continuous extended waistband rising at the sides, with no belt loops.",
+  }[trousers.waistband];
+
+  const sidePockets = trousers.sidePockets === "VERTICAL"
+    ? "Use vertical side trouser pockets."
+    : "Use slanted side trouser pockets.";
+
+  const backPockets = {
+    NONE: "Do not add rear trouser pockets.",
+    ONE: "Use exactly one rear trouser pocket.",
+    TWO: "Use exactly two rear trouser pockets.",
+  }[trousers.backPockets];
+
+  const backPocketButton = trousers.backPockets === "NONE"
+    ? ""
+    : trousers.backPocketButton
+      ? " The rear pocket opening(s) include visible button closure."
+      : " The rear pocket opening(s) have no visible button closure.";
+
   const cuffs = trousers.cuffs === "TURN_UPS"
     ? "Use clearly visible turn-up cuffs at both trouser hems."
     : "Use plain trouser hems with no turn-up cuffs.";
-  const length = trousers.length === "LONG"
-    ? "Use a longer trouser length with a clean tailored break."
-    : "Use a medium trouser length with a neat, proportional break.";
 
-  return [fit, waistband, cuffs, length].join(" ");
+  const length = {
+    SHORT: "Use a short, clean trouser length with no break.",
+    MEDIUM: "Use a medium trouser length with a neat, proportional light break.",
+    LONG: "Use a longer trouser length with a clean full tailored break.",
+  }[trousers.length];
+
+  const watchPocket = trousers.watchPocket
+    ? "Include one small watch pocket at the front waistband, visibly integrated into the trouser construction."
+    : "Do not add a watch pocket.";
+
+  return [
+    fit,
+    rise,
+    legLine,
+    pleats,
+    waistband,
+    sidePockets,
+    backPockets + backPocketButton,
+    cuffs,
+    length,
+    watchPocket,
+  ].join(" ");
+}
+
+function waistcoatInstruction(waistcoat, vest) {
+  if (!waistcoat) {
+    return "This is a two-piece suit. Do not add a waistcoat.";
+  }
+
+  const neckline = vest.neckline === "HIGH_CLOSED"
+    ? "Use a high, closed waistcoat neckline."
+    : "Use a classic waistcoat neckline.";
+
+  const hem = vest.hem === "POINTED"
+    ? "Use a pointed waistcoat front hem."
+    : "Use a straight waistcoat front hem.";
+
+  const pockets = {
+    NONE: "Do not add waistcoat pockets.",
+    TWO_STRAIGHT: "Use exactly two straight waistcoat pockets.",
+    TWO_SLANTED: "Use exactly two slanted waistcoat pockets.",
+  }[vest.pockets];
+
+  return [
+    "This is a three-piece suit. A matching tailored waistcoat in the same literal fabric is required and must be visibly worn beneath the open jacket.",
+    "Use a single-breasted six-button waistcoat.",
+    neckline,
+    hem,
+    pockets,
+  ].join(" ");
 }
 
 function poseInstruction(ticketPocket) {
@@ -365,10 +745,7 @@ function poseInstruction(ticketPocket) {
 
 export function buildBourbakiOpenAiPrompt(input) {
   const { configuration, renderPreset } = input;
-  const { jacket, trousers } = configuration;
-  const waistcoatInstruction = configuration.waistcoat
-    ? "This is a three-piece suit. A matching tailored waistcoat in the same literal fabric is required and must be visibly worn beneath the open jacket."
-    : "This is a two-piece suit. Do not add a waistcoat.";
+  const { jacket, trousers, vest } = configuration;
 
   if (renderPreset !== "MENSWEAR_THREE_QUARTER_OPEN_V1") {
     throw inputError("INVALID_RENDER_PRESET");
@@ -388,12 +765,16 @@ export function buildBourbakiOpenAiPrompt(input) {
     "Do not show the swatch, any diagram, labels, text or logos in the final image.",
     "",
     "JACKET CONSTRUCTION:",
-    buttonInstruction(jacket.buttonConfiguration),
+    buttonInstruction(jacket.front, jacket.buttonConfiguration),
     lapelInstruction(jacket.lapels),
-    shoulderInstruction(jacket.shoulders),
+    shoulderInstruction(jacket.shoulders, jacket.sleeveCharacter),
     silhouetteInstruction(jacket.silhouette),
     breastPocketInstruction(jacket.breastPocket),
-    lowerPocketInstruction(jacket.lowerPockets, jacket.ticketPocket),
+    lowerPocketInstruction(
+      jacket.lowerPockets,
+      jacket.lowerPocketOrientation,
+      jacket.ticketPocket,
+    ),
     ventInstruction(jacket.vent),
     milaneseInstruction(jacket.milaneseButtonhole),
     "The jacket is open and unbuttoned.",
@@ -403,7 +784,7 @@ export function buildBourbakiOpenAiPrompt(input) {
     trouserInstruction(trousers),
     "",
     "WAISTCOAT:",
-    waistcoatInstruction,
+    waistcoatInstruction(configuration.waistcoat, vest),
     "",
     "POSE AND PRESENTATION:",
     "Full-length view: the complete head, jacket, trousers and both shoes must be inside the frame.",
