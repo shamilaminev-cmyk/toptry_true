@@ -23,6 +23,11 @@ import {
 } from "./auth.mjs";
 import sharp from "sharp";
 import { runOpenAiStrictTryon } from "./openaiTryon.mjs";
+import {
+  describeBourbakiOpenAiRender,
+  parseBourbakiOpenAiRenderInput,
+  renderBourbakiOpenAiSuit,
+} from "./bourbakiOpenAiRenderer.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
 
@@ -4313,6 +4318,28 @@ function bourbakiVisualizationSecretMatches(providedSecret) {
   );
 }
 
+function bourbakiOpenAiRenderSecretMatches(providedSecret) {
+  const configuredSecret = String(
+    process.env.BOURBAKI_VISUALIZATION_SECRET ||
+      process.env.AI_GATEWAY_SECRET ||
+      "",
+  ).trim();
+
+  const receivedSecret = typeof providedSecret === "string" ? providedSecret.trim() : "";
+
+  if (!configuredSecret || !receivedSecret) {
+    return false;
+  }
+
+  const expected = Buffer.from(configuredSecret);
+  const received = Buffer.from(receivedSecret);
+
+  return (
+    expected.length === received.length &&
+    crypto.timingSafeEqual(expected, received)
+  );
+}
+
 function bourbakiVisualizationInputError(code) {
   const error = new Error(code);
   error.code = code;
@@ -5126,6 +5153,86 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
 });
 
 
+
+// toptry-bourbaki-openai-one-shot-render-v1
+app.post("/internal/ai/bourbaki/render-v2", async (req, res) => {
+  if (!bourbakiOpenAiRenderSecretMatches(req.get("x-bourbaki-visualization-secret"))) {
+    return bourbakiVisualizationError(
+      res,
+      403,
+      "BOURBAKI_GATEWAY_ACCESS_DENIED",
+      "Внутренний доступ к визуализации не подтверждён.",
+    );
+  }
+
+  if (String(process.env.AI_GATEWAY_ROLE || "").trim().toLowerCase() !== "gateway") {
+    return bourbakiVisualizationError(
+      res,
+      409,
+      "BOURBAKI_GATEWAY_ROLE_REQUIRED",
+      "Маршрут визуализации доступен только AI gateway.",
+    );
+  }
+
+  let input;
+  try {
+    input = parseBourbakiOpenAiRenderInput(req.body);
+  } catch (error) {
+    const code = error?.code || (error instanceof Error ? error.message : "INVALID_BODY");
+    const status = code === "FABRIC_SWATCH_TOO_LARGE" ? 413 : 400;
+    return bourbakiVisualizationError(
+      res,
+      status,
+      code,
+      "Параметры one-shot визуализации некорректны.",
+    );
+  }
+
+  const requestId = req.get("x-request-id") ?? null;
+  const description = describeBourbakiOpenAiRender(input);
+
+  if (input.dryRun) {
+    return res.status(200).json({
+      ok: true,
+      data: {
+        dryRun: true,
+        ...description,
+      },
+    });
+  }
+
+  try {
+    const rendered = await renderBourbakiOpenAiSuit(input);
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        ...rendered,
+      },
+    });
+  } catch (error) {
+    const code = error?.code || "BOURBAKI_OPENAI_UPSTREAM_FAILED";
+    const status = code === "BOURBAKI_OPENAI_NOT_CONFIGURED" ? 503 : 502;
+
+    console.error("Bourbaki OpenAI one-shot render failed", {
+      gatewayRequestId: requestId,
+      code,
+      providerStatus: error?.providerStatus ?? null,
+      providerRequestId: error?.providerRequestId ?? null,
+      message: error instanceof Error ? error.message.slice(0, 700) : String(error).slice(0, 700),
+      configurationHash: input.configurationHash,
+    });
+
+    return bourbakiVisualizationError(
+      res,
+      status,
+      code,
+      code === "BOURBAKI_OPENAI_NOT_CONFIGURED"
+        ? "OpenAI-визуализация временно не настроена."
+        : "Сервис визуализации временно недоступен.",
+    );
+  }
+});
 
 // toptry-bourbaki-technical-drawings-v1
 const BOURBAKI_TECHNICAL_DRAWING_MODEL = "gemini-3-pro-image";
