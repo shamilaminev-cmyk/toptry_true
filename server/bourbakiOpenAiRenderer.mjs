@@ -23,6 +23,11 @@ const ENUMS = {
     "MENSWEAR_STANDALONE_JACKET_V1",
     "MENSWEAR_STANDALONE_TROUSERS_V1",
   ]),
+  jacketCompanionBottom: new Set([
+    "DARK_BLUE_JEANS",
+    "GREY_TROUSERS",
+    "BEIGE_TROUSERS",
+  ]),
   jacketFront: new Set(["SINGLE_BREASTED", "DOUBLE_BREASTED"]),
   buttonConfiguration: new Set([
     "THREE_ROLL_TWO",
@@ -443,6 +448,12 @@ function parseSuitConfiguration(configuration) {
 function parseStandaloneJacketConfiguration(configuration) {
   return {
     garment: "JACKET",
+    companionBottom: optionalEnum(
+      configuration.companionBottom,
+      ENUMS.jacketCompanionBottom,
+      "INVALID_JACKET_COMPANION_BOTTOM",
+      "GREY_TROUSERS",
+    ),
     jacket: parseJacket(configuration.jacket),
   };
 }
@@ -774,11 +785,31 @@ function poseInstruction(ticketPocket) {
   ].join(" ");
 }
 
+function standaloneJacketCompanionBottomInstruction(companionBottom) {
+  const descriptions = {
+    DARK_BLUE_JEANS: [
+      "Wear clean, dark-indigo tailored jeans with no fading, distressing, tears, whiskering, contrast stitching or visible branding.",
+      "The jeans are a neutral styling companion only and are not part of the bespoke order.",
+    ].join(" "),
+    GREY_TROUSERS: [
+      "Wear neutral mid-grey tailored trousers with a clean classic line.",
+      "The trousers are a neutral styling companion only and are not part of the bespoke order.",
+    ].join(" "),
+    BEIGE_TROUSERS: [
+      "Wear light-to-medium beige tailored trousers with a clean classic line.",
+      "The trousers are a neutral styling companion only and are not part of the bespoke order.",
+    ].join(" "),
+  };
+
+  return descriptions[companionBottom] ?? descriptions.GREY_TROUSERS;
+}
+
 export function buildBourbakiOpenAiPrompt(input) {
   const { configuration, renderPreset } = input;
 
   if (renderPreset === "MENSWEAR_STANDALONE_JACKET_V1") {
-    const { jacket } = configuration;
+    const { jacket, companionBottom } = configuration;
+    const companionBottomInstruction = standaloneJacketCompanionBottomInstruction(companionBottom);
 
     return [
       "REFERENCE B is the fabric swatch and must be used as the literal final cloth for the standalone jacket.",
@@ -789,7 +820,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "FABRIC FIDELITY — CRITICAL:",
       "REFERENCE B is not merely a colour reference. It is the actual cloth for the final jacket only.",
       "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
-      "The white shirt, neutral mid-grey trousers and black Oxford shoes are supporting garments only. They must not use or imitate REFERENCE B.",
+      "The white shirt, selected companion bottom and black Oxford shoes are supporting garments only. They must not use or imitate REFERENCE B.",
       "Do not show the swatch, any diagram, labels, text or logos in the final image.",
       "",
       "JACKET CONSTRUCTION:",
@@ -808,12 +839,14 @@ export function buildBourbakiOpenAiPrompt(input) {
       "The jacket is open and unbuttoned so its lapel roll, breast pocket and both lower pockets remain fully readable.",
       "",
       "POSE AND PRESENTATION:",
-      "Use a direct front full-length view. The complete head, jacket, trousers and both shoes must be inside the frame.",
-      "The model stands upright facing directly toward the camera; both shoulders, hips and shoes face forward.",
-      "Keep both hands relaxed at the sides so no hand covers the selected pockets or front construction.",
+      "Use a full-length three-quarter front view. The complete head, jacket, companion bottom and both shoes must be inside the frame.",
+      "The model stands upright at a slight angle to the camera, approximately 15 to 20 degrees away from the frontal plane, so the shoulder line, sleeve attachment and tailored silhouette remain visible.",
+      "Keep both arms relaxed naturally at the sides. Both hands must remain fully outside every pocket and must not touch, pull or cover the jacket fronts, lower pockets or breast pocket.",
+      "The pose must remain elegant and natural, not exaggerated. Do not let hands, lapels, deep shadows or excessive drape hide the selected breast pocket, lower pockets, ticket pocket or button configuration.",
       "",
       "STYLING:",
-      "Wear only a plain white open-collar dress shirt without a tie, neutral mid-grey tailored trousers and black Oxford shoes.",
+      "Wear only a plain white open-collar dress shirt without a tie, the selected companion bottom below, and black Oxford shoes.",
+      companionBottomInstruction,
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
       "No pocket square, scarf, watch, jewellery, belt ornament, bag, outerwear, extra accessories, visible branding, text or watermark.",
     ].join("\n");
