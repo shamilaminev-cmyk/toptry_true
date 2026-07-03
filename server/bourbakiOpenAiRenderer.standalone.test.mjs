@@ -52,7 +52,13 @@ test("standalone jacket is accepted by the existing render-v2 parser", () => {
   assert.equal(input.configuration.jacket.buttonConfiguration, "THREE_ROLL_TWO");
   const prompt = buildBourbakiOpenAiPrompt(input);
   assert.match(prompt, /actual cloth for the final jacket only/i);
-  assert.match(prompt, /dark-indigo tailored jeans/i);
+  assert.match(prompt, /relaxed straight or gently tapered fit/i);
+  assert.match(prompt, /never read as skinny/i);
+  assert.match(prompt, /minimal, subtle, natural wear/i);
+  assert.match(prompt, /fully tucked cleanly into the selected companion bottom/i);
+  assert.match(prompt, /dark-brown leather penny loafers/i);
+  assert.match(prompt, /never suede, never tassel loafers and never Oxford shoes/i);
+  assert.match(prompt, /fine check or narrow stripe/i);
   assert.match(prompt, /approximately 15 to 20 degrees/i);
   assert.match(prompt, /fully outside every pocket/i);
   assert.match(prompt, /ticket pocket/i);
@@ -86,4 +92,7 @@ test("standalone trousers are accepted by the existing render-v2 parser", () => 
   assert.match(prompt, /fully tucked cleanly into the trouser waistband/i);
   assert.match(prompt, /There must be no jacket/i);
   assert.match(prompt, /no belt/i);
+  assert.match(prompt, /dark-brown leather penny loafers/i);
+  assert.match(prompt, /never suede, never tassel loafers and never Oxford shoes/i);
+  assert.match(prompt, /fine check or narrow stripe/i);
 });

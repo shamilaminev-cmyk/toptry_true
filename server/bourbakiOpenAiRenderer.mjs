@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v2-full-contract";
+  "bourbaki-openai-one-shot-v3-standalone-styling-fidelity";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -788,7 +788,8 @@ function poseInstruction(ticketPocket) {
 function standaloneJacketCompanionBottomInstruction(companionBottom) {
   const descriptions = {
     DARK_BLUE_JEANS: [
-      "Wear clean, dark-indigo tailored jeans with no fading, distressing, tears, whiskering, contrast stitching or visible branding.",
+      "Wear dark-blue premium-denim jeans in a relaxed straight or gently tapered fit, with visible ease through the thigh, knee and calf. They must never read as skinny, spray-on or tightly clinging jeans.",
+      "Allow only minimal, subtle, natural wear and faint fading at pressure points. Do not add tears, aggressive distressing, strong whiskering, contrast stitching or visible branding.",
       "The jeans are a neutral styling companion only and are not part of the bespoke order.",
     ].join(" "),
     GREY_TROUSERS: [
@@ -820,7 +821,9 @@ export function buildBourbakiOpenAiPrompt(input) {
       "FABRIC FIDELITY — CRITICAL:",
       "REFERENCE B is not merely a colour reference. It is the actual cloth for the final jacket only.",
       "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
-      "The white shirt, selected companion bottom and black Oxford shoes are supporting garments only. They must not use or imitate REFERENCE B.",
+      "Treat the swatch as a close-up of the real cloth. Preserve the same realistic apparent repeat on the jacket. Do not enlarge, simplify, smooth out, blur, shrink, stylise or genericise the pattern.",
+      "Never turn a fine check or narrow stripe into a large windowpane, broad check or oversized stripe. If the physical repeat is ambiguous in the swatch, favour a smaller, subtler realistic repeat rather than magnifying it.",
+      "The white shirt, selected companion bottom and dark-brown leather penny loafers are supporting garments only. They must not use or imitate REFERENCE B.",
       "Do not show the swatch, any diagram, labels, text or logos in the final image.",
       "",
       "JACKET CONSTRUCTION:",
@@ -845,7 +848,8 @@ export function buildBourbakiOpenAiPrompt(input) {
       "The pose must remain elegant and natural, not exaggerated. Do not let hands, lapels, deep shadows or excessive drape hide the selected breast pocket, lower pockets, ticket pocket or button configuration.",
       "",
       "STYLING:",
-      "Wear only a plain white open-collar dress shirt without a tie, the selected companion bottom below, and black Oxford shoes.",
+      "Wear only a plain white open-collar dress shirt without a tie, fully tucked cleanly into the selected companion bottom with no untucked shirt hem visible.",
+      "Wear dark-brown leather penny loafers. They must be smooth or subtly patinated leather, never suede, never tassel loafers and never Oxford shoes.",
       companionBottomInstruction,
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
       "No pocket square, scarf, watch, jewellery, belt ornament, bag, outerwear, extra accessories, visible branding, text or watermark.",
@@ -864,7 +868,9 @@ export function buildBourbakiOpenAiPrompt(input) {
       "FABRIC FIDELITY — CRITICAL:",
       "REFERENCE B is not merely a colour reference. It is the actual cloth for the final trousers only.",
       "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
-      "The white shirt and black Oxford shoes are supporting garments only. They must not use or imitate REFERENCE B.",
+      "Treat the swatch as a close-up of the real cloth. Preserve the same realistic apparent repeat on the trousers. Do not enlarge, simplify, smooth out, blur, shrink, stylise or genericise the pattern.",
+      "Never turn a fine check or narrow stripe into a large windowpane, broad check or oversized stripe. If the physical repeat is ambiguous in the swatch, favour a smaller, subtler realistic repeat rather than magnifying it.",
+      "The white shirt and dark-brown leather penny loafers are supporting garments only. They must not use or imitate REFERENCE B.",
       "Do not show the swatch, any diagram, labels, text or logos in the final image.",
       "",
       "TROUSER CONSTRUCTION:",
@@ -873,7 +879,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "POSE AND PRESENTATION:",
       "Use a direct front full-length view. The complete head, shirt, waistband, trouser hems and both shoes must be inside the frame.",
       "The model stands upright facing directly toward the camera; both shoulders, hips and shoes face forward.",
-      "Wear only a plain white classic dress shirt, fully tucked cleanly into the trouser waistband, without a tie or belt, and black Oxford shoes.",
+      "Wear only a plain white classic dress shirt, fully tucked cleanly into the trouser waistband, without a tie or belt, and dark-brown leather penny loafers. The loafers must be smooth or subtly patinated leather, never suede, never tassel loafers and never Oxford shoes.",
       "There must be no jacket, waistcoat, knitwear, overshirt, coat, belt, scarf, bag, watch, jewellery or other accessory.",
       "Keep the waistband, closure, front pleats and side pockets unobstructed. Keep both hands relaxed at the sides.",
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
