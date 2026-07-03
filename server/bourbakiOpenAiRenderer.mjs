@@ -18,7 +18,11 @@ const ALLOWED_MIME_TYPES = new Set([
 
 const ENUMS = {
   suitType: new Set(["TWO_PIECE", "THREE_PIECE"]),
-  renderPreset: new Set(["MENSWEAR_THREE_QUARTER_OPEN_V1"]),
+  renderPreset: new Set([
+    "MENSWEAR_THREE_QUARTER_OPEN_V1",
+    "MENSWEAR_STANDALONE_JACKET_V1",
+    "MENSWEAR_STANDALONE_TROUSERS_V1",
+  ]),
   jacketFront: new Set(["SINGLE_BREASTED", "DOUBLE_BREASTED"]),
   buttonConfiguration: new Set([
     "THREE_ROLL_TWO",
@@ -412,13 +416,7 @@ function parseVest(value, waistcoat) {
   };
 }
 
-export function parseBourbakiOpenAiRenderInput(value) {
-  const body = requiredObject(value, "INVALID_BODY");
-  const configuration = requiredObject(
-    body.configuration,
-    "INVALID_SUIT_CONFIGURATION",
-  );
-
+function parseSuitConfiguration(configuration) {
   const suitType = requiredEnum(
     configuration.suitType,
     ENUMS.suitType,
@@ -433,24 +431,57 @@ export function parseBourbakiOpenAiRenderInput(value) {
     throw inputError("INCONSISTENT_WAISTCOAT_CONFIGURATION");
   }
 
+  return {
+    suitType,
+    waistcoat,
+    jacket: parseJacket(configuration.jacket),
+    trousers: parseTrousers(configuration.trousers),
+    vest: parseVest(configuration.vest, waistcoat),
+  };
+}
+
+function parseStandaloneJacketConfiguration(configuration) {
+  return {
+    garment: "JACKET",
+    jacket: parseJacket(configuration.jacket),
+  };
+}
+
+function parseStandaloneTrousersConfiguration(configuration) {
+  return {
+    garment: "TROUSERS",
+    trousers: parseTrousers(configuration.trousers),
+  };
+}
+
+export function parseBourbakiOpenAiRenderInput(value) {
+  const body = requiredObject(value, "INVALID_BODY");
   const renderPreset = requiredEnum(
     body.renderPreset,
     ENUMS.renderPreset,
     "INVALID_RENDER_PRESET",
   );
+  const configuration = requiredObject(
+    body.configuration,
+    "INVALID_MENSWEAR_CONFIGURATION",
+  );
   const fabricSwatch = parseFabricSwatch(body.fabricSwatch);
-  const jacket = parseJacket(configuration.jacket);
-  const trousers = parseTrousers(configuration.trousers);
-  const vest = parseVest(configuration.vest, waistcoat);
   const dryRun = body.dryRun === true;
 
-  const normalizedConfiguration = {
-    suitType,
-    waistcoat,
-    jacket,
-    trousers,
-    vest,
-  };
+  let normalizedConfiguration;
+  switch (renderPreset) {
+    case "MENSWEAR_THREE_QUARTER_OPEN_V1":
+      normalizedConfiguration = parseSuitConfiguration(configuration);
+      break;
+    case "MENSWEAR_STANDALONE_JACKET_V1":
+      normalizedConfiguration = parseStandaloneJacketConfiguration(configuration);
+      break;
+    case "MENSWEAR_STANDALONE_TROUSERS_V1":
+      normalizedConfiguration = parseStandaloneTrousersConfiguration(configuration);
+      break;
+    default:
+      throw inputError("INVALID_RENDER_PRESET");
+  }
 
   const configurationHash = crypto
     .createHash("sha256")
@@ -745,11 +776,83 @@ function poseInstruction(ticketPocket) {
 
 export function buildBourbakiOpenAiPrompt(input) {
   const { configuration, renderPreset } = input;
-  const { jacket, trousers, vest } = configuration;
+
+  if (renderPreset === "MENSWEAR_STANDALONE_JACKET_V1") {
+    const { jacket } = configuration;
+
+    return [
+      "REFERENCE B is the fabric swatch and must be used as the literal final cloth for the standalone jacket.",
+      "",
+      "Create one realistic full-length studio fashion image of one adult man wearing the exact standalone tailored jacket specified below.",
+      "Important: prioritise jacket construction accuracy and exact pocket architecture over stylistic interpretation.",
+      "",
+      "FABRIC FIDELITY — CRITICAL:",
+      "REFERENCE B is not merely a colour reference. It is the actual cloth for the final jacket only.",
+      "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
+      "The white shirt, neutral mid-grey trousers and black Oxford shoes are supporting garments only. They must not use or imitate REFERENCE B.",
+      "Do not show the swatch, any diagram, labels, text or logos in the final image.",
+      "",
+      "JACKET CONSTRUCTION:",
+      buttonInstruction(jacket.front, jacket.buttonConfiguration),
+      lapelInstruction(jacket.lapels),
+      shoulderInstruction(jacket.shoulders, jacket.sleeveCharacter),
+      silhouetteInstruction(jacket.silhouette),
+      breastPocketInstruction(jacket.breastPocket),
+      lowerPocketInstruction(
+        jacket.lowerPockets,
+        jacket.lowerPocketOrientation,
+        jacket.ticketPocket,
+      ),
+      ventInstruction(jacket.vent),
+      milaneseInstruction(jacket.milaneseButtonhole),
+      "The jacket is open and unbuttoned so its lapel roll, breast pocket and both lower pockets remain fully readable.",
+      "",
+      "POSE AND PRESENTATION:",
+      "Use a direct front full-length view. The complete head, jacket, trousers and both shoes must be inside the frame.",
+      "The model stands upright facing directly toward the camera; both shoulders, hips and shoes face forward.",
+      "Keep both hands relaxed at the sides so no hand covers the selected pockets or front construction.",
+      "",
+      "STYLING:",
+      "Wear only a plain white open-collar dress shirt without a tie, neutral mid-grey tailored trousers and black Oxford shoes.",
+      "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
+      "No pocket square, scarf, watch, jewellery, belt ornament, bag, outerwear, extra accessories, visible branding, text or watermark.",
+    ].join("\n");
+  }
+
+  if (renderPreset === "MENSWEAR_STANDALONE_TROUSERS_V1") {
+    const { trousers } = configuration;
+
+    return [
+      "REFERENCE B is the fabric swatch and must be used as the literal final cloth for the standalone trousers.",
+      "",
+      "Create one realistic full-length studio fashion image of one adult man wearing the exact standalone tailored trousers specified below.",
+      "Important: prioritise trouser construction accuracy and a clearly readable waistband over stylistic interpretation.",
+      "",
+      "FABRIC FIDELITY — CRITICAL:",
+      "REFERENCE B is not merely a colour reference. It is the actual cloth for the final trousers only.",
+      "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
+      "The white shirt and black Oxford shoes are supporting garments only. They must not use or imitate REFERENCE B.",
+      "Do not show the swatch, any diagram, labels, text or logos in the final image.",
+      "",
+      "TROUSER CONSTRUCTION:",
+      trouserInstruction(trousers),
+      "",
+      "POSE AND PRESENTATION:",
+      "Use a direct front full-length view. The complete head, shirt, waistband, trouser hems and both shoes must be inside the frame.",
+      "The model stands upright facing directly toward the camera; both shoulders, hips and shoes face forward.",
+      "Wear only a plain white classic dress shirt, fully tucked cleanly into the trouser waistband, without a tie or belt, and black Oxford shoes.",
+      "There must be no jacket, waistcoat, knitwear, overshirt, coat, belt, scarf, bag, watch, jewellery or other accessory.",
+      "Keep the waistband, closure, front pleats and side pockets unobstructed. Keep both hands relaxed at the sides.",
+      "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
+      "No visible branding, text or watermark.",
+    ].join("\n");
+  }
 
   if (renderPreset !== "MENSWEAR_THREE_QUARTER_OPEN_V1") {
     throw inputError("INVALID_RENDER_PRESET");
   }
+
+  const { jacket, trousers, vest } = configuration;
 
   return [
     "REFERENCE B is the fabric swatch and must be used as the literal final suit cloth.",
@@ -856,7 +959,7 @@ function normalizeOpenAiError(error) {
   return normalized;
 }
 
-export async function renderBourbakiOpenAiSuit(input) {
+export async function renderBourbakiOpenAiMenswear(input) {
   const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
 
   if (!apiKey) {
@@ -910,3 +1013,7 @@ export async function renderBourbakiOpenAiSuit(input) {
     throw normalizeOpenAiError(error);
   }
 }
+
+// Keep the original gateway entry point stable. The render-v2 route still
+// imports this name, while it now accepts suit and standalone menswear presets.
+export const renderBourbakiOpenAiSuit = renderBourbakiOpenAiMenswear;

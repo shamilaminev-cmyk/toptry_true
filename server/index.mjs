@@ -26,7 +26,7 @@ import { runOpenAiStrictTryon } from "./openaiTryon.mjs";
 import {
   describeBourbakiOpenAiRender,
   parseBourbakiOpenAiRenderInput,
-  renderBourbakiOpenAiSuit,
+  renderBourbakiOpenAiMenswear,
 } from "./bourbakiOpenAiRenderer.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
@@ -5202,7 +5202,7 @@ app.post("/internal/ai/bourbaki/render-v2", async (req, res) => {
   }
 
   try {
-    const rendered = await renderBourbakiOpenAiSuit(input);
+    const rendered = await renderBourbakiOpenAiMenswear(input);
 
     return res.status(200).json({
       ok: true,
