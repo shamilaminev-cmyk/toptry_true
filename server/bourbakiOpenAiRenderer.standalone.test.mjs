@@ -96,3 +96,50 @@ test("standalone trousers are accepted by the existing render-v2 parser", () => 
   assert.match(prompt, /never suede, never tassel loafers and never Oxford shoes/i);
   assert.match(prompt, /fine check or narrow stripe/i);
 });
+
+const poloCoat = {
+  type: "POLO",
+  length: "BELOW_KNEE",
+  pocketStyle: "PATCH",
+  pocketFlap: true,
+};
+
+test("coat is accepted by the existing render-v2 parser with its archetype contract", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_COAT_V1",
+    fabricSwatch,
+    configuration: { coat: poloCoat },
+  });
+
+  assert.equal(input.configuration.garment, "COAT");
+  assert.equal(input.configuration.type, "POLO");
+  assert.equal(input.configuration.pocketStyle, "PATCH");
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /actual cloth for the final coat only/i);
+  assert.match(prompt, /long double-breasted Polo coat/i);
+  assert.match(prompt, /mandatory back martingale/i);
+  assert.match(prompt, /dark navy tailored suit/i);
+  assert.match(prompt, /muted dark tie/i);
+  assert.match(prompt, /black leather brogue lace-up shoes/i);
+  assert.match(prompt, /fine check or narrow stripe/i);
+});
+
+test("peacoat uses its dedicated companion outfit and no tie", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_COAT_V1",
+    fabricSwatch,
+    configuration: {
+      coat: {
+        type: "PEACOAT",
+        length: "ABOVE_KNEE",
+      },
+    },
+  });
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /true classic Peacoat/i);
+  assert.match(prompt, /medium-grey flannel tailored trousers/i);
+  assert.match(prompt, /dark charcoal or navy cardigan/i);
+  assert.match(prompt, /Do not add a tie/i);
+});

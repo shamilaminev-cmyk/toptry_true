@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v3-standalone-styling-fidelity";
+  "bourbaki-openai-one-shot-v4-coat-archetypes";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -22,7 +22,26 @@ const ENUMS = {
     "MENSWEAR_THREE_QUARTER_OPEN_V1",
     "MENSWEAR_STANDALONE_JACKET_V1",
     "MENSWEAR_STANDALONE_TROUSERS_V1",
+    "MENSWEAR_COAT_V1",
   ]),
+  coatType: new Set([
+    "CHESTERFIELD",
+    "POLO",
+    "COVERT",
+    "ULSTER",
+    "RAGLAN",
+    "LODEN",
+    "PEACOAT",
+  ]),
+  coatLength: new Set([
+    "ABOVE_KNEE",
+    "TO_KNEE",
+    "BELOW_KNEE",
+    "MID_CALF",
+  ]),
+  coatPocketStyle: new Set(["PATCH", "WELT"]),
+  coatFastening: new Set(["SINGLE_BREASTED", "DOUBLE_BREASTED"]),
+  coatCollar: new Set(["TURN_DOWN", "STAND"]),
   jacketCompanionBottom: new Set([
     "DARK_BLUE_JEANS",
     "GREY_TROUSERS",
@@ -465,6 +484,105 @@ function parseStandaloneTrousersConfiguration(configuration) {
   };
 }
 
+function parseCoatConfiguration(configuration) {
+  const coat = requiredObject(configuration.coat, "INVALID_COAT_CONFIGURATION");
+  const type = requiredEnum(coat.type, ENUMS.coatType, "INVALID_COAT_TYPE");
+  const length = requiredEnum(coat.length, ENUMS.coatLength, "INVALID_COAT_LENGTH");
+
+  switch (type) {
+    case "CHESTERFIELD":
+      return {
+        garment: "COAT",
+        type,
+        length,
+        ticketPocket: requiredBoolean(
+          coat.ticketPocket,
+          "INVALID_CHESTERFIELD_TICKET_POCKET",
+        ),
+        contrastingVelvetCollar: requiredBoolean(
+          coat.contrastingVelvetCollar,
+          "INVALID_CHESTERFIELD_VELVET_COLLAR",
+        ),
+      };
+    case "POLO":
+      return {
+        garment: "COAT",
+        type,
+        length,
+        pocketStyle: requiredEnum(
+          coat.pocketStyle,
+          ENUMS.coatPocketStyle,
+          "INVALID_POLO_POCKET_STYLE",
+        ),
+        pocketFlap: requiredBoolean(
+          coat.pocketFlap,
+          "INVALID_POLO_POCKET_FLAP",
+        ),
+      };
+    case "COVERT":
+      return {
+        garment: "COAT",
+        type,
+        length,
+        ticketPocket: requiredBoolean(
+          coat.ticketPocket,
+          "INVALID_COVERT_TICKET_POCKET",
+        ),
+        decorativeStitching: requiredBoolean(
+          coat.decorativeStitching,
+          "INVALID_COVERT_DECORATIVE_STITCHING",
+        ),
+      };
+    case "ULSTER":
+      return {
+        garment: "COAT",
+        type,
+        length,
+        pocketStyle: requiredEnum(
+          coat.pocketStyle,
+          ENUMS.coatPocketStyle,
+          "INVALID_ULSTER_POCKET_STYLE",
+        ),
+      };
+    case "RAGLAN":
+      return {
+        garment: "COAT",
+        type,
+        length,
+        fastening: requiredEnum(
+          coat.fastening,
+          ENUMS.coatFastening,
+          "INVALID_RAGLAN_FASTENING",
+        ),
+        pocketStyle: requiredEnum(
+          coat.pocketStyle,
+          ENUMS.coatPocketStyle,
+          "INVALID_RAGLAN_POCKET_STYLE",
+        ),
+      };
+    case "LODEN":
+      return {
+        garment: "COAT",
+        type,
+        length,
+        collar: requiredEnum(
+          coat.collar,
+          ENUMS.coatCollar,
+          "INVALID_LODEN_COLLAR",
+        ),
+        pocketStyle: requiredEnum(
+          coat.pocketStyle,
+          ENUMS.coatPocketStyle,
+          "INVALID_LODEN_POCKET_STYLE",
+        ),
+      };
+    case "PEACOAT":
+      return { garment: "COAT", type, length };
+    default:
+      throw inputError("INVALID_COAT_TYPE");
+  }
+}
+
 export function parseBourbakiOpenAiRenderInput(value) {
   const body = requiredObject(value, "INVALID_BODY");
   const renderPreset = requiredEnum(
@@ -489,6 +607,9 @@ export function parseBourbakiOpenAiRenderInput(value) {
       break;
     case "MENSWEAR_STANDALONE_TROUSERS_V1":
       normalizedConfiguration = parseStandaloneTrousersConfiguration(configuration);
+      break;
+    case "MENSWEAR_COAT_V1":
+      normalizedConfiguration = parseCoatConfiguration(configuration);
       break;
     default:
       throw inputError("INVALID_RENDER_PRESET");
@@ -805,8 +926,154 @@ function standaloneJacketCompanionBottomInstruction(companionBottom) {
   return descriptions[companionBottom] ?? descriptions.GREY_TROUSERS;
 }
 
+function coatLengthInstruction(length) {
+  return {
+    ABOVE_KNEE: "Use a short coat length ending clearly above the knee.",
+    TO_KNEE: "Use a classic coat length ending at the knee.",
+    BELOW_KNEE: "Use a long coat length falling clearly below the knee.",
+    MID_CALF: "Use a long, formal coat length falling to mid-calf.",
+  }[length];
+}
+
+function coatPocketInstruction(pocketStyle, pocketFlap = null) {
+  const base = pocketStyle === "PATCH"
+    ? "Use exactly two lower applied patch pockets, one on each side."
+    : "Use exactly two lower welted inset pockets, one on each side.";
+
+  if (pocketFlap === true) {
+    return `${base} Each lower pocket must have a clearly visible flap.`;
+  }
+
+  if (pocketFlap === false) {
+    return `${base} Do not add flaps to the lower pockets.`;
+  }
+
+  return base;
+}
+
+function coatTicketPocketInstruction(ticketPocket) {
+  return ticketPocket
+    ? "Add exactly one small ticket pocket above the wearer's right lower pocket. Do not add any other extra pocket."
+    : "Do not add a ticket pocket or any extra small pocket.";
+}
+
+function coatConstructionInstruction(coat) {
+  switch (coat.type) {
+    case "CHESTERFIELD":
+      return [
+        "Render a formal single-breasted Chesterfield overcoat with a clean concealed fly front. It must read as a Chesterfield, not as a generic overcoat, trench coat or car coat.",
+        coatLengthInstruction(coat.length),
+        "Use a restrained formal collar and exactly two clean lower welted pockets.",
+        coatTicketPocketInstruction(coat.ticketPocket),
+        coat.contrastingVelvetCollar
+          ? "Use a clearly visible black contrasting velvet collar. The velvet is a collar facing detail only; it must not replace the selected coat cloth."
+          : "Use the collar in the selected coat cloth. Do not add a contrasting velvet collar.",
+      ].join(" ");
+    case "POLO":
+      return [
+        "Render a long double-breasted Polo coat. It must have a true 6x2 front with exactly six visible exterior buttons in two symmetrical columns of three, wide peak lapels, cuffed sleeves and a mandatory back martingale.",
+        "The back martingale must be physically present at the waist, even if it is only partly visible in the three-quarter view. Do not omit it.",
+        coatLengthInstruction(coat.length),
+        coatPocketInstruction(coat.pocketStyle, coat.pocketFlap),
+        "Do not turn this into a Chesterfield, Ulster, trench coat or generic double-breasted overcoat.",
+      ].join(" ");
+    case "COVERT":
+      return [
+        "Render a classic single-breasted Covert coat with a clean country-tailoring character. It must read as a Covert, not as a generic Chesterfield or trench coat.",
+        coatLengthInstruction(coat.length),
+        "Use exactly two lower welted pockets.",
+        coatTicketPocketInstruction(coat.ticketPocket),
+        coat.decorativeStitching
+          ? "Add the traditional Covert decorative topstitching in several close parallel rows at the cuffs and lower hem. Keep it neat and restrained."
+          : "Do not add decorative Covert topstitching at the cuffs or lower hem.",
+      ].join(" ");
+    case "ULSTER":
+      return [
+        "Render a long, substantial double-breasted Ulster coat with its characteristic broad Ulster collar and generous tailored volume. It must not read as a Polo coat or a generic double-breasted overcoat.",
+        coatLengthInstruction(coat.length),
+        coatPocketInstruction(coat.pocketStyle),
+      ].join(" ");
+    case "RAGLAN":
+      return [
+        "Render a true Raglan coat. The sleeves must use a continuous raglan construction with visible diagonal seams running from the neckline to the underarm; do not use ordinary set-in sleeves.",
+        coat.fastening === "DOUBLE_BREASTED"
+          ? "Use a clearly recognisable double-breasted front."
+          : "Use a clearly recognisable single-breasted front.",
+        coatLengthInstruction(coat.length),
+        coatPocketInstruction(coat.pocketStyle),
+        "Do not turn this into a Chesterfield, Polo, Ulster or generic set-in-sleeve overcoat.",
+      ].join(" ");
+    case "LODEN":
+      return [
+        "Render a true Loden coat with a roomy, practical Alpine character and an unforced relaxed line. It must not read as a formal Chesterfield or generic overcoat.",
+        coatLengthInstruction(coat.length),
+        coat.collar === "STAND"
+          ? "Use a clearly visible stand collar that protects the neck."
+          : "Use a clearly visible turn-down collar.",
+        coatPocketInstruction(coat.pocketStyle),
+      ].join(" ");
+    case "PEACOAT":
+      return [
+        "Render a true classic Peacoat: a short, naval-inspired double-breasted coat with exactly six visible exterior buttons in two columns of three, broad lapels and a wide sailor-style collar.",
+        "Use the fixed short Peacoat proportion; do not turn it into a long overcoat, Polo coat, Ulster or trench coat.",
+        "Use clean vertical welted hand pockets and no ticket pocket, belt, martingale or extra decorative pockets.",
+      ].join(" ");
+    default:
+      throw inputError("INVALID_COAT_TYPE");
+  }
+}
+
+function coatStylingInstruction(coatType) {
+  if (coatType === "PEACOAT") {
+    return [
+      "Wear medium-grey flannel tailored trousers, a plain white dress shirt and a dark charcoal or navy cardigan.",
+      "Do not add a tie.",
+      "Wear classic black leather brogue lace-up shoes. Never use loafers, sneakers, boots or suede footwear.",
+    ].join(" ");
+  }
+
+  return [
+    "Wear a dark navy tailored suit beneath the coat, a plain white dress shirt and a muted dark tie in navy, charcoal or dark burgundy. The tie must have no bright or loud pattern.",
+    "Wear classic black leather brogue lace-up shoes. Never use loafers, sneakers, boots or suede footwear.",
+  ].join(" ");
+}
+
 export function buildBourbakiOpenAiPrompt(input) {
   const { configuration, renderPreset } = input;
+
+  if (renderPreset === "MENSWEAR_COAT_V1") {
+    const coat = configuration;
+
+    return [
+      "REFERENCE B is the fabric swatch and must be used as the literal final cloth for the selected coat.",
+      "",
+      "Create one realistic full-length studio fashion image of one adult man wearing the exact tailored coat specified below.",
+      "Important: prioritise the recognisable coat archetype, construction identity and fabric fidelity over stylistic interpretation.",
+      "",
+      "FABRIC FIDELITY — CRITICAL:",
+      "REFERENCE B is not merely a colour reference. It is the actual cloth for the final coat only.",
+      "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
+      "Treat the swatch as a close-up of the real cloth. Preserve the same realistic apparent repeat on the complete coat. Do not enlarge, simplify, smooth out, blur, shrink, stylise or genericise the pattern.",
+      "Never turn a fine check or narrow stripe into a large windowpane, broad check or oversized stripe. If the physical repeat is ambiguous in the swatch, favour a smaller, subtler realistic repeat rather than magnifying it.",
+      "The suit, shirt, tie, cardigan, trousers and shoes are supporting garments only. They must not use or imitate REFERENCE B.",
+      "Do not show the swatch, any diagram, labels, text or logos in the final image.",
+      "",
+      "COAT ARCHETYPE AND CONSTRUCTION:",
+      coatConstructionInstruction(coat),
+      "",
+      "POSE AND PRESENTATION:",
+      "Use a full-length three-quarter front studio view. The complete head, full coat length, trouser hems and both shoes must be inside the frame.",
+      "The model stands upright at a slight angle to the camera, approximately 15 to 20 degrees away from the frontal plane. The pose must make the closure, collar, sleeve construction, both lower pockets and overall coat length readable.",
+      "Both arms remain relaxed naturally at the sides. Both hands must remain fully outside every pocket and must not cover or pull the coat fronts, lower pockets, lapels, cuffs or closure.",
+      "Wear the coat naturally fastened enough to make its selected closure and archetype unmistakable. Do not render a generic fully open overcoat that hides the fly, button arrangement or coat shape.",
+      "The pose must remain elegant and natural, not exaggerated. Do not let hands, deep shadows or excessive drape hide the selected construction.",
+      "",
+      "STYLING:",
+      coatStylingInstruction(coat.type),
+      "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
+      "No pocket square, scarf, bag, watch, jewellery, belt ornament, extra outerwear, visible branding, text or watermark.",
+    ].join("\n");
+  }
 
   if (renderPreset === "MENSWEAR_STANDALONE_JACKET_V1") {
     const { jacket, companionBottom } = configuration;
