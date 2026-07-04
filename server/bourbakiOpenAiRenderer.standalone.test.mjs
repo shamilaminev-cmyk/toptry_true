@@ -104,6 +104,14 @@ const poloCoat = {
   pocketFlap: true,
 };
 
+const chesterfieldCoat = {
+  type: "CHESTERFIELD",
+  length: "TO_KNEE",
+  ticketPocket: false,
+  pocketFlap: true,
+  contrastingVelvetCollar: false,
+};
+
 test("coat is accepted by the existing render-v2 parser with its archetype contract", () => {
   const input = parseBourbakiOpenAiRenderInput({
     renderPreset: "MENSWEAR_COAT_V1",
@@ -119,10 +127,43 @@ test("coat is accepted by the existing render-v2 parser with its archetype contr
   assert.match(prompt, /actual cloth for the final coat only/i);
   assert.match(prompt, /long double-breasted Polo coat/i);
   assert.match(prompt, /mandatory back martingale/i);
+  assert.match(prompt, /notably roomy, generous Polo-coat silhouette/i);
+  assert.match(prompt, /Never make it slim, fitted, body-hugging, close-cut/i);
   assert.match(prompt, /dark navy tailored suit/i);
   assert.match(prompt, /muted dark tie/i);
   assert.match(prompt, /black leather brogue lace-up shoes/i);
   assert.match(prompt, /fine check or narrow stripe/i);
+});
+
+test("chesterfield accepts lower pocket flaps as an archetype-specific option", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_COAT_V1",
+    fabricSwatch,
+    configuration: { coat: chesterfieldCoat },
+  });
+
+  assert.equal(input.configuration.pocketFlap, true);
+  assert.match(
+    buildBourbakiOpenAiPrompt(input),
+    /Each lower pocket must have a clearly visible flap/i,
+  );
+});
+
+test("chesterfield defaults lower pocket flaps to false for existing callers", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_COAT_V1",
+    fabricSwatch,
+    configuration: {
+      coat: {
+        type: "CHESTERFIELD",
+        length: "TO_KNEE",
+        ticketPocket: false,
+        contrastingVelvetCollar: false,
+      },
+    },
+  });
+
+  assert.equal(input.configuration.pocketFlap, false);
 });
 
 test("peacoat uses its dedicated companion outfit and no tie", () => {
@@ -142,4 +183,6 @@ test("peacoat uses its dedicated companion outfit and no tie", () => {
   assert.match(prompt, /medium-grey flannel tailored trousers/i);
   assert.match(prompt, /dark charcoal or navy cardigan/i);
   assert.match(prompt, /Do not add a tie/i);
+  assert.match(prompt, /one adjustable sleeve cuff tab on each sleeve/i);
+  assert.match(prompt, /exactly one visible button/i);
 });

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v4-coat-archetypes";
+  "bourbaki-openai-one-shot-v5-coat-refinements";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -499,6 +499,11 @@ function parseCoatConfiguration(configuration) {
           coat.ticketPocket,
           "INVALID_CHESTERFIELD_TICKET_POCKET",
         ),
+        pocketFlap: optionalBoolean(
+          coat.pocketFlap,
+          "INVALID_CHESTERFIELD_POCKET_FLAP",
+          false,
+        ),
         contrastingVelvetCollar: requiredBoolean(
           coat.contrastingVelvetCollar,
           "INVALID_CHESTERFIELD_VELVET_COLLAR",
@@ -963,7 +968,8 @@ function coatConstructionInstruction(coat) {
       return [
         "Render a formal single-breasted Chesterfield overcoat with a clean concealed fly front. It must read as a Chesterfield, not as a generic overcoat, trench coat or car coat.",
         coatLengthInstruction(coat.length),
-        "Use a restrained formal collar and exactly two clean lower welted pockets.",
+        "Use a restrained formal collar.",
+        coatPocketInstruction("WELT", coat.pocketFlap),
         coatTicketPocketInstruction(coat.ticketPocket),
         coat.contrastingVelvetCollar
           ? "Use a clearly visible black contrasting velvet collar. The velvet is a collar facing detail only; it must not replace the selected coat cloth."
@@ -973,6 +979,7 @@ function coatConstructionInstruction(coat) {
       return [
         "Render a long double-breasted Polo coat. It must have a true 6x2 front with exactly six visible exterior buttons in two symmetrical columns of three, wide peak lapels, cuffed sleeves and a mandatory back martingale.",
         "The back martingale must be physically present at the waist, even if it is only partly visible in the three-quarter view. Do not omit it.",
+        "Use a notably roomy, generous Polo-coat silhouette with substantial ease through the chest, waist, hips, armholes and sleeves so a full suit fits comfortably underneath. Keep the waist straight and unsuppressed. Never make it slim, fitted, body-hugging, close-cut, sharply tapered, cinched or fashion-tailored.",
         coatLengthInstruction(coat.length),
         coatPocketInstruction(coat.pocketStyle, coat.pocketFlap),
         "Do not turn this into a Chesterfield, Ulster, trench coat or generic double-breasted overcoat.",
@@ -1017,6 +1024,7 @@ function coatConstructionInstruction(coat) {
         "Render a true classic Peacoat: a short, naval-inspired double-breasted coat with exactly six visible exterior buttons in two columns of three, broad lapels and a wide sailor-style collar.",
         "Use the fixed short Peacoat proportion; do not turn it into a long overcoat, Polo coat, Ulster or trench coat.",
         "Use clean vertical welted hand pockets and no ticket pocket, belt, martingale or extra decorative pockets.",
+        "Add one adjustable sleeve cuff tab on each sleeve, each secured by exactly one visible button. The sleeve tabs are mandatory Peacoat construction details, not optional decoration.",
       ].join(" ");
     default:
       throw inputError("INVALID_COAT_TYPE");
