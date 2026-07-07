@@ -674,6 +674,8 @@ function shoePatinaInstruction(shoe) {
   return [
     `The exact selected model is ${model}.`,
     `Change only the colour and hand-applied patina to ${dye}.`,
+    "The finished leather must look fully completed and professionally polished: rich, healthy leather with an elegant natural shine and visible care.",
+    "Do not leave the surface matte, chalky, dusty, dry, unfinished or dull like raw crust leather.",
   ].join(" ");
 }
 
@@ -1375,6 +1377,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "COLOUR AND PATINA:",
       shoePatinaInstruction(shoe),
       "The dye must look like refined hand-applied leather patina: realistic tonal depth, controlled burnishing and natural variation. It must not look like plastic, paint, suede, patent leather, printed texture or digital recolouring.",
+      "The final pair must read as a finished, wearable shoe from a luxury catalog, with the subtle gleam and polish expected after brushing and finishing.",
       "",
       "SCENE:",
       "Keep the exact same Bourbaki catalog interior and product-photography setup visible in REFERENCE A. Do not move the pair to a generic white studio, a different room, a shelf, a street, a foot, or a lifestyle scene.",

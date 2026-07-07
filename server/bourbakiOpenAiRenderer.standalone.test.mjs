@@ -339,6 +339,8 @@ test("shoe patina accepts a shoe reference image and keeps the source scene auth
   assert.match(prompt, /do not show a person, feet, legs/i);
   assert.match(prompt, /full brogue wingtip on a Dainite sole/i);
   assert.match(prompt, /rich warm cognac hand-dyed patina/i);
+  assert.match(prompt, /professionally polished/i);
+  assert.match(prompt, /matte, chalky, dusty, dry, unfinished or dull like raw crust leather/i);
   assert.match(prompt, /exact same Bourbaki catalog interior/i);
   assert.match(prompt, /Do not move the pair to a generic white studio/i);
 });
