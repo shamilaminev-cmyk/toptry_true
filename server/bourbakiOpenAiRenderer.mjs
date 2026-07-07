@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v7-shirt-presentation";
+  "bourbaki-openai-one-shot-v8-shoe-patina";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -24,6 +24,7 @@ const ENUMS = {
     "MENSWEAR_STANDALONE_TROUSERS_V1",
     "MENSWEAR_COAT_V1",
     "MENSWEAR_SHIRT_V1",
+    "SHOE_PATINA_STUDIO_V1",
   ]),
   shirtCollar: new Set([
     "CLASSIC",
@@ -64,6 +65,8 @@ const ENUMS = {
     "STRAIGHT_SIDE_SLIT",
   ]),
   shirtWearingStyle: new Set(["TUCKED", "UNTUCKED"]),
+  shoePatinaModel: new Set(["WHOLECUT_OXFORDS", "FULL_BROGUES_DAINITE"]),
+  shoeDyeColor: new Set(["BLACK", "DARK_BROWN", "COGNAC", "BURGUNDY", "NAVY", "GREEN", "CUSTOM"]),
   coatType: new Set([
     "CHESTERFIELD",
     "POLO",
@@ -637,6 +640,43 @@ function parseShirtConfiguration(configuration) {
   };
 }
 
+function parseShoePatinaConfiguration(configuration) {
+  const shoe = requiredObject(configuration.shoe, "INVALID_SHOE_PATINA_CONFIGURATION");
+  const dye = requiredObject(shoe.dye, "INVALID_SHOE_DYE");
+  const color = requiredEnum(dye.color, ENUMS.shoeDyeColor, "INVALID_SHOE_DYE_COLOR");
+  const note = typeof dye.note === "string" && dye.note.trim() ? dye.note.trim() : null;
+
+  if (color === "CUSTOM" && !note) {
+    throw inputError("CUSTOM_SHOE_DYE_NOTE_REQUIRED");
+  }
+
+  return {
+    garment: "SHOES",
+    model: requiredEnum(shoe.model, ENUMS.shoePatinaModel, "INVALID_SHOE_PATINA_MODEL"),
+    dye: { color, note },
+  };
+}
+
+function shoePatinaInstruction(shoe) {
+  const model = shoe.model === "WHOLECUT_OXFORDS"
+    ? "a wholecut Oxford: one uninterrupted vamp and quarter construction with clean closed lacing, no broguing and no cap toe"
+    : "a full brogue wingtip on a Dainite sole: keep the exact wingtip broguing, medallion, perforation layout, closed lacing and rubber-studded Dainite outsole";
+  const dye = {
+    BLACK: "a deep hand-dyed black with restrained tonal burnishing",
+    DARK_BROWN: "a deep dark-brown hand-dyed patina with natural tonal variation",
+    COGNAC: "a rich warm cognac hand-dyed patina with controlled darker burnishing at the toe and heel",
+    BURGUNDY: "a deep burgundy hand-dyed patina with restrained wine-red undertones",
+    NAVY: "a deep navy-blue hand-dyed patina with subtle tonal depth",
+    GREEN: "a deep forest-green hand-dyed patina with subtle tonal depth",
+    CUSTOM: shoe.dye.note,
+  }[shoe.dye.color];
+
+  return [
+    `The exact selected model is ${model}.`,
+    `Change only the colour and hand-applied patina to ${dye}.`,
+  ].join(" ");
+}
+
 function parseCoatConfiguration(configuration) {
   const coat = requiredObject(configuration.coat, "INVALID_COAT_CONFIGURATION");
   const type = requiredEnum(coat.type, ENUMS.coatType, "INVALID_COAT_TYPE");
@@ -752,7 +792,10 @@ export function parseBourbakiOpenAiRenderInput(value) {
     body.configuration,
     "INVALID_MENSWEAR_CONFIGURATION",
   );
-  const fabricSwatch = parseFabricSwatch(body.fabricSwatch);
+  const referenceValue = renderPreset === "SHOE_PATINA_STUDIO_V1"
+    ? body.referenceImage ?? body.fabricSwatch
+    : body.fabricSwatch;
+  const fabricSwatch = parseFabricSwatch(referenceValue);
   const dryRun = body.dryRun === true;
 
   let normalizedConfiguration;
@@ -771,6 +814,9 @@ export function parseBourbakiOpenAiRenderInput(value) {
       break;
     case "MENSWEAR_SHIRT_V1":
       normalizedConfiguration = parseShirtConfiguration(configuration);
+      break;
+    case "SHOE_PATINA_STUDIO_V1":
+      normalizedConfiguration = parseShoePatinaConfiguration(configuration);
       break;
     default:
       throw inputError("INVALID_RENDER_PRESET");
@@ -1313,6 +1359,28 @@ function shirtHemInstruction(hem) {
 
 export function buildBourbakiOpenAiPrompt(input) {
   const { configuration, renderPreset } = input;
+
+  if (renderPreset === "SHOE_PATINA_STUDIO_V1") {
+    const shoe = configuration;
+
+    return [
+      "REFERENCE A is the exact original Bourbaki catalog photograph of the selected unpainted Crust shoe pair.",
+      "",
+      "Create one photorealistic product image of this same unworn pair of shoes. This is a product shot, not a fashion image: do not show a person, feet, legs, clothing, mannequin, shoe box, hands or any other object.",
+      "",
+      "REFERENCE FIDELITY — CRITICAL:",
+      "Treat REFERENCE A as the construction and scene authority. Preserve the exact last, toe shape, proportions, lacing, eyelets, stitching, welt, sole, broguing, perforation, tassels if any, pair placement, orientation, camera angle, crop, floor, background, lighting and interior from the reference photograph.",
+      "Do not redesign, substitute, add, remove, simplify or reinterpret any construction detail. Do not change the shoe model, leather type before dyeing, outsole, laces, stitching, broguing, perforation pattern or silhouette.",
+      "",
+      "COLOUR AND PATINA:",
+      shoePatinaInstruction(shoe),
+      "The dye must look like refined hand-applied leather patina: realistic tonal depth, controlled burnishing and natural variation. It must not look like plastic, paint, suede, patent leather, printed texture or digital recolouring.",
+      "",
+      "SCENE:",
+      "Keep the exact same Bourbaki catalog interior and product-photography setup visible in REFERENCE A. Do not move the pair to a generic white studio, a different room, a shelf, a street, a foot, or a lifestyle scene.",
+      "Return one image only. No swatch, labels, text, logos, watermarks, collage or split panel.",
+    ].join("\n");
+  }
 
   if (renderPreset === "MENSWEAR_SHIRT_V1") {
     const shirt = configuration;

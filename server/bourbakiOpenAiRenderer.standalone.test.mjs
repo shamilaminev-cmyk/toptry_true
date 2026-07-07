@@ -317,3 +317,44 @@ test("peacoat uses its dedicated companion outfit and no tie", () => {
   assert.match(prompt, /one adjustable sleeve cuff tab on each sleeve/i);
   assert.match(prompt, /exactly one visible button/i);
 });
+
+test("shoe patina accepts a shoe reference image and keeps the source scene authoritative", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "SHOE_PATINA_STUDIO_V1",
+    referenceImage: fabricSwatch,
+    configuration: {
+      shoe: {
+        model: "FULL_BROGUES_DAINITE",
+        dye: { color: "COGNAC", note: null },
+      },
+    },
+  });
+
+  assert.equal(input.configuration.garment, "SHOES");
+  assert.equal(input.configuration.model, "FULL_BROGUES_DAINITE");
+  assert.equal(input.configuration.dye.color, "COGNAC");
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /exact original Bourbaki catalog photograph/i);
+  assert.match(prompt, /not a fashion image/i);
+  assert.match(prompt, /do not show a person, feet, legs/i);
+  assert.match(prompt, /full brogue wingtip on a Dainite sole/i);
+  assert.match(prompt, /rich warm cognac hand-dyed patina/i);
+  assert.match(prompt, /exact same Bourbaki catalog interior/i);
+  assert.match(prompt, /Do not move the pair to a generic white studio/i);
+});
+
+test("shoe patina rejects an unsupported model", () => {
+  assert.throws(
+    () => parseBourbakiOpenAiRenderInput({
+      renderPreset: "SHOE_PATINA_STUDIO_V1",
+      referenceImage: fabricSwatch,
+      configuration: {
+        shoe: {
+          model: "PENNY_LOAFERS",
+          dye: { color: "BLACK", note: null },
+        },
+      },
+    }),
+    /INVALID_SHOE_PATINA_MODEL/,
+  );
+});
