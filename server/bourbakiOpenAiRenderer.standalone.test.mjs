@@ -97,6 +97,82 @@ test("standalone trousers are accepted by the existing render-v2 parser", () => 
   assert.match(prompt, /fine check or narrow stripe/i);
 });
 
+const shirt = {
+  collar: {
+    type: "BUTTON_DOWN",
+    stand: "HIGH",
+    pointSize: "LARGE",
+    contrast: true,
+  },
+  cuff: {
+    type: "BUTTON",
+    shape: "MITERED",
+    buttonCount: "TWO",
+    contrast: false,
+  },
+  placket: "HIDDEN",
+  chestPocket: {
+    count: "ONE",
+    shape: "TRAPEZOID",
+    flap: true,
+  },
+  yoke: {
+    type: "SPLIT",
+    biasCut: true,
+  },
+  hem: "STRAIGHT_SIDE_SLIT",
+};
+
+test("shirt is accepted by the renderer with its bespoke construction contract", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_SHIRT_V1",
+    fabricSwatch,
+    configuration: { shirt },
+  });
+
+  assert.equal(input.configuration.garment, "SHIRT");
+  assert.equal(input.configuration.collar.type, "BUTTON_DOWN");
+  assert.equal(input.configuration.cuff.shape, "MITERED");
+  assert.equal(input.configuration.chestPocket.count, "ONE");
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /actual cloth for the final shirt only/i);
+  assert.match(prompt, /true button-down collar/i);
+  assert.match(prompt, /high collar stand/i);
+  assert.match(prompt, /crisp white contrast collar/i);
+  assert.match(prompt, /mitered angled button cuffs/i);
+  assert.match(prompt, /hidden button placket/i);
+  assert.match(prompt, /exactly one chest pocket/i);
+  assert.match(prompt, /split two-piece back yoke/i);
+  assert.match(prompt, /straight hem with visible short side slits/i);
+  assert.match(prompt, /Wear the shirt untucked/i);
+  assert.match(prompt, /dark charcoal tailored trousers/i);
+});
+
+test("shirt accepts French cuffs without button-cuff fields", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_SHIRT_V1",
+    fabricSwatch,
+    configuration: {
+      shirt: {
+        ...shirt,
+        cuff: {
+          type: "FRENCH",
+          shape: "FRENCH_ROUNDED",
+          contrast: true,
+        },
+        chestPocket: { count: "NONE" },
+      },
+    },
+  });
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.equal(input.configuration.cuff.type, "FRENCH");
+  assert.match(prompt, /rounded French cuffs/i);
+  assert.match(prompt, /restrained cufflinks/i);
+  assert.match(prompt, /Do not add any breast or chest pockets/i);
+});
+
 const poloCoat = {
   type: "POLO",
   length: "BELOW_KNEE",

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v5-coat-refinements";
+  "bourbaki-openai-one-shot-v6-shirt-builder";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -23,6 +23,45 @@ const ENUMS = {
     "MENSWEAR_STANDALONE_JACKET_V1",
     "MENSWEAR_STANDALONE_TROUSERS_V1",
     "MENSWEAR_COAT_V1",
+    "MENSWEAR_SHIRT_V1",
+  ]),
+  shirtCollar: new Set([
+    "CLASSIC",
+    "SEMI_FRENCH",
+    "FRENCH",
+    "BLUNT_ANGLE",
+    "SPREAD_ANGLE",
+    "ROUNDED",
+    "BUTTON_DOWN",
+  ]),
+  shirtCollarStand: new Set(["LOW", "STANDARD", "HIGH"]),
+  shirtCollarPointSize: new Set(["SMALL", "STANDARD", "INCREASED", "LARGE"]),
+  shirtCuffType: new Set(["BUTTON", "FRENCH"]),
+  shirtButtonCuffShape: new Set([
+    "STRAIGHT",
+    "MITERED",
+    "SMALL_ROUND",
+    "MEDIUM_ROUND",
+    "LARGE_ROUND",
+    "NEAPOLITAN",
+    "CONICAL",
+  ]),
+  shirtFrenchCuffShape: new Set(["FRENCH_STRAIGHT", "FRENCH_ROUNDED"]),
+  shirtCuffButtonCount: new Set(["ONE", "TWO", "THREE"]),
+  shirtPlacket: new Set(["NONE", "STANDARD", "HIDDEN"]),
+  shirtChestPocketCount: new Set(["NONE", "ONE", "TWO"]),
+  shirtChestPocketShape: new Set([
+    "WITH_CORNERS",
+    "ROUNDED",
+    "SQUARE",
+    "TRAPEZOID",
+  ]),
+  shirtYoke: new Set(["ONE_PIECE", "SPLIT"]),
+  shirtHem: new Set([
+    "ROUND",
+    "STRAIGHT",
+    "CURVED_CUTOUT",
+    "STRAIGHT_SIDE_SLIT",
   ]),
   coatType: new Set([
     "CHESTERFIELD",
@@ -484,6 +523,107 @@ function parseStandaloneTrousersConfiguration(configuration) {
   };
 }
 
+function parseShirtConfiguration(configuration) {
+  const shirt = requiredObject(configuration.shirt, "INVALID_SHIRT_CONFIGURATION");
+  const collar = requiredObject(shirt.collar, "INVALID_SHIRT_COLLAR");
+  const cuff = requiredObject(shirt.cuff, "INVALID_SHIRT_CUFF");
+  const chestPocket = requiredObject(shirt.chestPocket, "INVALID_SHIRT_CHEST_POCKET");
+  const yoke = requiredObject(shirt.yoke, "INVALID_SHIRT_YOKE");
+
+  const cuffType = requiredEnum(
+    cuff.type,
+    ENUMS.shirtCuffType,
+    "INVALID_SHIRT_CUFF_TYPE",
+  );
+  const normalizedCuff = cuffType === "BUTTON"
+    ? {
+        type: cuffType,
+        shape: requiredEnum(
+          cuff.shape,
+          ENUMS.shirtButtonCuffShape,
+          "INVALID_SHIRT_BUTTON_CUFF_SHAPE",
+        ),
+        buttonCount: requiredEnum(
+          cuff.buttonCount,
+          ENUMS.shirtCuffButtonCount,
+          "INVALID_SHIRT_CUFF_BUTTON_COUNT",
+        ),
+        contrast: requiredBoolean(
+          cuff.contrast,
+          "INVALID_SHIRT_CUFF_CONTRAST",
+        ),
+      }
+    : {
+        type: cuffType,
+        shape: requiredEnum(
+          cuff.shape,
+          ENUMS.shirtFrenchCuffShape,
+          "INVALID_SHIRT_FRENCH_CUFF_SHAPE",
+        ),
+        contrast: requiredBoolean(
+          cuff.contrast,
+          "INVALID_SHIRT_CUFF_CONTRAST",
+        ),
+      };
+
+  const chestPocketCount = requiredEnum(
+    chestPocket.count,
+    ENUMS.shirtChestPocketCount,
+    "INVALID_SHIRT_CHEST_POCKET_COUNT",
+  );
+  const normalizedChestPocket = chestPocketCount === "NONE"
+    ? { count: chestPocketCount }
+    : {
+        count: chestPocketCount,
+        shape: requiredEnum(
+          chestPocket.shape,
+          ENUMS.shirtChestPocketShape,
+          "INVALID_SHIRT_CHEST_POCKET_SHAPE",
+        ),
+        flap: requiredBoolean(
+          chestPocket.flap,
+          "INVALID_SHIRT_CHEST_POCKET_FLAP",
+        ),
+      };
+
+  return {
+    garment: "SHIRT",
+    collar: {
+      type: requiredEnum(
+        collar.type,
+        ENUMS.shirtCollar,
+        "INVALID_SHIRT_COLLAR_TYPE",
+      ),
+      stand: requiredEnum(
+        collar.stand,
+        ENUMS.shirtCollarStand,
+        "INVALID_SHIRT_COLLAR_STAND",
+      ),
+      pointSize: requiredEnum(
+        collar.pointSize,
+        ENUMS.shirtCollarPointSize,
+        "INVALID_SHIRT_COLLAR_POINT_SIZE",
+      ),
+      contrast: requiredBoolean(
+        collar.contrast,
+        "INVALID_SHIRT_COLLAR_CONTRAST",
+      ),
+    },
+    cuff: normalizedCuff,
+    placket: requiredEnum(
+      shirt.placket,
+      ENUMS.shirtPlacket,
+      "INVALID_SHIRT_PLACKET",
+    ),
+    chestPocket: normalizedChestPocket,
+    yoke: {
+      type: requiredEnum(yoke.type, ENUMS.shirtYoke, "INVALID_SHIRT_YOKE_TYPE"),
+      biasCut: requiredBoolean(yoke.biasCut, "INVALID_SHIRT_YOKE_BIAS_CUT"),
+    },
+    hem: requiredEnum(shirt.hem, ENUMS.shirtHem, "INVALID_SHIRT_HEM"),
+  };
+}
+
 function parseCoatConfiguration(configuration) {
   const coat = requiredObject(configuration.coat, "INVALID_COAT_CONFIGURATION");
   const type = requiredEnum(coat.type, ENUMS.coatType, "INVALID_COAT_TYPE");
@@ -615,6 +755,9 @@ export function parseBourbakiOpenAiRenderInput(value) {
       break;
     case "MENSWEAR_COAT_V1":
       normalizedConfiguration = parseCoatConfiguration(configuration);
+      break;
+    case "MENSWEAR_SHIRT_V1":
+      normalizedConfiguration = parseShirtConfiguration(configuration);
       break;
     default:
       throw inputError("INVALID_RENDER_PRESET");
@@ -1046,8 +1189,156 @@ function coatStylingInstruction(coatType) {
   ].join(" ");
 }
 
+function shirtCollarInstruction(collar) {
+  const type = {
+    CLASSIC: "Use a classic point collar.",
+    SEMI_FRENCH: "Use a semi-spread collar with a restrained, versatile opening.",
+    FRENCH: "Use a true spread collar with a wider, more open angle.",
+    BLUNT_ANGLE: "Use a blunt-angle collar with deliberately broad points.",
+    SPREAD_ANGLE: "Use a pronounced cutaway spread collar.",
+    ROUNDED: "Use a rounded club collar with softly rounded points.",
+    BUTTON_DOWN: "Use a true button-down collar with both collar points visibly fastened by buttons.",
+  }[collar.type];
+  const stand = {
+    LOW: "Use a low collar stand.",
+    STANDARD: "Use a standard-height collar stand.",
+    HIGH: "Use a high collar stand.",
+  }[collar.stand];
+  const pointSize = {
+    SMALL: "Use short collar points.",
+    STANDARD: "Use standard-length collar points.",
+    INCREASED: "Use slightly elongated collar points.",
+    LARGE: "Use clearly elongated large collar points.",
+  }[collar.pointSize];
+  const contrast = collar.contrast
+    ? "Use a crisp white contrast collar. The contrast applies only to the collar; the shirt body remains the selected fabric."
+    : "Make the collar from the selected shirt fabric; do not add a contrasting collar.";
+
+  return [type, stand, pointSize, contrast].join(" ");
+}
+
+function shirtCuffInstruction(cuff) {
+  const contrast = cuff.contrast
+    ? "Use crisp white contrast cuffs only; the sleeves and shirt body remain the selected fabric."
+    : "Make the cuffs from the selected shirt fabric; do not add contrasting cuffs.";
+
+  if (cuff.type === "FRENCH") {
+    const shape = cuff.shape === "FRENCH_ROUNDED"
+      ? "Use rounded French cuffs, folded back and fastened with restrained cufflinks."
+      : "Use straight French cuffs, folded back and fastened with restrained cufflinks.";
+    return [shape, contrast].join(" ");
+  }
+
+  const shape = {
+    STRAIGHT: "straight",
+    MITERED: "mitered angled",
+    SMALL_ROUND: "small rounded",
+    MEDIUM_ROUND: "medium rounded",
+    LARGE_ROUND: "large rounded",
+    NEAPOLITAN: "Neapolitan rounded",
+    CONICAL: "conical",
+  }[cuff.shape];
+  const count = { ONE: "one", TWO: "two", THREE: "three" }[cuff.buttonCount];
+  return [
+    `Use ${shape} button cuffs with exactly ${count} visible cuff button${cuff.buttonCount === "ONE" ? "" : "s"}.`,
+    contrast,
+  ].join(" ");
+}
+
+function shirtPlacketInstruction(placket) {
+  return {
+    NONE: "Use no separate front placket; the button stand is clean and seamless.",
+    STANDARD: "Use a standard visible front placket with a clean row of exposed buttons.",
+    HIDDEN: "Use a clean hidden button placket; do not show a conventional row of exposed front buttons.",
+  }[placket];
+}
+
+function shirtChestPocketInstruction(chestPocket) {
+  if (chestPocket.count === "NONE") {
+    return "Do not add any breast or chest pockets.";
+  }
+
+  const location = chestPocket.count === "ONE"
+    ? "Add exactly one chest pocket on the wearer's left chest."
+    : "Add exactly two symmetrical chest pockets, one on each side.";
+  const shape = {
+    WITH_CORNERS: "with pointed lower corners",
+    ROUNDED: "with rounded lower corners",
+    SQUARE: "with a square lower edge",
+    TRAPEZOID: "with a tapered trapezoid lower shape",
+  }[chestPocket.shape];
+  const flap = chestPocket.flap
+    ? "Each selected chest pocket must have a visible flap."
+    : "Do not add pocket flaps.";
+
+  return [
+    location,
+    `Make the selected chest pocket shape ${shape}.`,
+    flap,
+    "Do not add any extra chest pockets.",
+  ].join(" ");
+}
+
+function shirtYokeInstruction(yoke) {
+  const yokeType = yoke.type === "SPLIT"
+    ? "Use a split two-piece back yoke with a clearly readable centre seam."
+    : "Use a one-piece back yoke without a centre seam.";
+  const biasCut = yoke.biasCut
+    ? "Cut the yoke on the bias relative to the shirt body; preserve the selected fabric's pattern direction accordingly."
+    : "Keep the yoke on the straight grain, aligned with the shirt body.";
+  return [yokeType, biasCut].join(" ");
+}
+
+function shirtHemInstruction(hem) {
+  return {
+    ROUND: "Use a clearly visible rounded shirttail hem.",
+    STRAIGHT: "Use a clean straight hem.",
+    CURVED_CUTOUT: "Use a curved hem with distinct side cut-outs.",
+    STRAIGHT_SIDE_SLIT: "Use a straight hem with visible short side slits.",
+  }[hem];
+}
+
 export function buildBourbakiOpenAiPrompt(input) {
   const { configuration, renderPreset } = input;
+
+  if (renderPreset === "MENSWEAR_SHIRT_V1") {
+    const shirt = configuration;
+
+    return [
+      "REFERENCE B is the fabric swatch and must be used as the literal final cloth for the selected shirt.",
+      "",
+      "Create one realistic full-length studio fashion image of one adult man wearing the exact bespoke shirt specified below.",
+      "Important: prioritise shirt construction, visible details and exact fabric fidelity over generic styling.",
+      "",
+      "FABRIC FIDELITY — CRITICAL:",
+      "REFERENCE B is not merely a colour reference. It is the actual cloth for the final shirt only.",
+      "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
+      "Treat the swatch as a close-up of the real cloth. Preserve the same realistic apparent repeat on the complete shirt. Do not enlarge, simplify, smooth out, blur, shrink, stylise or genericise the pattern.",
+      "The trousers and shoes are supporting garments only. They must not use or imitate REFERENCE B.",
+      "Do not show the swatch, any diagram, labels, text or logos in the final image.",
+      "",
+      "SHIRT CONSTRUCTION:",
+      shirtCollarInstruction(shirt.collar),
+      shirtCuffInstruction(shirt.cuff),
+      shirtPlacketInstruction(shirt.placket),
+      shirtChestPocketInstruction(shirt.chestPocket),
+      shirtYokeInstruction(shirt.yoke),
+      shirtHemInstruction(shirt.hem),
+      "",
+      "POSE AND PRESENTATION:",
+      "Use a full-length three-quarter front studio view. The complete head, shirt hem, trouser hems and both shoes must be inside the frame.",
+      "The model stands upright with the torso turned approximately 15 to 20 degrees away from the frontal plane. Keep the collar, placket, chest-pocket architecture, both cuffs and the hem clearly readable.",
+      "Wear the shirt untucked, with the selected hem fully visible. Do not cover the shirt with a jacket, cardigan, knitwear, coat, overshirt, tie or scarf.",
+      "Both arms remain relaxed naturally at the sides. Both hands must remain fully outside every pocket and must not cover the collar, placket, chest pockets, cuffs or shirt hem.",
+      "The pose must remain elegant and natural, not exaggerated. Do not let hands, deep shadows or excessive drape hide the selected construction.",
+      "",
+      "STYLING:",
+      "Wear dark charcoal tailored trousers with a clean, relaxed straight or gently tapered line. Do not use jeans, shorts, cargo trousers or casual joggers.",
+      "Wear dark-brown leather penny loafers. Never use sneakers, boots, suede footwear, tassel loafers or Oxford shoes.",
+      "Use a neutral, plain studio background, realistic proportions, sharp shirtmaking details and an elegant luxury menswear look.",
+      "No belt ornament, jacket, neckwear, bag, watch, jewellery, visible branding, text or watermark.",
+    ].join("\n");
+  }
 
   if (renderPreset === "MENSWEAR_COAT_V1") {
     const coat = configuration;
