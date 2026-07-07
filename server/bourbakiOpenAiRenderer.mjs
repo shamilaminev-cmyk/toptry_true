@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v6-shirt-builder";
+  "bourbaki-openai-one-shot-v7-shirt-presentation";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -63,6 +63,7 @@ const ENUMS = {
     "CURVED_CUTOUT",
     "STRAIGHT_SIDE_SLIT",
   ]),
+  shirtWearingStyle: new Set(["TUCKED", "UNTUCKED"]),
   coatType: new Set([
     "CHESTERFIELD",
     "POLO",
@@ -525,6 +526,17 @@ function parseStandaloneTrousersConfiguration(configuration) {
 
 function parseShirtConfiguration(configuration) {
   const shirt = requiredObject(configuration.shirt, "INVALID_SHIRT_CONFIGURATION");
+  const presentation = configuration.presentation &&
+    typeof configuration.presentation === "object" &&
+    !Array.isArray(configuration.presentation)
+    ? configuration.presentation
+    : null;
+  const wearingStyle = optionalEnum(
+    configuration.wearingStyle ?? presentation?.wearingStyle ?? shirt.wearingStyle,
+    ENUMS.shirtWearingStyle,
+    "INVALID_SHIRT_WEARING_STYLE",
+    "TUCKED",
+  );
   const collar = requiredObject(shirt.collar, "INVALID_SHIRT_COLLAR");
   const cuff = requiredObject(shirt.cuff, "INVALID_SHIRT_CUFF");
   const chestPocket = requiredObject(shirt.chestPocket, "INVALID_SHIRT_CHEST_POCKET");
@@ -588,6 +600,7 @@ function parseShirtConfiguration(configuration) {
 
   return {
     garment: "SHIRT",
+    wearingStyle,
     collar: {
       type: requiredEnum(
         collar.type,
@@ -1326,15 +1339,25 @@ export function buildBourbakiOpenAiPrompt(input) {
       shirtHemInstruction(shirt.hem),
       "",
       "POSE AND PRESENTATION:",
-      "Use a full-length three-quarter front studio view. The complete head, shirt hem, trouser hems and both shoes must be inside the frame.",
+      "Use a full-length three-quarter front studio view. The complete head, shirt hem, trouser hems, both visible sock bands and both shoes must be inside the frame.",
       "The model stands upright with the torso turned approximately 15 to 20 degrees away from the frontal plane. Keep the collar, placket, chest-pocket architecture, both cuffs and the hem clearly readable.",
-      "Wear the shirt untucked, with the selected hem fully visible. Do not cover the shirt with a jacket, cardigan, knitwear, coat, overshirt, tie or scarf.",
       "Both arms remain relaxed naturally at the sides. Both hands must remain fully outside every pocket and must not cover the collar, placket, chest pockets, cuffs or shirt hem.",
+      "The trouser hems must sit high enough above the shoe collars in this stance to leave a clearly visible band of socks above each loafer. Do not crop, conceal or omit either sock.",
       "The pose must remain elegant and natural, not exaggerated. Do not let hands, deep shadows or excessive drape hide the selected construction.",
       "",
       "STYLING:",
-      "Wear dark charcoal tailored trousers with a clean, relaxed straight or gently tapered line. Do not use jeans, shorts, cargo trousers or casual joggers.",
-      "Wear dark-brown leather penny loafers. Never use sneakers, boots, suede footwear, tassel loafers or Oxford shoes.",
+      shirt.wearingStyle === "UNTUCKED"
+        ? "Wear the shirt fully untucked over the jeans, with the selected hem fully visible. The shirt must not be tucked, half-tucked or covered by a jacket, cardigan, knitwear, coat, overshirt, tie or scarf."
+        : "Wear the shirt fully and neatly tucked into the trouser waistband. Do not leave any part of the shirt hem hanging outside the trousers. Do not cover the shirt with a jacket, cardigan, knitwear, coat, overshirt, tie or scarf.",
+      shirt.wearingStyle === "UNTUCKED"
+        ? "Wear dark indigo-blue jeans with a relaxed straight or gently tapered line. The denim may show only minimal, subtle, natural fading and light wear. Do not use grey flannel trousers, formal wool trousers, black trousers, shorts, cargo trousers, casual joggers, rips, tears, holes, patches or heavy distressing."
+        : "Wear medium-grey flannel tailored trousers with a clean, relaxed straight or gently tapered line. Do not use jeans, denim, blue trousers, black trousers, shorts, cargo trousers or casual joggers.",
+      shirt.wearingStyle === "UNTUCKED"
+        ? "Wear solid dark navy-blue socks, visibly coordinated with the indigo jeans. The socks must be clearly visible above both shoes."
+        : "Wear solid medium-grey socks, visibly coordinated with the grey flannel trousers. The socks must be clearly visible above both shoes.",
+      shirt.wearingStyle === "UNTUCKED"
+        ? "Wear dark-brown suede tassel loafers. The vamp tassels and matte suede texture must be clearly visible. Never use leather penny loafers, penny straps, Oxford shoes, sneakers, boots or any other shoe style."
+        : "Wear dark-brown leather penny loafers with a clear penny strap. Never use suede, tassel loafers, Oxford shoes, sneakers, boots or any other shoe style.",
       "Use a neutral, plain studio background, realistic proportions, sharp shirtmaking details and an elegant luxury menswear look.",
       "No belt ornament, jacket, neckwear, bag, watch, jewellery, visible branding, text or watermark.",
     ].join("\n");

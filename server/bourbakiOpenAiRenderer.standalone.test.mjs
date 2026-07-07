@@ -123,7 +123,7 @@ const shirt = {
   hem: "STRAIGHT_SIDE_SLIT",
 };
 
-test("shirt is accepted by the renderer with its bespoke construction contract", () => {
+test("shirt defaults to tucked flannel trousers, grey socks and penny loafers", () => {
   const input = parseBourbakiOpenAiRenderInput({
     renderPreset: "MENSWEAR_SHIRT_V1",
     fabricSwatch,
@@ -131,6 +131,7 @@ test("shirt is accepted by the renderer with its bespoke construction contract",
   });
 
   assert.equal(input.configuration.garment, "SHIRT");
+  assert.equal(input.configuration.wearingStyle, "TUCKED");
   assert.equal(input.configuration.collar.type, "BUTTON_DOWN");
   assert.equal(input.configuration.cuff.shape, "MITERED");
   assert.equal(input.configuration.chestPocket.count, "ONE");
@@ -145,8 +146,62 @@ test("shirt is accepted by the renderer with its bespoke construction contract",
   assert.match(prompt, /exactly one chest pocket/i);
   assert.match(prompt, /split two-piece back yoke/i);
   assert.match(prompt, /straight hem with visible short side slits/i);
-  assert.match(prompt, /Wear the shirt untucked/i);
-  assert.match(prompt, /dark charcoal tailored trousers/i);
+  assert.match(prompt, /fully and neatly tucked into the trouser waistband/i);
+  assert.match(prompt, /medium-grey flannel tailored trousers/i);
+  assert.match(prompt, /solid medium-grey socks/i);
+  assert.match(prompt, /dark-brown leather penny loafers with a clear penny strap/i);
+  assert.match(prompt, /Never use suede, tassel loafers/i);
+});
+
+test("shirt honours the untucked presentation from the Bourbaki shirt builder", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_SHIRT_V1",
+    fabricSwatch,
+    configuration: {
+      wearingStyle: "UNTUCKED",
+      presentation: {
+        wearingStyle: "UNTUCKED",
+        trousers: "DARK_BLUE_LIGHTLY_AGED_JEANS_NO_HOLES",
+        socks: "DARK_BLUE_SOCKS",
+        shoes: "DARK_BROWN_SUEDE_TASSEL_LOAFERS",
+      },
+      shirt,
+    },
+  });
+
+  assert.equal(input.configuration.wearingStyle, "UNTUCKED");
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /fully untucked over the jeans/i);
+  assert.match(prompt, /dark indigo-blue jeans/i);
+  assert.match(prompt, /minimal, subtle, natural fading and light wear/i);
+  assert.match(prompt, /rips, tears, holes, patches or heavy distressing/i);
+  assert.match(prompt, /solid dark navy-blue socks/i);
+  assert.match(prompt, /dark-brown suede tassel loafers/i);
+  assert.match(prompt, /vamp tassels and matte suede texture/i);
+  assert.match(prompt, /Never use leather penny loafers, penny straps/i);
+  assert.match(prompt, /Do not use grey flannel trousers/i);
+});
+
+test("shirt accepts presentation.wearingStyle for compatible callers", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_SHIRT_V1",
+    fabricSwatch,
+    configuration: { presentation: { wearingStyle: "UNTUCKED" }, shirt },
+  });
+
+  assert.equal(input.configuration.wearingStyle, "UNTUCKED");
+});
+
+test("shirt rejects an unknown wearing style", () => {
+  assert.throws(
+    () => parseBourbakiOpenAiRenderInput({
+      renderPreset: "MENSWEAR_SHIRT_V1",
+      fabricSwatch,
+      configuration: { wearingStyle: "CASUAL", shirt },
+    }),
+    /INVALID_SHIRT_WEARING_STYLE/,
+  );
 });
 
 test("shirt accepts French cuffs without button-cuff fields", () => {
