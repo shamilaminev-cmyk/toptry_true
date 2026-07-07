@@ -1226,12 +1226,14 @@ function coatConstructionInstruction(coat) {
       ].join(" ");
     case "LODEN":
       return [
-        "Render a true Loden coat with a roomy, practical Alpine character and an unforced relaxed line. It must not read as a formal Chesterfield or generic overcoat.",
+        "Render a true traditional Loden coat with a roomy Alpine character, practical field-coat spirit and a relaxed, easy line. It must not read as a formal Chesterfield, a sleek city overcoat or a generic dress coat.",
         coatLengthInstruction(coat.length),
         coat.collar === "STAND"
-          ? "Use a clearly visible stand collar that protects the neck."
-          : "Use a clearly visible turn-down collar.",
+          ? "Use a stand-and-fall collar built on a collar stand. The collar must be worn down in its natural resting position, not raised upright around the neck. It must not spread broadly across the chest and shoulders like a wide turn-down overcoat collar."
+          : "Use a restrained fall collar in the Loden character; do not turn it into a broad formal overcoat collar.",
         coatPocketInstruction(coat.pocketStyle),
+        "Add one sleeve tab at each cuff, each secured by exactly one visible button. These sleeve tabs are required Loden details and must not be omitted.",
+        "The silhouette must be roomy and relaxed, with generous ease through the chest, waist and hips. Keep it straight or softly easy rather than shaped. Never make it slim, fitted, body-hugging or strongly waist-suppressed.",
       ].join(" ");
     case "PEACOAT":
       return [

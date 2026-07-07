@@ -245,6 +245,13 @@ const chesterfieldCoat = {
   contrastingVelvetCollar: false,
 };
 
+const lodenCoat = {
+  type: "LODEN",
+  length: "BELOW_KNEE",
+  collar: "STAND",
+  pocketStyle: "PATCH",
+};
+
 test("coat is accepted by the existing render-v2 parser with its archetype contract", () => {
   const input = parseBourbakiOpenAiRenderInput({
     renderPreset: "MENSWEAR_COAT_V1",
@@ -297,6 +304,26 @@ test("chesterfield defaults lower pocket flaps to false for existing callers", (
   });
 
   assert.equal(input.configuration.pocketFlap, false);
+});
+
+
+test("loden prompt enforces the correct collar, sleeve tabs and relaxed fit", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_COAT_V1",
+    fabricSwatch,
+    configuration: { coat: lodenCoat },
+  });
+
+  assert.equal(input.configuration.type, "LODEN");
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /stand-and-fall collar built on a collar stand/i);
+  assert.match(prompt, /worn down in its natural resting position/i);
+  assert.match(prompt, /not raised upright around the neck/i);
+  assert.match(prompt, /must not spread broadly across the chest and shoulders/i);
+  assert.match(prompt, /one sleeve tab at each cuff/i);
+  assert.match(prompt, /required Loden details/i);
+  assert.match(prompt, /roomy and relaxed/i);
+  assert.match(prompt, /Never make it slim, fitted, body-hugging or strongly waist-suppressed/i);
 });
 
 test("peacoat uses its dedicated companion outfit and no tie", () => {
