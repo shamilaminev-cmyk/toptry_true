@@ -92,6 +92,7 @@ const ENUMS = {
   ]),
   jacketFront: new Set(["SINGLE_BREASTED", "DOUBLE_BREASTED"]),
   buttonConfiguration: new Set([
+    "THREE_BUTTON",
     "THREE_ROLL_TWO",
     "TWO_BUTTON",
     "FOUR_BY_ONE",
@@ -261,7 +262,7 @@ function parseFabricSwatch(value) {
 function assertButtonConfiguration(front, buttonConfiguration) {
   const isSingleBreasted = front === "SINGLE_BREASTED";
   const valid = isSingleBreasted
-    ? ["THREE_ROLL_TWO", "TWO_BUTTON"].includes(buttonConfiguration)
+    ? ["THREE_BUTTON", "THREE_ROLL_TWO", "TWO_BUTTON"].includes(buttonConfiguration)
     : ["FOUR_BY_ONE", "SIX_BY_TWO"].includes(buttonConfiguration);
 
   if (!valid) {
@@ -859,6 +860,15 @@ function buttonInstruction(front, buttonConfiguration) {
       "There are exactly four visible exterior front buttons, arranged in two symmetrical vertical columns of two.",
       "The jacket is open, but the 4x1 double-breasted layout must remain clearly recognisable.",
       "Do not add a fifth button, an isolated centre button, or a single-breasted closure.",
+    ].join(" ");
+  }
+
+  if (buttonConfiguration === "THREE_BUTTON") {
+    return [
+      "Single-breasted three-button construction.",
+      "There are exactly three visible exterior front buttons in a simple, evenly spaced vertical row.",
+      "The jacket is open, but all three button positions must remain clearly identifiable.",
+      "Use a standard three-button front with a natural notch-lapel roll. Do not use a 3-roll-2 lapel roll and do not reduce the jacket to two buttons.",
     ].join(" ");
   }
 

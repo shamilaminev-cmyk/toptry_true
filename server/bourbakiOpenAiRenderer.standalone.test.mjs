@@ -12,7 +12,7 @@ const fabricSwatch = {
 
 const jacket = {
   front: "SINGLE_BREASTED",
-  buttonConfiguration: "THREE_ROLL_TWO",
+  buttonConfiguration: "THREE_BUTTON",
   lapels: "NOTCH_MEDIUM",
   shoulders: "CLASSIC",
   sleeveCharacter: "CLEAN",
@@ -49,7 +49,7 @@ test("standalone jacket is accepted by the existing render-v2 parser", () => {
 
   assert.equal(input.configuration.garment, "JACKET");
   assert.equal(input.configuration.companionBottom, "DARK_BLUE_JEANS");
-  assert.equal(input.configuration.jacket.buttonConfiguration, "THREE_ROLL_TWO");
+  assert.equal(input.configuration.jacket.buttonConfiguration, "THREE_BUTTON");
   const prompt = buildBourbakiOpenAiPrompt(input);
   assert.match(prompt, /actual cloth for the final jacket only/i);
   assert.match(prompt, /relaxed straight or gently tapered fit/i);
@@ -62,6 +62,8 @@ test("standalone jacket is accepted by the existing render-v2 parser", () => {
   assert.match(prompt, /approximately 15 to 20 degrees/i);
   assert.match(prompt, /fully outside every pocket/i);
   assert.match(prompt, /ticket pocket/i);
+  assert.match(prompt, /three-button construction/i);
+  assert.match(prompt, /Do not use a 3-roll-2 lapel roll/i);
 });
 
 test("standalone jacket defaults its companion bottom to grey trousers", () => {
