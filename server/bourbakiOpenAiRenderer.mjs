@@ -1264,56 +1264,76 @@ function coatStylingInstruction(coatType) {
 
 function shirtCollarInstruction(collar) {
   const type = {
-    CLASSIC: "Use a classic point collar.",
-    SEMI_FRENCH: "Use a semi-spread collar with a restrained, versatile opening.",
-    FRENCH: "Use a true spread collar with a wider, more open angle.",
-    BLUNT_ANGLE: "Use a blunt-angle collar with deliberately broad points.",
-    SPREAD_ANGLE: "Use a pronounced cutaway spread collar.",
-    ROUNDED: "Use a rounded club collar with softly rounded points.",
-    BUTTON_DOWN: "Use a true button-down collar with both collar points visibly fastened by buttons.",
+    CLASSIC: "Use a true classic point collar, not a semi-spread or French spread collar. Keep the opening restrained and the points clearly forward-oriented.",
+    SEMI_FRENCH: "Use a semi-spread collar with a restrained, versatile opening. It must sit between a classic point collar and a full French spread collar.",
+    FRENCH: "Use a true French spread collar with a visibly wider, more open angle. Do not collapse it into a classic point collar.",
+    BLUNT_ANGLE: "Use a blunt-angle collar with deliberately broad, angular points. Make the blunt geometry readable.",
+    SPREAD_ANGLE: "Use a pronounced cutaway spread collar with a clearly opened angle for a larger tie knot.",
+    ROUNDED: "Use a rounded club collar with softly rounded points. The rounded ends must be visible, not squared off.",
+    BUTTON_DOWN: "Use a true button-down collar with both collar points visibly fastened by buttons. The collar points must not float loose.",
   }[collar.type];
   const stand = {
-    LOW: "Use a low collar stand.",
-    STANDARD: "Use a standard-height collar stand.",
-    HIGH: "Use a high collar stand.",
+    LOW: "Use a low collar stand with a lower, softer neckline.",
+    STANDARD: "Use a standard-height collar stand with balanced proportions.",
+    HIGH: "Use a visibly high collar stand. The collar band must be noticeably taller than standard and clearly visible around the neck; do not render it as an ordinary standard collar stand.",
   }[collar.stand];
   const pointSize = {
-    SMALL: "Use short collar points.",
+    SMALL: "Use short, compact collar points.",
     STANDARD: "Use standard-length collar points.",
-    INCREASED: "Use slightly elongated collar points.",
-    LARGE: "Use clearly elongated large collar points.",
+    INCREASED: "Use slightly elongated collar points that remain balanced.",
+    LARGE: "Use clearly large, elongated collar points. The collar must read as larger than standard; do not shrink it into a standard semi-spread or French collar.",
   }[collar.pointSize];
   const contrast = collar.contrast
-    ? "Use a crisp white contrast collar. The contrast applies only to the collar; the shirt body remains the selected fabric."
+    ? "Use a crisp white contrast collar. The contrast applies only to the collar; the shirt body remains the selected fabric. The white collar edge and band must be clearly visible."
     : "Make the collar from the selected shirt fabric; do not add a contrasting collar.";
 
-  return [type, stand, pointSize, contrast].join(" ");
+  return [
+    type,
+    stand,
+    pointSize,
+    contrast,
+    "The collar construction is a priority detail: keep its stand height, opening angle and point length clearly readable and do not substitute it with a generic dress-shirt collar.",
+  ].join(" ");
 }
 
 function shirtCuffInstruction(cuff) {
   const contrast = cuff.contrast
-    ? "Use crisp white contrast cuffs only; the sleeves and shirt body remain the selected fabric."
+    ? "Use crisp white contrast cuffs only; the sleeves and shirt body remain the selected fabric. The white cuff bands must be clearly visible."
     : "Make the cuffs from the selected shirt fabric; do not add contrasting cuffs.";
 
   if (cuff.type === "FRENCH") {
     const shape = cuff.shape === "FRENCH_ROUNDED"
-      ? "Use rounded French cuffs, folded back and fastened with restrained cufflinks."
-      : "Use straight French cuffs, folded back and fastened with restrained cufflinks.";
-    return [shape, contrast].join(" ");
+      ? "Use rounded French double cuffs, folded back and fastened with restrained cufflinks. The cuff corners must be visibly rounded on both cuffs; do not render straight or squared French cuffs."
+      : "Use straight French double cuffs, folded back and fastened with restrained cufflinks. Keep the cuff edge straight, not rounded.";
+    return [
+      shape,
+      contrast,
+      "French cuffs must be clearly double cuffs with a visible fold-back layer and cufflinks; do not render ordinary button cuffs.",
+    ].join(" ");
   }
 
   const shape = {
-    STRAIGHT: "straight",
+    STRAIGHT: "straight-edged",
     MITERED: "mitered angled",
     SMALL_ROUND: "small rounded",
     MEDIUM_ROUND: "medium rounded",
     LARGE_ROUND: "large rounded",
-    NEAPOLITAN: "Neapolitan rounded",
-    CONICAL: "conical",
+    NEAPOLITAN: "cocktail turnback",
+    CONICAL: "conical tapered",
   }[cuff.shape];
   const count = { ONE: "one", TWO: "two", THREE: "three" }[cuff.buttonCount];
+  const shapeEmphasis = {
+    STRAIGHT: "Keep the cuff edge clean and straight.",
+    MITERED: "Make the diagonal mitered cuff corner readable.",
+    SMALL_ROUND: "Show a small, subtle rounded cuff corner.",
+    MEDIUM_ROUND: "Show a clearly rounded cuff corner with a balanced curve.",
+    LARGE_ROUND: "Show a large, soft rounded cuff corner; do not square it off.",
+    NEAPOLITAN: "Render cocktail cuffs with visible turnback cuffs; do not treat them as ordinary button cuffs.",
+    CONICAL: "Make the cuff shape visibly tapered and conical.",
+  }[cuff.shape];
   return [
     `Use ${shape} button cuffs with exactly ${count} visible cuff button${cuff.buttonCount === "ONE" ? "" : "s"}.`,
+    shapeEmphasis,
     contrast,
   ].join(" ");
 }

@@ -141,9 +141,11 @@ test("shirt defaults to tucked flannel trousers, grey socks and penny loafers", 
   const prompt = buildBourbakiOpenAiPrompt(input);
   assert.match(prompt, /actual cloth for the final shirt only/i);
   assert.match(prompt, /true button-down collar/i);
-  assert.match(prompt, /high collar stand/i);
+  assert.match(prompt, /visibly high collar stand/i);
+  assert.match(prompt, /noticeably taller than standard/i);
   assert.match(prompt, /crisp white contrast collar/i);
   assert.match(prompt, /mitered angled button cuffs/i);
+  assert.match(prompt, /diagonal mitered cuff corner readable/i);
   assert.match(prompt, /hidden button placket/i);
   assert.match(prompt, /exactly one chest pocket/i);
   assert.match(prompt, /split two-piece back yoke/i);
@@ -225,9 +227,36 @@ test("shirt accepts French cuffs without button-cuff fields", () => {
 
   const prompt = buildBourbakiOpenAiPrompt(input);
   assert.equal(input.configuration.cuff.type, "FRENCH");
-  assert.match(prompt, /rounded French cuffs/i);
-  assert.match(prompt, /restrained cufflinks/i);
+  assert.match(prompt, /rounded French double cuffs/i);
+  assert.match(prompt, /cuff corners must be visibly rounded/i);
+  assert.match(prompt, /visible fold-back layer and cufflinks/i);
   assert.match(prompt, /Do not add any breast or chest pockets/i);
+});
+
+
+test("shirt prompt distinguishes large classic collars from spread collars", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_SHIRT_V1",
+    fabricSwatch,
+    configuration: {
+      shirt: {
+        ...shirt,
+        collar: {
+          type: "CLASSIC",
+          stand: "HIGH",
+          pointSize: "LARGE",
+          contrast: false,
+        },
+      },
+    },
+  });
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /true classic point collar/i);
+  assert.match(prompt, /not a semi-spread or French spread collar/i);
+  assert.match(prompt, /clearly large, elongated collar points/i);
+  assert.match(prompt, /must read as larger than standard/i);
+  assert.match(prompt, /do not shrink it into a standard semi-spread or French collar/i);
 });
 
 const poloCoat = {
