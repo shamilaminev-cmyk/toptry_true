@@ -4207,6 +4207,197 @@ const BOURBAKI_VISUALIZATION_ALLOWED_MIME_TYPES = new Set([
   "image/webp",
 ]);
 
+
+// toptry-bourbaki-fabric-classifier-gateway-v1
+const BOURBAKI_FABRIC_CLASSIFIER_MODEL = String(
+  process.env.BOURBAKI_FABRIC_CLASSIFIER_MODEL ||
+    process.env.GEMINI_CATALOG_MODEL ||
+    process.env.GEMINI_MODEL_TEXT ||
+    "gemini-2.5-flash-lite",
+).trim();
+const BOURBAKI_FABRIC_CLASSIFIER_MAX_IMAGE_URL_CHARS = 2_000;
+const BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_COLORS = new Set([
+  "white",
+  "light_blue",
+  "blue",
+  "gray",
+  "beige",
+  "pink",
+  "green",
+  "brown",
+  "black",
+  "red",
+  "yellow",
+  "purple",
+  "multi",
+  "unknown",
+]);
+const BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_PATTERNS = new Set([
+  "PLAIN",
+  "STRIPE",
+  "CHECK",
+  "TEXTURED",
+  "MELANGE",
+  "DENIM",
+  "OTHER",
+  "UNKNOWN",
+]);
+
+function parseBourbakiFabricClassifierString(value, maxLength) {
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized && normalized.length <= maxLength ? normalized : null;
+}
+
+function parseBourbakiFabricClassificationInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw bourbakiVisualizationInputError("INVALID_BODY");
+  }
+
+  const imageUrl = parseBourbakiFabricClassifierString(
+    value.imageUrl,
+    BOURBAKI_FABRIC_CLASSIFIER_MAX_IMAGE_URL_CHARS,
+  );
+
+  if (!imageUrl) {
+    throw bourbakiVisualizationInputError("INVALID_IMAGE_URL");
+  }
+
+  if (!imageUrl.startsWith("http://") && !imageUrl.startsWith("https://") && !imageUrl.startsWith("data:")) {
+    throw bourbakiVisualizationInputError("INVALID_IMAGE_URL");
+  }
+
+  return {
+    imageUrl,
+    supplier: parseBourbakiFabricClassifierString(value.supplier, 120),
+    article: parseBourbakiFabricClassifierString(value.article, 120),
+    title: parseBourbakiFabricClassifierString(value.title, 240),
+    bunch: parseBourbakiFabricClassifierString(value.bunch, 160),
+    weave: parseBourbakiFabricClassifierString(value.weave, 120),
+    composition: parseBourbakiFabricClassifierString(value.composition, 240),
+  };
+}
+
+function buildBourbakiFabricClassificationPrompt(input) {
+  return [
+    "You are classifying fabric swatches for a Russian bespoke menswear configurator.",
+    "Look only at the fabric swatch image and return strict JSON. Do not return markdown, prose, code fences, or comments.",
+    "Classify the dominant visual color family and the visible visual pattern of the cloth.",
+    "Use colorFamily exactly one of: white, light_blue, blue, gray, beige, pink, green, brown, black, red, yellow, purple, multi, unknown.",
+    "Use pattern exactly one of: PLAIN, STRIPE, CHECK, TEXTURED, MELANGE, DENIM, OTHER, UNKNOWN.",
+    "Pattern definitions:",
+    "- PLAIN: solid-looking cloth without visible stripe/check motif; subtle weave is allowed.",
+    "- STRIPE: clear lines or repeated stripes, including fine pinstripes.",
+    "- CHECK: clear check, grid, plaid or windowpane.",
+    "- TEXTURED: visible weave/structure such as oxford, pique, dobby, honeycomb, seersucker or other relief texture without stripe/check.",
+    "- MELANGE: heathered or mixed-yarn effect where color is mottled rather than flat.",
+    "- DENIM: denim/chambray-like blue twill appearance.",
+    "If the image is ambiguous, choose the closest category and lower the relevant confidence.",
+    "Return JSON with this exact shape:",
+    '{"colorFamily":"white","pattern":"PLAIN","colorConfidence":0.0,"patternConfidence":0.0,"notes":"short reason"}',
+    "Confidence values must be numbers from 0 to 1.",
+    "Fabric metadata, for context only:",
+    `supplier: ${input.supplier || "unknown"}`,
+    `article: ${input.article || "unknown"}`,
+    `title: ${input.title || "unknown"}`,
+    `bunch: ${input.bunch || "unknown"}`,
+    `weave: ${input.weave || "unknown"}`,
+    `composition: ${input.composition || "unknown"}`,
+  ].join("\n");
+}
+
+function extractJsonObjectFromText(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {}
+
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+
+  try {
+    return JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeBourbakiFabricClassificationJson(parsed) {
+  const colorFamily = String(parsed?.colorFamily || "unknown").trim().toLowerCase();
+  const pattern = String(parsed?.pattern || "UNKNOWN").trim().toUpperCase();
+  const colorConfidence = Number(parsed?.colorConfidence);
+  const patternConfidence = Number(parsed?.patternConfidence);
+  const notes = typeof parsed?.notes === "string"
+    ? parsed.notes.replace(/\s+/g, " ").trim().slice(0, 300)
+    : "";
+
+  return {
+    colorFamily: BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_COLORS.has(colorFamily)
+      ? colorFamily
+      : "unknown",
+    pattern: BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_PATTERNS.has(pattern)
+      ? pattern
+      : "UNKNOWN",
+    colorConfidence: Number.isFinite(colorConfidence)
+      ? Math.max(0, Math.min(1, colorConfidence))
+      : 0,
+    patternConfidence: Number.isFinite(patternConfidence)
+      ? Math.max(0, Math.min(1, patternConfidence))
+      : 0,
+    notes,
+  };
+}
+
+async function classifyBourbakiFabricImage(input) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured on the AI gateway");
+  }
+
+  const image = await imageToBase64(input.imageUrl, {
+    context: {
+      kind: "bourbaki_fabric_classifier",
+      itemTitle: input.title || input.article || "Albini fabric",
+    },
+  });
+
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  const result = await ai.models.generateContent({
+    model: BOURBAKI_FABRIC_CLASSIFIER_MODEL,
+    contents: {
+      parts: [
+        { inlineData: { data: image.base64, mimeType: image.mimeType } },
+        { text: buildBourbakiFabricClassificationPrompt(input) },
+      ],
+    },
+    config: {
+      temperature: 0,
+      responseMimeType: "application/json",
+    },
+  });
+
+  const responseText =
+    result?.text ||
+    result?.response?.text?.() ||
+    result?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") ||
+    "";
+
+  const parsed = extractJsonObjectFromText(responseText);
+  if (!parsed) {
+    const error = new Error("Gemini fabric classifier returned invalid JSON");
+    error.rawText = responseText.slice(0, 500);
+    throw error;
+  }
+
+  return {
+    model: BOURBAKI_FABRIC_CLASSIFIER_MODEL,
+    classification: normalizeBourbakiFabricClassificationJson(parsed),
+    rawText: responseText.slice(0, 2_000),
+  };
+}
+
 // toptry-bourbaki-visualization-strict-contract-v1
 const BOURBAKI_VISUALIZATION_RENDER_CONTRACT_VERSION =
   "bourbaki-suit-render-contract-v5";
@@ -5038,6 +5229,65 @@ async function generateAndReviewBourbakiView({
 
   return { candidate, verification, attempts };
 }
+
+
+
+app.post("/internal/ai/bourbaki/fabric-classify", async (req, res) => {
+  if (!bourbakiVisualizationSecretMatches(req.get("x-bourbaki-visualization-secret"))) {
+    return bourbakiVisualizationError(
+      res,
+      403,
+      "BOURBAKI_GATEWAY_ACCESS_DENIED",
+      "Внутренний доступ к классификации ткани не подтверждён.",
+    );
+  }
+
+  if (String(process.env.AI_GATEWAY_ROLE || "").trim().toLowerCase() !== "gateway") {
+    return bourbakiVisualizationError(
+      res,
+      409,
+      "BOURBAKI_GATEWAY_ROLE_REQUIRED",
+      "Маршрут классификации ткани доступен только AI gateway.",
+    );
+  }
+
+  let input;
+  try {
+    input = parseBourbakiFabricClassificationInput(req.body);
+  } catch (error) {
+    const code = error?.code || (error instanceof Error ? error.message : "INVALID_BODY");
+    return bourbakiVisualizationError(
+      res,
+      400,
+      code,
+      "Параметры классификации ткани некорректны.",
+    );
+  }
+
+  try {
+    const result = await classifyBourbakiFabricImage(input);
+    return res.status(200).json({
+      ok: true,
+      data: {
+        model: result.model,
+        ...result.classification,
+      },
+    });
+  } catch (error) {
+    console.error("Bourbaki fabric classifier Gemini request failed", {
+      message: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500),
+      article: input?.article || null,
+      model: BOURBAKI_FABRIC_CLASSIFIER_MODEL,
+      rawText: typeof error?.rawText === "string" ? error.rawText.slice(0, 500) : null,
+    });
+    return bourbakiVisualizationError(
+      res,
+      502,
+      "BOURBAKI_FABRIC_CLASSIFIER_UPSTREAM_FAILED",
+      "Сервис классификации ткани временно недоступен.",
+    );
+  }
+});
 
 app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
   if (!bourbakiVisualizationSecretMatches(req.get("x-bourbaki-visualization-secret"))) {
