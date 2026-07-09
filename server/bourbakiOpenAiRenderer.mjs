@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v8-shoe-patina";
+  "bourbaki-openai-one-shot-v9-construction-scale";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -900,6 +900,53 @@ function lapelInstruction(lapels) {
   return descriptions[lapels];
 }
 
+function standaloneJacketButtonInstruction(front, buttonConfiguration) {
+  if (front === "DOUBLE_BREASTED") {
+    if (buttonConfiguration === "SIX_BY_TWO") {
+      return [
+        "Double-breasted 6x2 construction.",
+        "The standalone jacket must be worn closed and buttoned, not open or hanging apart.",
+        "There are exactly six visible exterior front buttons, arranged in two symmetrical vertical columns of three.",
+        "Keep the working-button closure and overlapping double-breasted front clearly readable while preserving the lapel roll.",
+        "Do not add a seventh button, an isolated centre button, or a single-breasted closure.",
+      ].join(" ");
+    }
+
+    return [
+      "Double-breasted 4x1 construction.",
+      "The standalone jacket must be worn closed and buttoned, not open or hanging apart.",
+      "There are exactly four visible exterior front buttons, arranged in two symmetrical vertical columns of two.",
+      "Keep the working-button closure and overlapping double-breasted front clearly readable while preserving the lapel roll.",
+      "Do not add a fifth button, an isolated centre button, or a single-breasted closure.",
+    ].join(" ");
+  }
+
+  if (buttonConfiguration === "THREE_BUTTON") {
+    return [
+      "Single-breasted three-button construction.",
+      "The standalone jacket must be worn closed and buttoned at its natural fastening point, not open or hanging apart.",
+      "There are exactly three visible exterior front buttons in a simple, evenly spaced vertical row.",
+      "Use a standard three-button front with a natural notch-lapel roll. Do not use a 3-roll-2 lapel roll and do not reduce the jacket to two buttons.",
+    ].join(" ");
+  }
+
+  if (buttonConfiguration === "THREE_ROLL_TWO") {
+    return [
+      "Single-breasted true 3-roll-2 construction.",
+      "The standalone jacket must be worn closed and buttoned at the middle button, not open or hanging apart.",
+      "There are exactly three physical front buttons in total.",
+      "The lapel must softly roll toward the middle button position, so the jacket reads as a true 3-roll-2 rather than a flat generic three-button or ordinary two-button jacket.",
+    ].join(" ");
+  }
+
+  return [
+    "Single-breasted two-button construction.",
+    "The standalone jacket must be worn closed and buttoned at the upper button, with the lower button left unfastened by tailoring convention.",
+    "There are exactly two visible front buttons and no third button or extra visible fastener.",
+    "Do not render the jacket open, spread apart or pulled back.",
+  ].join(" ");
+}
+
 function shoulderInstruction(shoulders, sleeveCharacter) {
   const shoulder = {
     SOFT: "Use soft, natural shoulders with a relaxed, lightly padded line.",
@@ -1191,12 +1238,14 @@ function coatConstructionInstruction(coat) {
       ].join(" ");
     case "POLO":
       return [
-        "Render a long double-breasted Polo coat. It must have a true 6x2 front with exactly six visible exterior buttons in two symmetrical columns of three, wide peak lapels, cuffed sleeves and a mandatory back martingale.",
+        "Render a long double-breasted Polo coat. It must have a true 6x2 front with exactly six visible exterior buttons in two symmetrical columns of three, wide PEAK LAPELS, cuffed sleeves and a mandatory back martingale.",
+        "The Polo coat front identity is mandatory: the collar-and-lapel area must show clearly separated wide peak lapels forming a sharp formal V on the upper chest. These peak lapels must be visible and unmistakable in the final image.",
+        "Do not render notch lapels, shawl lapels, an Ulster collar, a peacoat collar, a generic folded overcoat collar, a raised collar that hides the lapels, a scarf, or any closed front that conceals the peak-lapel geometry.",
         "The back martingale must be physically present at the waist, even if it is only partly visible in the three-quarter view. Do not omit it.",
         "Use a notably roomy, generous Polo-coat silhouette with substantial ease through the chest, waist, hips, armholes and sleeves so a full suit fits comfortably underneath. Keep the waist straight and unsuppressed. Never make it slim, fitted, body-hugging, close-cut, sharply tapered, cinched or fashion-tailored.",
         coatLengthInstruction(coat.length),
         coatPocketInstruction(coat.pocketStyle, coat.pocketFlap),
-        "Do not turn this into a Chesterfield, Ulster, trench coat or generic double-breasted overcoat.",
+        "Do not turn this into a Chesterfield, Ulster, trench coat, peacoat or generic double-breasted overcoat.",
       ].join(" ");
     case "COVERT":
       return [
@@ -1260,6 +1309,16 @@ function coatStylingInstruction(coatType) {
     "Wear a dark navy tailored suit beneath the coat, a plain white dress shirt and a muted dark tie in navy, charcoal or dark burgundy. The tie must have no bright or loud pattern.",
     "Wear classic black leather brogue lace-up shoes. Never use loafers, sneakers, boots or suede footwear.",
   ].join(" ");
+}
+
+function fabricScaleInstruction(garmentLabel) {
+  return [
+    "PHYSICAL PATTERN SCALE — CRITICAL:",
+    "REFERENCE B shows approximately 15 cm of real cloth. Use this as the physical scale anchor for the fabric.",
+    `On the ${garmentLabel}, preserve the same real-world repeat size visible in REFERENCE B. Do not enlarge the check, herringbone, stripe, windowpane, glen check or any woven motif for decorative effect.`,
+    "Never turn a fine check into a large windowpane, a small check into a broad check, a fine herringbone into a wide chevron, or a narrow stripe into an oversized stripe.",
+    "If the repeat scale is ambiguous, choose a slightly smaller, denser, subtler repeat rather than a larger one.",
+  ].join("\n");
 }
 
 function shirtCollarInstruction(collar) {
@@ -1429,7 +1488,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "FABRIC FIDELITY — CRITICAL:",
       "REFERENCE B is not merely a colour reference. It is the actual cloth for the final shirt only.",
       "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
-      "Treat the swatch as a close-up of the real cloth. Preserve the same realistic apparent repeat on the complete shirt. Do not enlarge, simplify, smooth out, blur, shrink, stylise or genericise the pattern.",
+      fabricScaleInstruction("complete shirt"),
       "The trousers and shoes are supporting garments only. They must not use or imitate REFERENCE B.",
       "Do not show the swatch, any diagram, labels, text or logos in the final image.",
       "",
@@ -1478,8 +1537,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "FABRIC FIDELITY — CRITICAL:",
       "REFERENCE B is not merely a colour reference. It is the actual cloth for the final coat only.",
       "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
-      "Treat the swatch as a close-up of the real cloth. Preserve the same realistic apparent repeat on the complete coat. Do not enlarge, simplify, smooth out, blur, shrink, stylise or genericise the pattern.",
-      "Never turn a fine check or narrow stripe into a large windowpane, broad check or oversized stripe. If the physical repeat is ambiguous in the swatch, favour a smaller, subtler realistic repeat rather than magnifying it.",
+      fabricScaleInstruction("complete coat"),
       "The suit, shirt, tie, cardigan, trousers and shoes are supporting garments only. They must not use or imitate REFERENCE B.",
       "Do not show the swatch, any diagram, labels, text or logos in the final image.",
       "",
@@ -1513,13 +1571,12 @@ export function buildBourbakiOpenAiPrompt(input) {
       "FABRIC FIDELITY — CRITICAL:",
       "REFERENCE B is not merely a colour reference. It is the actual cloth for the final jacket only.",
       "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
-      "Treat the swatch as a close-up of the real cloth. Preserve the same realistic apparent repeat on the jacket. Do not enlarge, simplify, smooth out, blur, shrink, stylise or genericise the pattern.",
-      "Never turn a fine check or narrow stripe into a large windowpane, broad check or oversized stripe. If the physical repeat is ambiguous in the swatch, favour a smaller, subtler realistic repeat rather than magnifying it.",
+      fabricScaleInstruction("standalone jacket"),
       "The white shirt, selected companion bottom and dark-brown leather penny loafers are supporting garments only. They must not use or imitate REFERENCE B.",
       "Do not show the swatch, any diagram, labels, text or logos in the final image.",
       "",
       "JACKET CONSTRUCTION:",
-      buttonInstruction(jacket.front, jacket.buttonConfiguration),
+      standaloneJacketButtonInstruction(jacket.front, jacket.buttonConfiguration),
       lapelInstruction(jacket.lapels),
       shoulderInstruction(jacket.shoulders, jacket.sleeveCharacter),
       silhouetteInstruction(jacket.silhouette),
@@ -1531,7 +1588,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       ),
       ventInstruction(jacket.vent),
       milaneseInstruction(jacket.milaneseButtonhole),
-      "The jacket is open and unbuttoned so its lapel roll, breast pocket and both lower pockets remain fully readable.",
+      "The standalone jacket is worn closed and correctly buttoned. Do not render it hanging open; do not spread, pull back or separate the fronts. Keep the lapel roll, breast pocket and lower pockets readable without opening the jacket.",
       "",
       "POSE AND PRESENTATION:",
       "Use a full-length three-quarter front view. The complete head, jacket, companion bottom and both shoes must be inside the frame.",
@@ -1560,8 +1617,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "FABRIC FIDELITY — CRITICAL:",
       "REFERENCE B is not merely a colour reference. It is the actual cloth for the final trousers only.",
       "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
-      "Treat the swatch as a close-up of the real cloth. Preserve the same realistic apparent repeat on the trousers. Do not enlarge, simplify, smooth out, blur, shrink, stylise or genericise the pattern.",
-      "Never turn a fine check or narrow stripe into a large windowpane, broad check or oversized stripe. If the physical repeat is ambiguous in the swatch, favour a smaller, subtler realistic repeat rather than magnifying it.",
+      fabricScaleInstruction("standalone trousers"),
       "The white shirt and dark-brown leather penny loafers are supporting garments only. They must not use or imitate REFERENCE B.",
       "Do not show the swatch, any diagram, labels, text or logos in the final image.",
       "",
@@ -1594,7 +1650,7 @@ export function buildBourbakiOpenAiPrompt(input) {
     "FABRIC FIDELITY — CRITICAL:",
     "REFERENCE B is not merely a colour reference. It is the actual cloth for the final jacket, trousers, and matching waistcoat when present.",
     "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
-    "Treat the swatch as a close-up of the real cloth. Do not reinterpret, simplify, smooth out, blur, enlarge, shrink, stylise, or genericise the fabric.",
+    fabricScaleInstruction("jacket, trousers and matching waistcoat when present"),
     "The garment must remain recognisably made from the same cloth as REFERENCE B at realistic garment scale.",
     "Do not show the swatch, any diagram, labels, text or logos in the final image.",
     "",

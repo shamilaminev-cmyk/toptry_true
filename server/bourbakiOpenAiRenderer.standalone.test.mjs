@@ -58,7 +58,12 @@ test("standalone jacket is accepted by the existing render-v2 parser", () => {
   assert.match(prompt, /fully tucked cleanly into the selected companion bottom/i);
   assert.match(prompt, /dark-brown leather penny loafers/i);
   assert.match(prompt, /never suede, never tassel loafers and never Oxford shoes/i);
-  assert.match(prompt, /fine check or narrow stripe/i);
+  assert.match(prompt, /REFERENCE B shows approximately 15 cm of real cloth/i);
+  assert.match(prompt, /fine herringbone into a wide chevron/i);
+  assert.match(prompt, /worn closed and correctly buttoned/i);
+  assert.match(prompt, /must be worn closed and buttoned/i);
+  assert.match(prompt, /not open or hanging apart/i);
+  assert.doesNotMatch(prompt, /open and unbuttoned so its lapel roll/i);
   assert.match(prompt, /approximately 15 to 20 degrees/i);
   assert.match(prompt, /fully outside every pocket/i);
   assert.match(prompt, /ticket pocket/i);
@@ -96,7 +101,8 @@ test("standalone trousers are accepted by the existing render-v2 parser", () => 
   assert.match(prompt, /no belt/i);
   assert.match(prompt, /dark-brown leather penny loafers/i);
   assert.match(prompt, /never suede, never tassel loafers and never Oxford shoes/i);
-  assert.match(prompt, /fine check or narrow stripe/i);
+  assert.match(prompt, /REFERENCE B shows approximately 15 cm of real cloth/i);
+  assert.match(prompt, /fine herringbone into a wide chevron/i);
 });
 
 const shirt = {
@@ -155,6 +161,7 @@ test("shirt defaults to tucked flannel trousers, grey socks and penny loafers", 
   assert.match(prompt, /solid medium-grey socks/i);
   assert.match(prompt, /dark-brown leather penny loafers with a clear penny strap/i);
   assert.match(prompt, /Never use suede, tassel loafers/i);
+  assert.match(prompt, /REFERENCE B shows approximately 15 cm of real cloth/i);
 });
 
 test("shirt honours the untucked presentation from the Bourbaki shirt builder", () => {
@@ -301,7 +308,11 @@ test("coat is accepted by the existing render-v2 parser with its archetype contr
   assert.match(prompt, /dark navy tailored suit/i);
   assert.match(prompt, /muted dark tie/i);
   assert.match(prompt, /black leather brogue lace-up shoes/i);
-  assert.match(prompt, /fine check or narrow stripe/i);
+  assert.match(prompt, /REFERENCE B shows approximately 15 cm of real cloth/i);
+  assert.match(prompt, /wide PEAK LAPELS/i);
+  assert.match(prompt, /clearly separated wide peak lapels/i);
+  assert.match(prompt, /Do not render notch lapels, shawl lapels/i);
+  assert.match(prompt, /generic folded overcoat collar/i);
 });
 
 test("chesterfield accepts lower pocket flaps as an archetype-specific option", () => {
@@ -374,6 +385,26 @@ test("peacoat uses its dedicated companion outfit and no tie", () => {
   assert.match(prompt, /Do not add a tie/i);
   assert.match(prompt, /one adjustable sleeve cuff tab on each sleeve/i);
   assert.match(prompt, /exactly one visible button/i);
+});
+
+
+test("two-piece suit prompt keeps the jacket open but uses the same 15 cm fabric scale anchor", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_THREE_QUARTER_OPEN_V1",
+    fabricSwatch,
+    configuration: {
+      suitType: "TWO_PIECE",
+      waistcoat: false,
+      jacket,
+      trousers,
+    },
+  });
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /literal final suit cloth/i);
+  assert.match(prompt, /REFERENCE B shows approximately 15 cm of real cloth/i);
+  assert.match(prompt, /fine herringbone into a wide chevron/i);
+  assert.match(prompt, /The jacket is open and unbuttoned/i);
 });
 
 test("shoe patina accepts a shoe reference image and keeps the source scene authoritative", () => {
