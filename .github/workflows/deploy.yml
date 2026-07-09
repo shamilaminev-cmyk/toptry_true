@@ -141,6 +141,7 @@ jobs:
               --network "$NETWORK" \
               --env-file "$ENV_FILE" \
               -e AI_GATEWAY_ROLE=gateway \
+              -e BOURBAKI_FABRIC_CLASSIFIER_MODEL=gemini-2.5-flash \
               -p "$PORT_BIND" \
               "$PREVIOUS_IMAGE" >/dev/null
           }
@@ -182,6 +183,7 @@ jobs:
             --network "$NETWORK" \
             --env-file "$ENV_FILE" \
             -e AI_GATEWAY_ROLE=gateway \
+            -e BOURBAKI_FABRIC_CLASSIFIER_MODEL=gemini-2.5-flash \
             -p "$PORT_BIND" \
             "$IMAGE_API:$TAG" >/dev/null
           REPLACED=1
