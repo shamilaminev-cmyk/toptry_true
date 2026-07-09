@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v10-pattern-calibration";
+  "bourbaki-openai-one-shot-v11-suit-pattern-calibration";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -1357,6 +1357,22 @@ function fabricScaleInstruction(garmentLabel) {
   return lines.join("\\n");
 }
 
+function suitFabricScaleInstruction() {
+  return [
+    "SUIT-SPECIFIC PATTERN SCALE CALIBRATION — CRITICAL:",
+    "REFERENCE B still represents approximately 15 cm of real cloth, but a full suit gives the model too much surface area and it may enlarge the check or woven motif.",
+    "For a checked suit, make the repeat visibly smaller, calmer and more densely repeated than for a decorative sport coat.",
+    "Across each visible jacket front panel, from lapel edge to side seam, show many small repeat cells, not only 3 to 6 large blocks.",
+    "Across each trouser thigh and each trouser lower leg, show many repeated cells. The trousers must not be drawn with a handful of broad squares.",
+    "The jacket and trousers must share exactly the same fabric scale. Do not make the trouser pattern larger, bolder or more graphic than the jacket pattern.",
+    "Pattern matching is less important than correct real-world repeat scale. Do not make the check bold just to make it readable.",
+    "If the model is unsure, reduce the suit pattern scale again by about 50% compared with the previous default interpretation.",
+    "At normal full-length viewing distance, the suit should read as tailored cloth with a fine or medium-fine check, not as a loud oversized stage costume pattern.",
+    "For herringbone, keep it as a fine woven texture. Do not turn it into large zig-zag chevrons.",
+  ].join("\n");
+}
+
+
 function shirtCollarInstruction(collar) {
   const type = {
     CLASSIC: "Use a true classic point collar, not a semi-spread or French spread collar. Keep the opening restrained and the points clearly forward-oriented.",
@@ -1687,6 +1703,7 @@ export function buildBourbakiOpenAiPrompt(input) {
     "REFERENCE B is not merely a colour reference. It is the actual cloth for the final jacket, trousers, and matching waistcoat when present.",
     "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
     fabricScaleInstruction("jacket, trousers and matching waistcoat when present"),
+    suitFabricScaleInstruction(),
     "The garment must remain recognisably made from the same cloth as REFERENCE B at realistic garment scale.",
     "Do not show the swatch, any diagram, labels, text or logos in the final image.",
     "",

@@ -445,6 +445,30 @@ test("two-piece suit prompt also carries the stronger pattern-scale calibration"
   assert.match(prompt, /The jacket is open and unbuttoned/i);
 });
 
+
+
+test("suit prompt adds suit-specific pattern-scale calibration", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_THREE_QUARTER_OPEN_V1",
+    fabricSwatch,
+    configuration: {
+      suitType: "TWO_PIECE",
+      waistcoat: false,
+      jacket,
+      trousers,
+    },
+  });
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /SUIT-SPECIFIC PATTERN SCALE CALIBRATION/i);
+  assert.match(prompt, /full suit gives the model too much surface area/i);
+  assert.match(prompt, /not only 3 to 6 large blocks/i);
+  assert.match(prompt, /each trouser thigh and each trouser lower leg/i);
+  assert.match(prompt, /jacket and trousers must share exactly the same fabric scale/i);
+  assert.match(prompt, /reduce the suit pattern scale again by about 50%/i);
+  assert.match(prompt, /not as a loud oversized stage costume pattern/i);
+});
+
 test("shoe patina accepts a shoe reference image and keeps the source scene authoritative", () => {
   const input = parseBourbakiOpenAiRenderInput({
     renderPreset: "SHOE_PATINA_STUDIO_V1",
