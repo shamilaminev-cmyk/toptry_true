@@ -407,6 +407,44 @@ test("two-piece suit prompt keeps the jacket open but uses the same 15 cm fabric
   assert.match(prompt, /The jacket is open and unbuttoned/i);
 });
 
+
+
+test("standalone jacket prompt adds quantitative pattern-scale calibration", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_STANDALONE_JACKET_V1",
+    fabricSwatch,
+    configuration: { jacket, companionBottom: "GREY_TROUSERS" },
+  });
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /REFERENCE B shows approximately 15 cm of real cloth/i);
+  assert.match(prompt, /hard physical scale anchor/i);
+  assert.match(prompt, /small check into a broad sport-coat check/i);
+  assert.match(prompt, /Bias strongly toward a finer, denser, smaller repeat/i);
+  assert.match(prompt, /lapel width should contain several small check cells/i);
+  assert.match(prompt, /One front panel should show many repeated cells/i);
+  assert.match(prompt, /40% to 60% smaller than the model's default guess/i);
+});
+
+test("two-piece suit prompt also carries the stronger pattern-scale calibration", () => {
+  const input = parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_THREE_QUARTER_OPEN_V1",
+    fabricSwatch,
+    configuration: {
+      suitType: "TWO_PIECE",
+      waistcoat: false,
+      jacket,
+      trousers,
+    },
+  });
+
+  const prompt = buildBourbakiOpenAiPrompt(input);
+  assert.match(prompt, /REFERENCE B shows approximately 15 cm of real cloth/i);
+  assert.match(prompt, /small check into a broad sport-coat check/i);
+  assert.match(prompt, /lapel width should contain several small check cells/i);
+  assert.match(prompt, /The jacket is open and unbuttoned/i);
+});
+
 test("shoe patina accepts a shoe reference image and keeps the source scene authoritative", () => {
   const input = parseBourbakiOpenAiRenderInput({
     renderPreset: "SHOE_PATINA_STUDIO_V1",

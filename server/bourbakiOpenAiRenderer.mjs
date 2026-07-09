@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v9-construction-scale";
+  "bourbaki-openai-one-shot-v10-pattern-calibration";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -1312,13 +1312,49 @@ function coatStylingInstruction(coatType) {
 }
 
 function fabricScaleInstruction(garmentLabel) {
-  return [
+  const normalized = String(garmentLabel || "").toLowerCase();
+  const isTailoredUpperBody =
+    normalized.includes("jacket") ||
+    normalized.includes("coat") ||
+    normalized.includes("waistcoat");
+  const isShirt = normalized.includes("shirt");
+  const isTrousers = normalized.includes("trousers");
+
+  const lines = [
     "PHYSICAL PATTERN SCALE — CRITICAL:",
-    "REFERENCE B shows approximately 15 cm of real cloth. Use this as the physical scale anchor for the fabric.",
+    "REFERENCE B shows approximately 15 cm of real cloth. Use this as a hard physical scale anchor for the fabric.",
     `On the ${garmentLabel}, preserve the same real-world repeat size visible in REFERENCE B. Do not enlarge the check, herringbone, stripe, windowpane, glen check or any woven motif for decorative effect.`,
-    "Never turn a fine check into a large windowpane, a small check into a broad check, a fine herringbone into a wide chevron, or a narrow stripe into an oversized stripe.",
-    "If the repeat scale is ambiguous, choose a slightly smaller, denser, subtler repeat rather than a larger one.",
-  ].join("\n");
+    "Never turn a fine check into a large windowpane, a small check into a broad sport-coat check, a fine herringbone into a wide chevron, or a narrow stripe into an oversized stripe.",
+    "The common failure to avoid is an oversized decorative pattern. Bias strongly toward a finer, denser, smaller repeat than the model's default interpretation.",
+  ];
+
+  if (isTailoredUpperBody) {
+    lines.push(
+      "If REFERENCE B contains a check or grid pattern, a lapel width should contain several small check cells, not one large square.",
+      "One front panel should show many repeated cells from lapel edge to side seam. Do not render only a handful of large checks across the jacket or coat front.",
+      "The pattern must read like real cloth at garment scale, not like a bold enlarged sport-coat graphic.",
+    );
+  }
+
+  if (isShirt) {
+    lines.push(
+      "If REFERENCE B contains a check, stripe or other small repeat, the shirt body, placket and collar should show a fine, dense, shirting-scale repeat rather than enlarged decorative blocks.",
+      "The collar and visible front should not be dominated by a few oversized cells or stripes.",
+    );
+  }
+
+  if (isTrousers) {
+    lines.push(
+      "If REFERENCE B contains a check or grid pattern, each visible trouser leg should show many repeated cells. Do not render broad oversized blocks across the leg.",
+      "The pattern must remain fine enough to read as tailored trouser cloth rather than a loud novelty check.",
+    );
+  }
+
+  lines.push(
+    "If the repeat scale is still ambiguous, shrink it substantially: make it about 40% to 60% smaller than the model's default guess rather than larger.",
+  );
+
+  return lines.join("\\n");
 }
 
 function shirtCollarInstruction(collar) {
