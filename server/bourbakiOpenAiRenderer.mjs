@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v12-trouser-length-socks";
+  "bourbaki-openai-one-shot-v11-suit-pattern-calibration";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -1172,37 +1172,6 @@ function poseInstruction(ticketPocket) {
   ].join(" ");
 }
 
-function supportingTrousersLengthAndSocksInstruction(sockColor, trouserLabel = "supporting trousers") {
-  return [
-    `All ${trouserLabel} must be full length: the hems must reach the shoe collars/top line with a slight natural tailored break.`,
-    "Never crop supporting trousers or jeans above the ankle; never make them capri-length, high-water, ankle-length or intentionally shortened no-break styling.",
-    "Do not raise trouser hems merely to display socks.",
-    `Dress socks are mandatory: wear solid ${sockColor} socks coordinated with the trouser colour.`,
-    "No bare ankles, no bare skin between trouser hem and shoe, no invisible/no-show socks, no sockless styling.",
-    "If any ankle gap is visible in the pose, it must be covered by these socks rather than bare skin.",
-  ].join(" ");
-}
-
-function standaloneJacketCompanionSocksInstruction(companionBottom) {
-  if (companionBottom === "DARK_BLUE_JEANS") {
-    return supportingTrousersLengthAndSocksInstruction("dark navy-blue", "dark-blue jeans");
-  }
-
-  if (companionBottom === "BEIGE_TROUSERS") {
-    return supportingTrousersLengthAndSocksInstruction("beige or light taupe", "beige tailored trousers");
-  }
-
-  return supportingTrousersLengthAndSocksInstruction("medium-grey", "mid-grey tailored trousers");
-}
-
-function selectedTrousersMandatorySocksInstruction(trouserLabel = "trousers") {
-  return [
-    `Dress socks are mandatory with the ${trouserLabel}: choose a solid sock colour coordinated with the trouser fabric, preferably the same tone as the trousers.`,
-    "Never render bare ankles, bare skin between trouser hem and shoe, invisible/no-show socks or sockless styling.",
-    "If any ankle area is visible because of the stance or trouser break, it must be covered by the socks.",
-  ].join(" ");
-}
-
 function standaloneJacketCompanionBottomInstruction(companionBottom) {
   const descriptions = {
     DARK_BLUE_JEANS: [
@@ -1331,7 +1300,6 @@ function coatStylingInstruction(coatType) {
   if (coatType === "PEACOAT") {
     return [
       "Wear medium-grey flannel tailored trousers, a plain white dress shirt and a dark charcoal or navy cardigan.",
-      supportingTrousersLengthAndSocksInstruction("medium-grey", "medium-grey flannel tailored trousers"),
       "Do not add a tie.",
       "Wear classic black leather brogue lace-up shoes. Never use loafers, sneakers, boots or suede footwear.",
     ].join(" ");
@@ -1339,7 +1307,6 @@ function coatStylingInstruction(coatType) {
 
   return [
     "Wear a dark navy tailored suit beneath the coat, a plain white dress shirt and a muted dark tie in navy, charcoal or dark burgundy. The tie must have no bright or loud pattern.",
-    supportingTrousersLengthAndSocksInstruction("dark navy", "dark navy suit trousers worn beneath the coat"),
     "Wear classic black leather brogue lace-up shoes. Never use loafers, sneakers, boots or suede footwear.",
   ].join(" ");
 }
@@ -1586,10 +1553,10 @@ export function buildBourbakiOpenAiPrompt(input) {
       shirtHemInstruction(shirt.hem),
       "",
       "POSE AND PRESENTATION:",
-      "Use a full-length three-quarter front studio view. The complete head, shirt hem, full-length trouser or jean hems and both shoes must be inside the frame.",
+      "Use a full-length three-quarter front studio view. The complete head, shirt hem, trouser hems, both visible sock bands and both shoes must be inside the frame.",
       "The model stands upright with the torso turned approximately 15 to 20 degrees away from the frontal plane. Keep the collar, placket, chest-pocket architecture, both cuffs and the hem clearly readable.",
       "Both arms remain relaxed naturally at the sides. Both hands must remain fully outside every pocket and must not cover the collar, placket, chest pockets, cuffs or shirt hem.",
-      "The trouser or jean hems must fall naturally to the shoes with a slight tailored break; do not shorten them to expose sock bands and never show bare ankles.",
+      "The trouser hems must sit high enough above the shoe collars in this stance to leave a clearly visible band of socks above each loafer. Do not crop, conceal or omit either sock.",
       "The pose must remain elegant and natural, not exaggerated. Do not let hands, deep shadows or excessive drape hide the selected construction.",
       "",
       "STYLING:",
@@ -1600,8 +1567,8 @@ export function buildBourbakiOpenAiPrompt(input) {
         ? "Wear dark indigo-blue jeans with a relaxed straight or gently tapered line. The denim may show only minimal, subtle, natural fading and light wear. Do not use grey flannel trousers, formal wool trousers, black trousers, shorts, cargo trousers, casual joggers, rips, tears, holes, patches or heavy distressing."
         : "Wear medium-grey flannel tailored trousers with a clean, relaxed straight or gently tapered line. Do not use jeans, denim, blue trousers, black trousers, shorts, cargo trousers or casual joggers.",
       shirt.wearingStyle === "UNTUCKED"
-        ? supportingTrousersLengthAndSocksInstruction("dark navy-blue", "dark indigo-blue jeans")
-        : supportingTrousersLengthAndSocksInstruction("medium-grey", "medium-grey flannel tailored trousers"),
+        ? "Wear solid dark navy-blue socks, visibly coordinated with the indigo jeans. The socks must be clearly visible above both shoes."
+        : "Wear solid medium-grey socks, visibly coordinated with the grey flannel trousers. The socks must be clearly visible above both shoes.",
       shirt.wearingStyle === "UNTUCKED"
         ? "Wear dark-brown suede tassel loafers. The vamp tassels and matte suede texture must be clearly visible. Never use leather penny loafers, penny straps, Oxford shoes, sneakers, boots or any other shoe style."
         : "Wear dark-brown leather penny loafers with a clear penny strap. Never use suede, tassel loafers, Oxford shoes, sneakers, boots or any other shoe style.",
@@ -1685,7 +1652,6 @@ export function buildBourbakiOpenAiPrompt(input) {
       "Wear only a plain white open-collar dress shirt without a tie, fully tucked cleanly into the selected companion bottom with no untucked shirt hem visible.",
       "Wear dark-brown leather penny loafers. They must be smooth or subtly patinated leather, never suede, never tassel loafers and never Oxford shoes.",
       companionBottomInstruction,
-      standaloneJacketCompanionSocksInstruction(companionBottom),
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
       "No pocket square, scarf, watch, jewellery, belt ornament, bag, outerwear, extra accessories, visible branding, text or watermark.",
     ].join("\n");
@@ -1714,7 +1680,6 @@ export function buildBourbakiOpenAiPrompt(input) {
       "Use a direct front full-length view. The complete head, shirt, waistband, trouser hems and both shoes must be inside the frame.",
       "The model stands upright facing directly toward the camera; both shoulders, hips and shoes face forward.",
       "Wear only a plain white classic dress shirt, fully tucked cleanly into the trouser waistband, without a tie or belt, and dark-brown leather penny loafers. The loafers must be smooth or subtly patinated leather, never suede, never tassel loafers and never Oxford shoes.",
-      selectedTrousersMandatorySocksInstruction("standalone trousers"),
       "There must be no jacket, waistcoat, knitwear, overshirt, coat, belt, scarf, bag, watch, jewellery or other accessory.",
       "Keep the waistband, closure, front pleats and side pockets unobstructed. Keep both hands relaxed at the sides.",
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
@@ -1760,7 +1725,6 @@ export function buildBourbakiOpenAiPrompt(input) {
     "TROUSERS:",
     "The trousers are tailored in the same literal fabric as the jacket.",
     trouserInstruction(trousers),
-    selectedTrousersMandatorySocksInstruction("suit trousers"),
     "",
     "WAISTCOAT:",
     waistcoatInstruction(configuration.waistcoat, vest),
