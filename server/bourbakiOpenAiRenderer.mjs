@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v12-trouser-break-socks-lite";
+  "bourbaki-openai-one-shot-v13-trouser-break-socks-refined";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -1556,7 +1556,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "Use a full-length three-quarter front studio view. The complete head, shirt hem, full-length trouser or jean hems, colour-matched dress socks and both shoes must be inside the frame.",
       "The model stands upright with the torso turned approximately 15 to 20 degrees away from the frontal plane. Keep the collar, placket, chest-pocket architecture, both cuffs and the hem clearly readable.",
       "Both arms remain relaxed naturally at the sides. Both hands must remain fully outside every pocket and must not cover the collar, placket, chest pockets, cuffs or shirt hem.",
-      "The trousers or jeans must be full length to the shoes with a slight natural tailored break. Socks are mandatory and must match the trouser or jean colour. Never render bare ankles, bare skin between trouser hem and shoe, no-show socks or sockless styling.",
+      "The trousers or jeans must be full length to the shoes with a very light, barely visible break. The hem should just touch the shoes and must not create a full break or heavy stacking. Socks are mandatory and must match the trouser or jean colour. Never render bare ankles, bare skin between trouser hem and shoe, no-show socks or sockless styling.",
       "The pose must remain elegant and natural, not exaggerated. Do not let hands, deep shadows or excessive drape hide the selected construction.",
       "",
       "STYLING:",
@@ -1605,7 +1605,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "",
       "STYLING:",
       coatStylingInstruction(coat.type),
-      "Any trousers visible beneath the coat must be full length to the shoes with a slight natural tailored break. Socks are mandatory and must match the visible trouser colour; never show bare ankles or sockless styling.",
+      "Any trousers visible beneath the coat must be full length to the shoes with a very light, barely visible break. The hem should just touch the shoes and must not create a full break or heavy stacking. Socks are mandatory and must match the visible trouser colour; never show bare ankles or sockless styling.",
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
       "No pocket square, scarf, bag, watch, jewellery, belt ornament, extra outerwear, visible branding, text or watermark.",
     ].join("\n");
@@ -1653,7 +1653,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "Wear only a plain white open-collar dress shirt without a tie, fully tucked cleanly into the selected companion bottom with no untucked shirt hem visible.",
       "Wear dark-brown leather penny loafers. They must be smooth or subtly patinated leather, never suede, never tassel loafers and never Oxford shoes.",
       companionBottomInstruction,
-      "All companion trousers or jeans must be full length to the shoes with a slight natural tailored break. Socks are mandatory and must match the companion trouser or jean colour. Never show bare ankles, no-show socks or sockless styling.",
+      "All companion trousers or jeans must be full length to the shoes with a very light, barely visible break. The hem should just touch the shoes and must not create a full break or heavy stacking. Socks are mandatory and must match the companion trouser or jean colour. Never show bare ankles, no-show socks or sockless styling.",
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
       "No pocket square, scarf, watch, jewellery, belt ornament, bag, outerwear, extra accessories, visible branding, text or watermark.",
     ].join("\n");
@@ -1682,7 +1682,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "Use a direct front full-length view. The complete head, shirt, waistband, trouser hems and both shoes must be inside the frame.",
       "The model stands upright facing directly toward the camera; both shoulders, hips and shoes face forward.",
       "Wear only a plain white classic dress shirt, fully tucked cleanly into the trouser waistband, without a tie or belt, and dark-brown leather penny loafers. The loafers must be smooth or subtly patinated leather, never suede, never tassel loafers and never Oxford shoes.",
-      "The standalone trousers must be full length to the shoes with a slight natural tailored break. Socks are mandatory and must match the trouser fabric colour; never show bare ankles, no-show socks or sockless styling.",
+      "The standalone trousers must be full length to the shoes with a very light, barely visible break. The hem should just touch the shoes and must not create a full break or heavy stacking. Socks are mandatory and must match the trouser fabric colour; never show bare ankles, no-show socks or sockless styling.",
       "There must be no jacket, waistcoat, knitwear, overshirt, coat, belt, scarf, bag, watch, jewellery or other accessory.",
       "Keep the waistband, closure, front pleats and side pockets unobstructed. Keep both hands relaxed at the sides.",
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
@@ -1728,7 +1728,7 @@ export function buildBourbakiOpenAiPrompt(input) {
     "TROUSERS:",
     "The trousers are tailored in the same literal fabric as the jacket.",
     trouserInstruction(trousers),
-    "The suit trousers must be full length to the shoes with a slight natural tailored break. Socks are mandatory and must match the trouser fabric colour; never show bare ankles, no-show socks or sockless styling.",
+    "The suit trousers must be full length to the shoes with a very light, barely visible break. The hem should just touch the shoes and must not create a full break or heavy stacking. Socks are mandatory and must match the trouser fabric colour; never show bare ankles, no-show socks or sockless styling.",
     "",
     "WAISTCOAT:",
     waistcoatInstruction(configuration.waistcoat, vest),

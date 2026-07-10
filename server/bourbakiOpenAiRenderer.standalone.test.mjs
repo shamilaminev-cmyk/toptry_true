@@ -519,7 +519,7 @@ test("Bourbaki prompts keep trousers full length and require colour-matched sock
     fabricSwatch,
     configuration: { shirt },
   }));
-  assert.match(tuckedShirtPrompt, /trousers or jeans must be full length to the shoes with a slight natural tailored break/i);
+  assert.match(tuckedShirtPrompt, /trousers or jeans must be full length to the shoes with a very light, barely visible break/i);
   assert.match(tuckedShirtPrompt, /solid medium-grey dress socks matched to the grey flannel trousers/i);
   assert.match(tuckedShirtPrompt, /Never render bare ankles/i);
   assert.doesNotMatch(tuckedShirtPrompt, /clearly visible band of socks/i);
