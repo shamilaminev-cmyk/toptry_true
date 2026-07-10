@@ -158,7 +158,7 @@ test("shirt defaults to tucked flannel trousers, grey socks and penny loafers", 
   assert.match(prompt, /straight hem with visible short side slits/i);
   assert.match(prompt, /fully and neatly tucked into the trouser waistband/i);
   assert.match(prompt, /medium-grey flannel tailored trousers/i);
-  assert.match(prompt, /solid medium-grey socks/i);
+  assert.match(prompt, /solid medium-grey dress socks/i);
   assert.match(prompt, /dark-brown leather penny loafers with a clear penny strap/i);
   assert.match(prompt, /Never use suede, tassel loafers/i);
   assert.match(prompt, /REFERENCE B shows approximately 15 cm of real cloth/i);
@@ -187,7 +187,7 @@ test("shirt honours the untucked presentation from the Bourbaki shirt builder", 
   assert.match(prompt, /dark indigo-blue jeans/i);
   assert.match(prompt, /minimal, subtle, natural fading and light wear/i);
   assert.match(prompt, /rips, tears, holes, patches or heavy distressing/i);
-  assert.match(prompt, /solid dark navy-blue socks/i);
+  assert.match(prompt, /solid dark navy-blue dress socks/i);
   assert.match(prompt, /dark-brown suede tassel loafers/i);
   assert.match(prompt, /vamp tassels and matte suede texture/i);
   assert.match(prompt, /Never use leather penny loafers, penny straps/i);
@@ -510,4 +510,58 @@ test("shoe patina rejects an unsupported model", () => {
     }),
     /INVALID_SHOE_PATINA_MODEL/,
   );
+});
+
+
+test("Bourbaki prompts keep trousers full length and require colour-matched socks", () => {
+  const tuckedShirtPrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_SHIRT_V1",
+    fabricSwatch,
+    configuration: { shirt },
+  }));
+  assert.match(tuckedShirtPrompt, /trousers or jeans must be full length to the shoes with a slight natural tailored break/i);
+  assert.match(tuckedShirtPrompt, /solid medium-grey dress socks matched to the grey flannel trousers/i);
+  assert.match(tuckedShirtPrompt, /Never render bare ankles/i);
+  assert.doesNotMatch(tuckedShirtPrompt, /clearly visible band of socks/i);
+
+  const untuckedShirtPrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_SHIRT_V1",
+    fabricSwatch,
+    configuration: { shirt, wearingStyle: "UNTUCKED" },
+  }));
+  assert.match(untuckedShirtPrompt, /solid dark navy-blue dress socks matched to the indigo jeans/i);
+
+  const jacketPrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_STANDALONE_JACKET_V1",
+    fabricSwatch,
+    configuration: { jacket, companionBottom: "GREY_TROUSERS" },
+  }));
+  assert.match(jacketPrompt, /All companion trousers or jeans must be full length to the shoes/i);
+  assert.match(jacketPrompt, /Socks are mandatory and must match the companion trouser or jean colour/i);
+
+  const coatPrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_COAT_V1",
+    fabricSwatch,
+    configuration: { coat: poloCoat },
+  }));
+  assert.match(coatPrompt, /Any trousers visible beneath the coat must be full length to the shoes/i);
+
+  const trousersPrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_STANDALONE_TROUSERS_V1",
+    fabricSwatch,
+    configuration: { trousers },
+  }));
+  assert.match(trousersPrompt, /The standalone trousers must be full length to the shoes/i);
+
+  const suitPrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_THREE_QUARTER_OPEN_V1",
+    fabricSwatch,
+    configuration: {
+      suitType: "TWO_PIECE",
+      waistcoat: false,
+      jacket,
+      trousers,
+    },
+  }));
+  assert.match(suitPrompt, /The suit trousers must be full length to the shoes/i);
 });
