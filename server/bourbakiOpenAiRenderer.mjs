@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v13-trouser-break-socks-refined";
+  "bourbaki-openai-one-shot-v14-gurkha-coat-closure";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -1605,6 +1605,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "",
       "STYLING:",
       coatStylingInstruction(coat.type),
+      "The coat must be worn fastened closed, not open. For Polo and Peacoat keep the double-breasted front properly overlapped and buttoned. For Chesterfield, Covert, Ulster, Raglan and Loden keep the front properly buttoned or fastened according to the selected coat type. Do not style the coat open, unbuttoned or unfastened.",
       "Any trousers visible beneath the coat must be full length to the shoes with a very light, barely visible break. The hem should just touch the shoes and must not create a full break or heavy stacking. Socks are mandatory and must match the visible trouser colour; never show bare ankles or sockless styling.",
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
       "No pocket square, scarf, bag, watch, jewellery, belt ornament, extra outerwear, visible branding, text or watermark.",
@@ -1677,6 +1678,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "",
       "TROUSER CONSTRUCTION:",
       trouserInstruction(trousers),
+      "If the selected trousers use a Gurkha waistband, render unmistakable Gurkha construction: an extended overlap waistband fastening with clearly visible side-adjuster straps or buckles at the waistband, no belt loops, and a clean high-rise tailored appearance. The shirt must be neatly tucked so the waistband remains fully visible and unobstructed.",
       "",
       "POSE AND PRESENTATION:",
       "Use a direct front full-length view. The complete head, shirt, waistband, trouser hems and both shoes must be inside the frame.",
@@ -1728,6 +1730,7 @@ export function buildBourbakiOpenAiPrompt(input) {
     "TROUSERS:",
     "The trousers are tailored in the same literal fabric as the jacket.",
     trouserInstruction(trousers),
+    "If the selected trousers use a Gurkha waistband, render unmistakable Gurkha construction: an extended overlap waistband fastening with clearly visible side-adjuster straps or buckles at the waistband, no belt loops, and a clean high-rise tailored appearance. If Gurkha is selected, the jacket opening must not hide the waistband; keep the front sufficiently open so the Gurkha overlap and side adjusters remain clearly readable.",
     "The suit trousers must be full length to the shoes with a very light, barely visible break. The hem should just touch the shoes and must not create a full break or heavy stacking. Socks are mandatory and must match the trouser fabric colour; never show bare ankles, no-show socks or sockless styling.",
     "",
     "WAISTCOAT:",
