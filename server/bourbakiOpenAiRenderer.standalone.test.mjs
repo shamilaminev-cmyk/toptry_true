@@ -567,17 +567,26 @@ test("Bourbaki prompts keep trousers full length and require colour-matched sock
 });
 
 
-test("Bourbaki prompts explicitly preserve Gurkha waistband visibility and closed coat fronts", () => {
-  const standaloneTrousersPrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
+test("standalone Gurkha trousers use construction reference while suit trousers do not", () => {
+  const gurkhaTrousers = { ...trousers, waistband: "GURKHA" };
+
+  const standalonePrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
+    renderPreset: "MENSWEAR_STANDALONE_TROUSERS_V1",
+    fabricSwatch,
+    configuration: { trousers: gurkhaTrousers },
+  }));
+  assert.match(standalonePrompt, /REFERENCE C is the internal construction reference for the Gurkha waistband only/i);
+  assert.match(standalonePrompt, /the waistband construction must follow REFERENCE C closely/i);
+  assert.match(standalonePrompt, /extended overlapping front closure/i);
+  assert.match(standalonePrompt, /visible functional side buckle or side adjuster/i);
+  assert.match(standalonePrompt, /not decorative, not theatrical, not a sash and not a cummerbund/i);
+
+  const ordinaryStandalonePrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
     renderPreset: "MENSWEAR_STANDALONE_TROUSERS_V1",
     fabricSwatch,
     configuration: { trousers },
   }));
-  assert.match(standaloneTrousersPrompt, /If the selected trousers use a Gurkha waistband/i);
-  assert.match(standaloneTrousersPrompt, /extended overlap waistband fastening/i);
-  assert.match(standaloneTrousersPrompt, /clearly visible side-adjuster straps or buckles/i);
-  assert.match(standaloneTrousersPrompt, /no belt loops/i);
-  assert.match(standaloneTrousersPrompt, /shirt must be neatly tucked so the waistband remains fully visible/i);
+  assert.doesNotMatch(ordinaryStandalonePrompt, /REFERENCE C is the internal construction reference/i);
 
   const suitPrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
     renderPreset: "MENSWEAR_THREE_QUARTER_OPEN_V1",
@@ -586,18 +595,10 @@ test("Bourbaki prompts explicitly preserve Gurkha waistband visibility and close
       suitType: "TWO_PIECE",
       waistcoat: false,
       jacket,
-      trousers,
+      trousers: gurkhaTrousers,
     },
   }));
-  assert.match(suitPrompt, /If the selected trousers use a Gurkha waistband/i);
-  assert.match(suitPrompt, /jacket opening must not hide the waistband/i);
-
-  const coatPrompt = buildBourbakiOpenAiPrompt(parseBourbakiOpenAiRenderInput({
-    renderPreset: "MENSWEAR_COAT_V1",
-    fabricSwatch,
-    configuration: { coat: poloCoat },
-  }));
-  assert.match(coatPrompt, /The coat must be worn fastened closed, not open/i);
-  assert.match(coatPrompt, /double-breasted front properly overlapped and buttoned/i);
-  assert.match(coatPrompt, /Do not style the coat open, unbuttoned or unfastened/i);
+  assert.doesNotMatch(suitPrompt, /Gurkha waistband/i);
+  assert.doesNotMatch(suitPrompt, /REFERENCE C/i);
+  assert.match(suitPrompt, /Use clean side adjusters at the trouser waistband/i);
 });

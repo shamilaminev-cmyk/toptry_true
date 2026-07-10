@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
 import OpenAI from "openai";
 
 export const BOURBAKI_OPENAI_RENDER_PROMPT_VERSION =
-  "bourbaki-openai-one-shot-v14-gurkha-coat-closure";
+  "bourbaki-openai-one-shot-v15-standalone-gurkha-reference";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const OUTPUT_SIZE = "1152x1536";
@@ -10,6 +11,7 @@ const OUTPUT_FORMAT = "webp";
 const OUTPUT_COMPRESSION = 92;
 const MAX_SWATCH_BYTES = 8 * 1024 * 1024;
 const MAX_SWATCH_BASE64_CHARS = 12_000_000;
+const GURKHA_WAISTBAND_REFERENCE_URL = new URL("./bourbakiReferences/gurkha-waistband-reference.jpg", import.meta.url);
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -1047,7 +1049,10 @@ function milaneseInstruction(selected) {
     : "Do not add a Milanese buttonhole.";
 }
 
-function trouserInstruction(trousers) {
+function trouserInstruction(trousers, options = {}) {
+  const waistbandKey = options.allowGurkha === false && trousers.waistband === "GURKHA"
+    ? "SIDE_ADJUSTERS"
+    : trousers.waistband;
   const fit = {
     SLIM: "Use a slim, narrow tailored leg.",
     CLASSIC: "Use a classic tailored trouser silhouette with balanced ease.",
@@ -1081,9 +1086,9 @@ function trouserInstruction(trousers) {
     BELT_LOOPS: "Use a trouser waistband with visible belt loops.",
     SIDE_ADJUSTERS: "Use clean side adjusters at the trouser waistband, with no belt loops.",
     SUSPENDER_BUTTONS: "Use a waistband with visible suspender buttons and no belt loops.",
-    GURKHA: "Use a clearly visible Gurkha waistband with distinctive side fastening straps and buckles, no belt and no belt loops.",
+    GURKHA: "Use a clearly visible true Gurkha waistband with a high rise, extended overlapping front closure, visible side fastening straps and buckles, no belt and no belt loops.",
     HOLLYWOOD: "Use a Hollywood waistband with a continuous extended waistband rising at the sides, with no belt loops.",
-  }[trousers.waistband];
+  }[waistbandKey];
 
   const sidePockets = trousers.sidePockets === "VERTICAL"
     ? "Use vertical side trouser pockets."
@@ -1662,9 +1667,11 @@ export function buildBourbakiOpenAiPrompt(input) {
 
   if (renderPreset === "MENSWEAR_STANDALONE_TROUSERS_V1") {
     const { trousers } = configuration;
+    const hasGurkhaWaistband = trousers.waistband === "GURKHA";
 
     return [
       "REFERENCE B is the fabric swatch and must be used as the literal final cloth for the standalone trousers.",
+      hasGurkhaWaistband ? "REFERENCE C is the internal construction reference for the Gurkha waistband only. Use it to understand the true waistband fastening logic, overlap, side buckles and tailored proportion. Do not copy its colour, cloth, shirt, pose, scene or styling." : null,
       "",
       "Create one realistic full-length studio fashion image of one adult man wearing the exact standalone tailored trousers specified below.",
       "Important: prioritise trouser construction accuracy and a clearly readable waistband over stylistic interpretation.",
@@ -1674,11 +1681,13 @@ export function buildBourbakiOpenAiPrompt(input) {
       "Use it faithfully for colour, contrast, texture, weave character, pattern visibility, and apparent scale.",
       fabricScaleInstruction("standalone trousers"),
       "The white shirt and dark-brown leather penny loafers are supporting garments only. They must not use or imitate REFERENCE B.",
+      hasGurkhaWaistband ? "REFERENCE C is not a fabric reference and is not a styling reference. The final trousers must use REFERENCE B cloth, while the waistband construction must follow the Gurkha construction language of REFERENCE C." : null,
       "Do not show the swatch, any diagram, labels, text or logos in the final image.",
       "",
       "TROUSER CONSTRUCTION:",
       trouserInstruction(trousers),
-      "If the selected trousers use a Gurkha waistband, render unmistakable Gurkha construction: an extended overlap waistband fastening with clearly visible side-adjuster straps or buckles at the waistband, no belt loops, and a clean high-rise tailored appearance. The shirt must be neatly tucked so the waistband remains fully visible and unobstructed.",
+      hasGurkhaWaistband ? "Because the selected trousers use a Gurkha waistband, the waistband construction must follow REFERENCE C closely in principle. Render a true tailored Gurkha waistband: high rise, extended overlapping front closure, long waistband extension crossing the front, visible functional side buckle or side adjuster, no belt, no belt loops. The closure must look structurally believable and tailored, not decorative, not theatrical, not a sash and not a cummerbund." : null,
+      hasGurkhaWaistband ? "The Gurkha waistband must be the key detail. Keep the shirt tucked cleanly so the waistband remains fully visible and easy to read. The front overlap and side fastening system must be immediately recognizable as Gurkha construction rather than ordinary side-adjuster trousers." : null,
       "",
       "POSE AND PRESENTATION:",
       "Use a direct front full-length view. The complete head, shirt, waistband, trouser hems and both shoes must be inside the frame.",
@@ -1689,7 +1698,7 @@ export function buildBourbakiOpenAiPrompt(input) {
       "Keep the waistband, closure, front pleats and side pockets unobstructed. Keep both hands relaxed at the sides.",
       "Use a neutral, plain studio background, realistic proportions, sharp tailoring details and an elegant luxury menswear look.",
       "No visible branding, text or watermark.",
-    ].join("\n");
+    ].filter(Boolean).join("\n");
   }
 
   if (renderPreset !== "MENSWEAR_THREE_QUARTER_OPEN_V1") {
@@ -1729,8 +1738,7 @@ export function buildBourbakiOpenAiPrompt(input) {
     "",
     "TROUSERS:",
     "The trousers are tailored in the same literal fabric as the jacket.",
-    trouserInstruction(trousers),
-    "If the selected trousers use a Gurkha waistband, render unmistakable Gurkha construction: an extended overlap waistband fastening with clearly visible side-adjuster straps or buckles at the waistband, no belt loops, and a clean high-rise tailored appearance. If Gurkha is selected, the jacket opening must not hide the waistband; keep the front sufficiently open so the Gurkha overlap and side adjusters remain clearly readable.",
+    trouserInstruction(trousers, { allowGurkha: false }),
     "The suit trousers must be full length to the shoes with a very light, barely visible break. The hem should just touch the shoes and must not create a full break or heavy stacking. Socks are mandatory and must match the trouser fabric colour; never show bare ankles, no-show socks or sockless styling.",
     "",
     "WAISTCOAT:",
@@ -1788,6 +1796,29 @@ function createFabricFile(fabricSwatch) {
   );
 }
 
+function isStandaloneGurkhaTrousers(input) {
+  return input.renderPreset === "MENSWEAR_STANDALONE_TROUSERS_V1"
+    && input.configuration?.trousers?.waistband === "GURKHA";
+}
+
+function createGurkhaWaistbandReferenceFile() {
+  return new File(
+    [fs.readFileSync(GURKHA_WAISTBAND_REFERENCE_URL)],
+    "gurkha-waistband-reference.jpg",
+    { type: "image/jpeg" },
+  );
+}
+
+function createOpenAiEditImageInput(input) {
+  const images = [createFabricFile(input.fabricSwatch)];
+
+  if (isStandaloneGurkhaTrousers(input)) {
+    images.push(createGurkhaWaistbandReferenceFile());
+  }
+
+  return images.length === 1 ? images[0] : images;
+}
+
 function normalizeOpenAiError(error) {
   if (error?.code === "BOURBAKI_OPENAI_NOT_CONFIGURED") {
     return error;
@@ -1824,7 +1855,7 @@ export async function renderBourbakiOpenAiMenswear(input) {
   try {
     const response = await client.images.edit({
       model,
-      image: createFabricFile(input.fabricSwatch),
+      image: createOpenAiEditImageInput(input),
       prompt,
       size: OUTPUT_SIZE,
       quality,
