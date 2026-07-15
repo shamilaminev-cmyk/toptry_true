@@ -484,8 +484,17 @@ function assertInternalAiRequest(req, res) {
     return true;
   }
 
-  const got = String(req.headers["x-toptry-internal-secret"] || "").trim();
-  if (got && crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {
+  const got = String(
+    req.headers["x-toptry-internal-secret"] || ""
+  ).trim();
+
+  const expectedBuffer = Buffer.from(expected);
+  const gotBuffer = Buffer.from(got);
+
+  if (
+    gotBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(gotBuffer, expectedBuffer)
+  ) {
     return true;
   }
 
