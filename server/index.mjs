@@ -31,7 +31,8 @@ import {
 import {
   describeNeverendingNovelStoryArchitect,
   parseNeverendingNovelStoryArchitectInput,
-  runNeverendingNovelStoryArchitect,
+  retrieveNeverendingNovelStoryArchitect,
+  startNeverendingNovelStoryArchitect,
 } from "./neverendingNovelOpenAi.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
@@ -5518,7 +5519,7 @@ app.post(
         describeNeverendingNovelStoryArchitect();
 
       console.log(
-        "[toptry] Neverending Novel Story Architect request",
+        "[toptry] Neverending Novel Story Architect start",
         {
           model: description.model,
           reasoningEffort:
@@ -5532,14 +5533,20 @@ app.post(
       );
 
       const result =
-        await runNeverendingNovelStoryArchitect(
+        await startNeverendingNovelStoryArchitect(
           input
         );
 
-      return res.status(200).json({
-        ok: true,
-        data: result
-      });
+      return res
+        .status(
+          result.status === "completed"
+            ? 200
+            : 202
+        )
+        .json({
+          ok: true,
+          data: result
+        });
     } catch (error) {
       const code =
         error?.code ||
@@ -5551,7 +5558,7 @@ app.post(
           : 502;
 
       console.error(
-        "[toptry] Neverending Novel Story Architect failed",
+        "[toptry] Neverending Novel Story Architect start failed",
         {
           code,
           status,
@@ -5571,6 +5578,80 @@ app.post(
           status === 400
             ? error?.message ||
               "Invalid Story Architect request"
+            : status === 503
+              ? "Story Architect provider is not configured"
+              : "Story Architect is temporarily unavailable",
+        code
+      });
+    }
+  }
+);
+
+app.get(
+  "/internal/ai/neverending-novel/story-architect/:responseId",
+  async (req, res) => {
+    try {
+      if (!assertInternalAiRequest(req, res)) return;
+
+      if (
+        String(
+          process.env.AI_GATEWAY_ROLE || ""
+        ).trim().toLowerCase() !== "gateway"
+      ) {
+        return res.status(409).json({
+          error:
+            "This route is available only on the AI gateway",
+          code:
+            "NEVERENDING_NOVEL_GATEWAY_ROLE_REQUIRED"
+        });
+      }
+
+      const result =
+        await retrieveNeverendingNovelStoryArchitect(
+          req.params.responseId
+        );
+
+      return res
+        .status(
+          result.status === "completed"
+            ? 200
+            : 202
+        )
+        .json({
+          ok: true,
+          data: result
+        });
+    } catch (error) {
+      const code =
+        error?.code ||
+        "NEVERENDING_NOVEL_OPENAI_UPSTREAM_FAILED";
+
+      const status =
+        Number.isFinite(Number(error?.statusCode))
+          ? Number(error.statusCode)
+          : 502;
+
+      console.error(
+        "[toptry] Neverending Novel Story Architect poll failed",
+        {
+          code,
+          status,
+          providerStatus:
+            error?.providerStatus ?? null,
+          providerRequestId:
+            error?.providerRequestId ?? null,
+          message:
+            error instanceof Error
+              ? error.message.slice(0, 700)
+              : String(error).slice(0, 700)
+        }
+      );
+
+      return res.status(status).json({
+        error:
+          status === 400
+            ? error?.message ||
+              "Invalid Story Architect response id"
             : status === 503
               ? "Story Architect provider is not configured"
               : "Story Architect is temporarily unavailable",

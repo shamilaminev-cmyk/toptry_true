@@ -274,6 +274,7 @@ export function buildNeverendingNovelStoryArchitectRequest(
       effort: reasoningEffort
     },
     max_output_tokens: maxOutputTokens,
+    background: true,
     store: false
   };
 }
@@ -309,9 +310,7 @@ function normalizeUsage(usage) {
   };
 }
 
-export async function runNeverendingNovelStoryArchitect(
-  rawInput
-) {
+function createNeverendingNovelOpenAiClient() {
   const apiKey = String(
     process.env.OPENAI_API_KEY || ""
   ).trim();
@@ -324,13 +323,107 @@ export async function runNeverendingNovelStoryArchitect(
     );
   }
 
+  return new OpenAI({ apiKey });
+}
+
+function normalizeBackgroundResponse(
+  response,
+  requestMetadata
+) {
+  return {
+    provider: "openai",
+    model:
+      requestMetadata?.model ||
+      response?.model ||
+      null,
+    gatewayVersion:
+      NEVERENDING_NOVEL_ARCHITECT_GATEWAY_VERSION,
+    role: "story_architect",
+    schemaName:
+      NEVERENDING_NOVEL_ARCHITECT_SCHEMA_NAME,
+    responseId: response?.id ?? null,
+    providerRequestId:
+      response?._request_id ?? null,
+    status: String(response?.status || ""),
+    usage: normalizeUsage(response?.usage),
+    output: null
+  };
+}
+
+function parseCompletedArchitectResponse(
+  response,
+  requestMetadata
+) {
+  const outputText = String(
+    response?.output_text || ""
+  ).trim();
+
+  if (!outputText) {
+    throw createGatewayError(
+      "NEVERENDING_NOVEL_OPENAI_INVALID_RESPONSE",
+      "OpenAI did not return Story Architect output",
+      502,
+      {
+        providerRequestId:
+          response?._request_id ?? null
+      }
+    );
+  }
+
+  let output;
+
+  try {
+    output = JSON.parse(outputText);
+  } catch {
+    throw createGatewayError(
+      "NEVERENDING_NOVEL_OPENAI_INVALID_RESPONSE",
+      "OpenAI Story Architect output is not valid JSON",
+      502,
+      {
+        providerRequestId:
+          response?._request_id ?? null
+      }
+    );
+  }
+
+  return {
+    ...normalizeBackgroundResponse(
+      response,
+      requestMetadata
+    ),
+    status: "completed",
+    output
+  };
+}
+
+function validateResponseId(value) {
+  const responseId = String(value || "").trim();
+
+  if (
+    !/^resp_[A-Za-z0-9_-]+$/.test(responseId) ||
+    responseId.length > 220
+  ) {
+    throw createGatewayError(
+      "NEVERENDING_NOVEL_ARCHITECT_INVALID_RESPONSE_ID",
+      "Invalid OpenAI response id",
+      400
+    );
+  }
+
+  return responseId;
+}
+
+export async function startNeverendingNovelStoryArchitect(
+  rawInput
+) {
   const input =
     parseNeverendingNovelStoryArchitectInput(rawInput);
 
   const request =
     buildNeverendingNovelStoryArchitectRequest(input);
 
-  const client = new OpenAI({ apiKey });
+  const client =
+    createNeverendingNovelOpenAiClient();
 
   let response;
 
@@ -351,47 +444,81 @@ export async function runNeverendingNovelStoryArchitect(
     );
   }
 
-  const outputText = String(
-    response?.output_text || ""
-  ).trim();
-
-  if (!outputText) {
+  if (!response?.id) {
     throw createGatewayError(
       "NEVERENDING_NOVEL_OPENAI_INVALID_RESPONSE",
-      "OpenAI did not return Story Architect output",
-      502,
-      {
-        providerRequestId: response?._request_id ?? null
-      }
+      "OpenAI did not return a background response id",
+      502
     );
   }
 
-  let output;
+  if (response.status === "completed") {
+    return parseCompletedArchitectResponse(
+      response,
+      request
+    );
+  }
+
+  return normalizeBackgroundResponse(
+    response,
+    request
+  );
+}
+
+export async function retrieveNeverendingNovelStoryArchitect(
+  rawResponseId
+) {
+  const responseId = validateResponseId(rawResponseId);
+
+  const client =
+    createNeverendingNovelOpenAiClient();
+
+  let response;
 
   try {
-    output = JSON.parse(outputText);
-  } catch {
+    response = await client.responses.retrieve(
+      responseId
+    );
+  } catch (providerError) {
     throw createGatewayError(
-      "NEVERENDING_NOVEL_OPENAI_INVALID_RESPONSE",
-      "OpenAI Story Architect output is not valid JSON",
+      "NEVERENDING_NOVEL_OPENAI_UPSTREAM_FAILED",
+      "OpenAI Story Architect status request failed",
       502,
       {
-        providerRequestId: response?._request_id ?? null
+        providerStatus:
+          providerError?.status ?? null,
+        providerRequestId:
+          providerError?.request_id ?? null,
+        cause: providerError
       }
     );
   }
 
-  return {
-    provider: "openai",
-    model: request.model,
-    gatewayVersion:
-      NEVERENDING_NOVEL_ARCHITECT_GATEWAY_VERSION,
-    role: input.role,
-    schemaName: input.schemaName,
-    responseId: response?.id ?? null,
-    providerRequestId:
-      response?._request_id ?? null,
-    usage: normalizeUsage(response?.usage),
-    output
-  };
+  if (
+    response.status === "queued" ||
+    response.status === "in_progress"
+  ) {
+    return normalizeBackgroundResponse(
+      response,
+      response
+    );
+  }
+
+  if (response.status === "completed") {
+    return parseCompletedArchitectResponse(
+      response,
+      response
+    );
+  }
+
+  throw createGatewayError(
+    "NEVERENDING_NOVEL_OPENAI_TERMINAL_FAILURE",
+    `Story Architect response reached terminal status: ${response.status}`,
+    502,
+    {
+      providerRequestId:
+        response?._request_id ?? null,
+      responseId: response?.id ?? responseId
+    }
+  );
 }

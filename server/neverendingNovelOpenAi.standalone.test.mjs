@@ -111,5 +111,6 @@ test("builds a Responses API strict JSON Schema request", () => {
   assert.equal(request.text.format.strict, true);
   assert.equal(request.reasoning.effort, "high");
   assert.equal(request.max_output_tokens, 32000);
+  assert.equal(request.background, true);
   assert.equal(request.store, false);
 });
