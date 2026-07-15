@@ -413,6 +413,40 @@ function validateResponseId(value) {
   return responseId;
 }
 
+function logOpenAiProviderError(
+  operation,
+  providerError
+) {
+  const normalize = (value, maximumLength = 2000) => {
+    const normalized = String(value ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!normalized) {
+      return null;
+    }
+
+    return normalized.slice(0, maximumLength);
+  };
+
+  console.error(
+    `[toptry] Neverending Novel OpenAI ${operation} provider error`,
+    {
+      status: providerError?.status ?? null,
+      requestId:
+        providerError?.request_id ?? null,
+      name: normalize(providerError?.name, 200),
+      code: normalize(providerError?.code, 500),
+      type: normalize(providerError?.type, 500),
+      param: normalize(providerError?.param, 1000),
+      message: normalize(
+        providerError?.message,
+        2000
+      )
+    }
+  );
+}
+
 export async function startNeverendingNovelStoryArchitect(
   rawInput
 ) {
@@ -430,6 +464,11 @@ export async function startNeverendingNovelStoryArchitect(
   try {
     response = await client.responses.create(request);
   } catch (providerError) {
+    logOpenAiProviderError(
+      "start",
+      providerError
+    );
+
     throw createGatewayError(
       "NEVERENDING_NOVEL_OPENAI_UPSTREAM_FAILED",
       "OpenAI Story Architect request failed",
