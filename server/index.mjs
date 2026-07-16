@@ -40,6 +40,12 @@ import {
   retrieveNeverendingNovelOpeningArcPlanner,
   startNeverendingNovelOpeningArcPlanner,
 } from "./neverendingNovelArcPlannerOpenAi.mjs";
+import {
+  describeNeverendingNovelChapterPlanner,
+  parseNeverendingNovelChapterPlannerInput,
+  retrieveNeverendingNovelChapterPlanner,
+  startNeverendingNovelChapterPlanner,
+} from "./neverendingNovelChapterPlannerOpenAi.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
 
@@ -5841,6 +5847,177 @@ app.get(
             : status === 503
               ? "Opening Arc Planner provider is not configured"
               : "Opening Arc Planner is temporarily unavailable",
+        code
+      });
+    }
+  }
+);
+
+// toptry-neverending-novel-chapter-planner-v1
+app.post(
+  "/internal/ai/neverending-novel/chapter-planner",
+  async (req, res) => {
+    try {
+      if (!assertInternalAiRequest(req, res)) return;
+
+      if (
+        String(
+          process.env.AI_GATEWAY_ROLE || ""
+        ).trim().toLowerCase() !== "gateway"
+      ) {
+        return res.status(409).json({
+          error:
+            "This route is available only on the AI gateway",
+          code:
+            "NEVERENDING_NOVEL_GATEWAY_ROLE_REQUIRED"
+        });
+      }
+
+      const input =
+        parseNeverendingNovelChapterPlannerInput(
+          req.body
+        );
+
+      const description =
+        describeNeverendingNovelChapterPlanner();
+
+      console.log(
+        "[toptry] Neverending Novel Chapter Planner start",
+        {
+          model: description.model,
+          reasoningEffort:
+            description.reasoningEffort,
+          schemaName: input.schemaName,
+          systemPromptLength:
+            input.systemPrompt.length,
+          userPromptLength:
+            input.userPrompt.length
+        }
+      );
+
+      const result =
+        await startNeverendingNovelChapterPlanner(
+          input
+        );
+
+      return res
+        .status(
+          result.status === "completed"
+            ? 200
+            : 202
+        )
+        .json({
+          ok: true,
+          data: result
+        });
+    } catch (error) {
+      const code =
+        error?.code ||
+        "NEVERENDING_NOVEL_OPENAI_UPSTREAM_FAILED";
+
+      const status =
+        Number.isFinite(Number(error?.statusCode))
+          ? Number(error.statusCode)
+          : 502;
+
+      console.error(
+        "[toptry] Neverending Novel Chapter Planner start failed",
+        {
+          code,
+          status,
+          providerStatus:
+            error?.providerStatus ?? null,
+          providerRequestId:
+            error?.providerRequestId ?? null,
+          message:
+            error instanceof Error
+              ? error.message.slice(0, 700)
+              : String(error).slice(0, 700)
+        }
+      );
+
+      return res.status(status).json({
+        error:
+          status === 400
+            ? error?.message ||
+              "Invalid Chapter Planner request"
+            : status === 503
+              ? "Chapter Planner provider is not configured"
+              : "Chapter Planner is temporarily unavailable",
+        code
+      });
+    }
+  }
+);
+
+app.get(
+  "/internal/ai/neverending-novel/chapter-planner/:responseId",
+  async (req, res) => {
+    try {
+      if (!assertInternalAiRequest(req, res)) return;
+
+      if (
+        String(
+          process.env.AI_GATEWAY_ROLE || ""
+        ).trim().toLowerCase() !== "gateway"
+      ) {
+        return res.status(409).json({
+          error:
+            "This route is available only on the AI gateway",
+          code:
+            "NEVERENDING_NOVEL_GATEWAY_ROLE_REQUIRED"
+        });
+      }
+
+      const result =
+        await retrieveNeverendingNovelChapterPlanner(
+          req.params.responseId
+        );
+
+      return res
+        .status(
+          result.status === "completed"
+            ? 200
+            : 202
+        )
+        .json({
+          ok: true,
+          data: result
+        });
+    } catch (error) {
+      const code =
+        error?.code ||
+        "NEVERENDING_NOVEL_OPENAI_UPSTREAM_FAILED";
+
+      const status =
+        Number.isFinite(Number(error?.statusCode))
+          ? Number(error.statusCode)
+          : 502;
+
+      console.error(
+        "[toptry] Neverending Novel Chapter Planner poll failed",
+        {
+          code,
+          status,
+          providerStatus:
+            error?.providerStatus ?? null,
+          providerRequestId:
+            error?.providerRequestId ?? null,
+          message:
+            error instanceof Error
+              ? error.message.slice(0, 700)
+              : String(error).slice(0, 700)
+        }
+      );
+
+      return res.status(status).json({
+        error:
+          status === 400
+            ? error?.message ||
+              "Invalid Chapter Planner response id"
+            : status === 503
+              ? "Chapter Planner provider is not configured"
+              : "Chapter Planner is temporarily unavailable",
         code
       });
     }
