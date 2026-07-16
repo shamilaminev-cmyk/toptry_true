@@ -52,6 +52,12 @@ import {
   retrieveNeverendingNovelWriter,
   startNeverendingNovelWriter,
 } from "./neverendingNovelWriterOpenAi.mjs";
+import {
+  describeNeverendingNovelLiteraryEditor,
+  parseNeverendingNovelLiteraryEditorInput,
+  retrieveNeverendingNovelLiteraryEditor,
+  startNeverendingNovelLiteraryEditor,
+} from "./neverendingNovelLiteraryEditorOpenAi.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
 
@@ -6195,6 +6201,177 @@ app.get(
             : status === 503
               ? "Writer provider is not configured"
               : "Writer is temporarily unavailable",
+        code
+      });
+    }
+  }
+);
+
+// toptry-neverending-novel-literary-editor-v1
+app.post(
+  "/internal/ai/neverending-novel/literary-editor",
+  async (req, res) => {
+    try {
+      if (!assertInternalAiRequest(req, res)) return;
+
+      if (
+        String(
+          process.env.AI_GATEWAY_ROLE || ""
+        ).trim().toLowerCase() !== "gateway"
+      ) {
+        return res.status(409).json({
+          error:
+            "This route is available only on the AI gateway",
+          code:
+            "NEVERENDING_NOVEL_GATEWAY_ROLE_REQUIRED"
+        });
+      }
+
+      const input =
+        parseNeverendingNovelLiteraryEditorInput(
+          req.body
+        );
+
+      const description =
+        describeNeverendingNovelLiteraryEditor();
+
+      console.log(
+        "[toptry] Neverending Novel Literary Editor start",
+        {
+          model: description.model,
+          reasoningEffort:
+            description.reasoningEffort,
+          schemaName: input.schemaName,
+          systemPromptLength:
+            input.systemPrompt.length,
+          userPromptLength:
+            input.userPrompt.length
+        }
+      );
+
+      const result =
+        await startNeverendingNovelLiteraryEditor(
+          input
+        );
+
+      return res
+        .status(
+          result.status === "completed"
+            ? 200
+            : 202
+        )
+        .json({
+          ok: true,
+          data: result
+        });
+    } catch (error) {
+      const code =
+        error?.code ||
+        "NEVERENDING_NOVEL_OPENAI_UPSTREAM_FAILED";
+
+      const status =
+        Number.isFinite(Number(error?.statusCode))
+          ? Number(error.statusCode)
+          : 502;
+
+      console.error(
+        "[toptry] Neverending Novel Literary Editor start failed",
+        {
+          code,
+          status,
+          providerStatus:
+            error?.providerStatus ?? null,
+          providerRequestId:
+            error?.providerRequestId ?? null,
+          message:
+            error instanceof Error
+              ? error.message.slice(0, 700)
+              : String(error).slice(0, 700)
+        }
+      );
+
+      return res.status(status).json({
+        error:
+          status === 400
+            ? error?.message ||
+              "Invalid Literary Editor request"
+            : status === 503
+              ? "Literary Editor provider is not configured"
+              : "Literary Editor is temporarily unavailable",
+        code
+      });
+    }
+  }
+);
+
+app.get(
+  "/internal/ai/neverending-novel/literary-editor/:responseId",
+  async (req, res) => {
+    try {
+      if (!assertInternalAiRequest(req, res)) return;
+
+      if (
+        String(
+          process.env.AI_GATEWAY_ROLE || ""
+        ).trim().toLowerCase() !== "gateway"
+      ) {
+        return res.status(409).json({
+          error:
+            "This route is available only on the AI gateway",
+          code:
+            "NEVERENDING_NOVEL_GATEWAY_ROLE_REQUIRED"
+        });
+      }
+
+      const result =
+        await retrieveNeverendingNovelLiteraryEditor(
+          req.params.responseId
+        );
+
+      return res
+        .status(
+          result.status === "completed"
+            ? 200
+            : 202
+        )
+        .json({
+          ok: true,
+          data: result
+        });
+    } catch (error) {
+      const code =
+        error?.code ||
+        "NEVERENDING_NOVEL_OPENAI_UPSTREAM_FAILED";
+
+      const status =
+        Number.isFinite(Number(error?.statusCode))
+          ? Number(error.statusCode)
+          : 502;
+
+      console.error(
+        "[toptry] Neverending Novel Literary Editor poll failed",
+        {
+          code,
+          status,
+          providerStatus:
+            error?.providerStatus ?? null,
+          providerRequestId:
+            error?.providerRequestId ?? null,
+          message:
+            error instanceof Error
+              ? error.message.slice(0, 700)
+              : String(error).slice(0, 700)
+        }
+      );
+
+      return res.status(status).json({
+        error:
+          status === 400
+            ? error?.message ||
+              "Invalid Literary Editor response id"
+            : status === 503
+              ? "Literary Editor provider is not configured"
+              : "Literary Editor is temporarily unavailable",
         code
       });
     }
