@@ -4256,30 +4256,41 @@ const BOURBAKI_FABRIC_CLASSIFIER_MODEL = String(
 ).trim();
 const BOURBAKI_FABRIC_CLASSIFIER_MAX_IMAGE_URL_CHARS = 2_000;
 const BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_COLORS = new Set([
-  "white",
-  "light_blue",
-  "blue",
-  "gray",
-  "beige",
-  "pink",
-  "green",
-  "brown",
   "black",
+  "white",
+  "blue",
+  "light_blue",
+  "dark_blue",
+  "brown",
+  "gray",
+  "green",
+  "beige",
   "red",
+  "burgundy",
+  "orange",
   "yellow",
+  "pink",
   "purple",
   "multi",
-  "unknown",
+  "ecru",
+  "off_white",
 ]);
 const BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_PATTERNS = new Set([
   "PLAIN",
-  "STRIPE",
   "CHECK",
+  "STRIPE",
+  "PIN_STRIPES",
+  "CHALK_STRIPE",
+  "HERRINGBONE",
+  "HOUNDSTOOTH",
+  "BIRDS_EYE",
+  "NAILHEAD",
+  "JACQUARD",
+  "MICRO_DESIGN",
   "TEXTURED",
   "MELANGE",
   "DENIM",
-  "OTHER",
-  "UNKNOWN",
+  "SHARKSKIN",
 ]);
 
 function parseBourbakiFabricClassifierString(value, maxLength) {
@@ -4320,20 +4331,33 @@ function parseBourbakiFabricClassificationInput(value) {
 function buildBourbakiFabricClassificationPrompt(input) {
   return [
     "You are classifying fabric swatches for a Russian bespoke menswear configurator.",
-    "Look only at the fabric swatch image and return strict JSON. Do not return markdown, prose, code fences, or comments.",
+    "Look only at the fabric swatch image and return strict JSON. Do not return markdown, prose, code fences, comments, catalog labels, or source design names.",
     "Classify the dominant visual color family and the visible visual pattern of the cloth.",
-    "Use colorFamily exactly one of: white, light_blue, blue, gray, beige, pink, green, brown, black, red, yellow, purple, multi, unknown.",
-    "Use pattern exactly one of: PLAIN, STRIPE, CHECK, TEXTURED, MELANGE, DENIM, OTHER, UNKNOWN.",
+    "Use colorFamily exactly one of: black, white, blue, light_blue, dark_blue, brown, gray, green, beige, red, burgundy, orange, yellow, pink, purple, multi, ecru, off_white.",
+    "Never return unknown, other, fantasy, full color, full_color, mixed, neutral, or catalog source words for colorFamily.",
+    "If one base color dominates, choose that base color. If several colors are strongly visible and no single base dominates, choose multi.",
+    "Use pattern exactly one of: PLAIN, CHECK, STRIPE, PIN_STRIPES, CHALK_STRIPE, HERRINGBONE, HOUNDSTOOTH, BIRDS_EYE, NAILHEAD, JACQUARD, MICRO_DESIGN, TEXTURED, MELANGE, DENIM, SHARKSKIN.",
+    "Never return OTHER, UNKNOWN, Fantasy, Full Color, full_color, solid color, source design names, or free-text pattern labels.",
     "Pattern definitions:",
-    "- PLAIN: solid-looking cloth without visible stripe/check motif; subtle weave is allowed.",
-    "- STRIPE: clear lines or repeated stripes, including fine pinstripes.",
-    "- CHECK: clear check, grid, plaid or windowpane.",
-    "- TEXTURED: visible weave/structure such as oxford, pique, dobby, honeycomb, seersucker or other relief texture without stripe/check.",
-    "- MELANGE: heathered or mixed-yarn effect where color is mottled rather than flat.",
-    "- DENIM: denim/chambray-like blue twill appearance.",
-    "If the image is ambiguous, choose the closest category and lower the relevant confidence.",
+    "- PLAIN: visually smooth solid-looking cloth without a visible graphic motif; subtle plain weave is allowed.",
+    "- TEXTURED: visible weave, structure, relief, bouclé, hopsack, twill, oxford, piqué, dobby, honeycomb, seersucker, or wool surface without a stripe/check motif.",
+    "- MELANGE: heathered, mottled, mixed-yarn or pepper-and-salt tone without a clear graphic motif.",
+    "- MICRO_DESIGN: small irregular fantasy motif, tiny geometric motif, small printed/woven design, or decorative pattern that is not stripe, check, herringbone, houndstooth, birds-eye or nailhead.",
+    "- CHECK: any check, grid, plaid, tartan, madras, overcheck, glen check, Prince of Wales or windowpane.",
+    "- STRIPE: visible repeated stripes or lines that are not specifically pinstripes or chalk stripes.",
+    "- PIN_STRIPES: very fine suit pinstripes.",
+    "- CHALK_STRIPE: soft, wider, chalk-like suit stripes.",
+    "- HERRINGBONE: chevron or fishbone weave.",
+    "- HOUNDSTOOTH: broken check / dogtooth shape.",
+    "- BIRDS_EYE: tiny repeated dot/eye-like woven pattern.",
+    "- NAILHEAD: tiny regular nail-head dot texture.",
+    "- JACQUARD: woven ornamental or complex figured pattern.",
+    "- DENIM: denim or chambray-like blue twill appearance.",
+    "- SHARKSKIN: smooth two-tone worsted sharkskin effect.",
+    "If the image is ambiguous, choose the closest useful category instead of OTHER/UNKNOWN and lower the relevant confidence.",
+    "For catalog metadata saying Fantasy or Full Color, ignore that label and classify the actual visible image.",
     "Return JSON with this exact shape:",
-    '{"colorFamily":"white","pattern":"PLAIN","colorConfidence":0.0,"patternConfidence":0.0,"notes":"short reason"}',
+    '{"colorFamily":"blue","pattern":"TEXTURED","colorConfidence":0.0,"patternConfidence":0.0,"notes":"short reason"}',
     "Confidence values must be numbers from 0 to 1.",
     "Fabric metadata, for context only:",
     `supplier: ${input.supplier || "unknown"}`,
@@ -4364,9 +4388,62 @@ function extractJsonObjectFromText(text) {
   }
 }
 
+function normalizeBourbakiFabricClassifierColor(value) {
+  const raw = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const aliases = new Map([
+    ["navy", "dark_blue"],
+    ["dark_navy", "dark_blue"],
+    ["midnight_blue", "dark_blue"],
+    ["sky_blue", "light_blue"],
+    ["pale_blue", "light_blue"],
+    ["grey", "gray"],
+    ["cream", "off_white"],
+    ["ivory", "off_white"],
+    ["offwhite", "off_white"],
+    ["natural", "ecru"],
+    ["wine", "burgundy"],
+    ["bordeaux", "burgundy"],
+    ["maroon", "burgundy"],
+    ["unknown", "multi"],
+    ["other", "multi"],
+  ]);
+
+  const color = aliases.get(raw) || raw;
+  return BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_COLORS.has(color) ? color : "multi";
+}
+
+function normalizeBourbakiFabricClassifierPattern(value) {
+  const raw = String(value || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const aliases = new Map([
+    ["SOLID", "PLAIN"],
+    ["SOLID_COLOR", "PLAIN"],
+    ["PLAIN_WEAVE", "PLAIN"],
+    ["PINSTRIPE", "PIN_STRIPES"],
+    ["PINSTRIPES", "PIN_STRIPES"],
+    ["PIN_STRIPE", "PIN_STRIPES"],
+    ["CHALKSTRIPE", "CHALK_STRIPE"],
+    ["CHALK_STRIPES", "CHALK_STRIPE"],
+    ["BIRDSEYE", "BIRDS_EYE"],
+    ["BIRD_EYE", "BIRDS_EYE"],
+    ["BIRD'S_EYE", "BIRDS_EYE"],
+    ["DOGTOOTH", "HOUNDSTOOTH"],
+    ["HOUNDSTOOTH_CHECK", "HOUNDSTOOTH"],
+    ["FULL_COLOR", "MICRO_DESIGN"],
+    ["FANTASY", "MICRO_DESIGN"],
+    ["OTHER", "MICRO_DESIGN"],
+    ["UNKNOWN", "MICRO_DESIGN"],
+    ["OTHER_PATTERN", "MICRO_DESIGN"],
+    ["MICRO", "MICRO_DESIGN"],
+    ["MICRO_PATTERN", "MICRO_DESIGN"],
+  ]);
+
+  const pattern = aliases.get(raw) || raw;
+  return BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_PATTERNS.has(pattern) ? pattern : "MICRO_DESIGN";
+}
+
 function normalizeBourbakiFabricClassificationJson(parsed) {
-  const colorFamily = String(parsed?.colorFamily || "unknown").trim().toLowerCase();
-  const pattern = String(parsed?.pattern || "UNKNOWN").trim().toUpperCase();
+  const colorFamily = normalizeBourbakiFabricClassifierColor(parsed?.colorFamily);
+  const pattern = normalizeBourbakiFabricClassifierPattern(parsed?.pattern);
   const colorConfidence = Number(parsed?.colorConfidence);
   const patternConfidence = Number(parsed?.patternConfidence);
   const notes = typeof parsed?.notes === "string"
@@ -4374,12 +4451,8 @@ function normalizeBourbakiFabricClassificationJson(parsed) {
     : "";
 
   return {
-    colorFamily: BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_COLORS.has(colorFamily)
-      ? colorFamily
-      : "unknown",
-    pattern: BOURBAKI_FABRIC_CLASSIFIER_ALLOWED_PATTERNS.has(pattern)
-      ? pattern
-      : "UNKNOWN",
+    colorFamily,
+    pattern,
     colorConfidence: Number.isFinite(colorConfidence)
       ? Math.max(0, Math.min(1, colorConfidence))
       : 0,
