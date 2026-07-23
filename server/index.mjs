@@ -5272,7 +5272,7 @@ async function generateAndReviewBourbakiView({
 
 
 app.post("/internal/ai/bourbaki/fabric-classify", async (req, res) => {
-  if (!bourbakiVisualizationSecretMatches(req.get("x-bourbaki-visualization-secret"))) {
+  if (!bourbakiOpenAiRenderSecretMatches(req.get("x-bourbaki-visualization-secret"))) {
     return bourbakiVisualizationError(
       res,
       403,
