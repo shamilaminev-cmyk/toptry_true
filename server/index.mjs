@@ -58,6 +58,10 @@ import {
   retrieveNeverendingNovelLiteraryEditor,
   startNeverendingNovelLiteraryEditor,
 } from "./neverendingNovelLiteraryEditorOpenAi.mjs";
+import {
+  analyzePrStudioBrandMemory,
+  parsePrStudioBrandMemoryInput,
+} from "./prStudioBrandMemoryOpenAi.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
 
@@ -5576,6 +5580,54 @@ app.get("/internal/ai/pr-studio/health", (req, res) => {
       ),
     },
   });
+});
+
+app.post("/internal/ai/pr-studio/brand-memory/analyze", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+  if (
+    String(process.env.AI_GATEWAY_ROLE || "")
+      .trim()
+      .toLowerCase() !== "gateway"
+  ) {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+
+  try {
+    const input = parsePrStudioBrandMemoryInput(req.body);
+    const result = await analyzePrStudioBrandMemory(input);
+    return res.status(200).json({
+      ok: true,
+      claims: result.claims,
+      provider: {
+        model: result.model,
+        responseId: result.responseId,
+      },
+    });
+  } catch (error) {
+    const code = error?.code || "PR_STUDIO_OPENAI_UPSTREAM_FAILED";
+    const status =
+      code === "PR_STUDIO_INVALID_INPUT"
+        ? 400
+        : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED"
+          ? 503
+          : 502;
+    console.error("PR Studio Brand Memory analysis failed", {
+      code,
+      message: error instanceof Error ? error.message.slice(0, 700) : String(error).slice(0, 700),
+    });
+    return res.status(status).json({
+      ok: false,
+      error:
+        status === 400
+          ? error.message
+          : "Brand Memory analysis is temporarily unavailable",
+      code,
+    });
+  }
 });
 
 // toptry-bourbaki-openai-one-shot-render-v1
