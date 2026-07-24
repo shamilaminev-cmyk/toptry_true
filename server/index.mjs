@@ -479,6 +479,10 @@ const AI_GATEWAY_SECRET = String(
   process.env.AI_GATEWAY_SECRET || process.env.PROXY_SHARED_SECRET || ""
 ).trim();
 
+const PR_STUDIO_GATEWAY_TOKEN = String(
+  process.env.PR_STUDIO_GATEWAY_TOKEN || ""
+).trim();
+
 function authCookieDomainOption() {
   const configured = String(process.env.AUTH_COOKIE_DOMAIN || "").trim();
   if (configured) return { domain: configured };
@@ -526,6 +530,38 @@ function assertInternalAiRequest(req, res) {
   return false;
 }
 
+
+function assertPrStudioGatewayRequest(req, res) {
+  if (!PR_STUDIO_GATEWAY_TOKEN) {
+    res.status(503).json({
+      ok: false,
+      error: "PR Studio gateway access is not configured",
+      code: "PR_STUDIO_GATEWAY_NOT_CONFIGURED",
+    });
+    return false;
+  }
+
+  const provided = String(
+    req.get("x-pr-studio-gateway-token") || ""
+  ).trim();
+
+  const expectedBuffer = Buffer.from(PR_STUDIO_GATEWAY_TOKEN);
+  const providedBuffer = Buffer.from(provided);
+
+  if (
+    providedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(providedBuffer, expectedBuffer)
+  ) {
+    return true;
+  }
+
+  res.status(403).json({
+    ok: false,
+    error: "Forbidden",
+    code: "PR_STUDIO_GATEWAY_ACCESS_DENIED",
+  });
+  return false;
+}
 
 function getPublicApiOriginForInternalUrls() {
   return String(
@@ -5515,6 +5551,32 @@ app.post("/internal/ai/bourbaki/visualize", async (req, res) => {
 });
 
 
+
+app.get("/internal/ai/pr-studio/health", (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+
+  if (
+    String(process.env.AI_GATEWAY_ROLE || "")
+      .trim()
+      .toLowerCase() !== "gateway"
+  ) {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+
+  return res.status(200).json({
+    ok: true,
+    service: "pr-studio-ai-gateway",
+    provider: {
+      openaiConfigured: Boolean(
+        String(process.env.OPENAI_API_KEY || "").trim()
+      ),
+    },
+  });
+});
 
 // toptry-bourbaki-openai-one-shot-render-v1
 app.post("/internal/ai/bourbaki/render-v2", async (req, res) => {

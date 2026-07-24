@@ -99,14 +99,17 @@ jobs:
           GHCR_USER: ${{ secrets.GHCR_USER }}
           BOURBAKI_OPENAI_API_KEY: ${{ secrets.BOURBAKI_OPENAI_API_KEY }}
           BOURBAKI_VISUALIZATION_SECRET: ${{ secrets.BOURBAKI_VISUALIZATION_SECRET }}
+          PR_STUDIO_GATEWAY_TOKEN: ${{ secrets.PR_STUDIO_GATEWAY_TOKEN }}
         run: |
           set -euo pipefail
 
           test -n "$BOURBAKI_OPENAI_API_KEY"
           test -n "$BOURBAKI_VISUALIZATION_SECRET"
+          test -n "$PR_STUDIO_GATEWAY_TOKEN"
 
           OPENAI_KEY_B64="$(printf '%s' "$BOURBAKI_OPENAI_API_KEY" | base64 | tr -d '\n')"
           BOURBAKI_SECRET_B64="$(printf '%s' "$BOURBAKI_VISUALIZATION_SECRET" | base64 | tr -d '\n')"
+          PR_STUDIO_TOKEN_B64="$(printf '%s' "$PR_STUDIO_GATEWAY_TOKEN" | base64 | tr -d '\n')"
 
           mkdir -p ~/.ssh
           printf "%s" "$SSH_KEY" > ~/.ssh/id_ed25519
@@ -115,7 +118,7 @@ jobs:
           ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
 
           ssh -i ~/.ssh/id_ed25519 -p "$PORT" "$USER@$HOST" \
-            "IMAGE_API='$IMAGE_API' TAG='$TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' OPENAI_KEY_B64='$OPENAI_KEY_B64' BOURBAKI_SECRET_B64='$BOURBAKI_SECRET_B64' bash -s" <<'REMOTE'
+            "IMAGE_API='$IMAGE_API' TAG='$TAG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' OPENAI_KEY_B64='$OPENAI_KEY_B64' BOURBAKI_SECRET_B64='$BOURBAKI_SECRET_B64' PR_STUDIO_TOKEN_B64='$PR_STUDIO_TOKEN_B64' bash -s" <<'REMOTE'
           set -euo pipefail
 
           CONTAINER="toptry-ai-gateway"
@@ -164,13 +167,16 @@ jobs:
 
           OPENAI_API_KEY="$(printf '%s' "$OPENAI_KEY_B64" | base64 -d)"
           BOURBAKI_VISUALIZATION_SECRET="$(printf '%s' "$BOURBAKI_SECRET_B64" | base64 -d)"
+          PR_STUDIO_GATEWAY_TOKEN="$(printf '%s' "$PR_STUDIO_TOKEN_B64" | base64 -d)"
 
           test -n "$OPENAI_API_KEY"
           test -n "$BOURBAKI_VISUALIZATION_SECRET"
+          test -n "$PR_STUDIO_GATEWAY_TOKEN"
 
-          grep -vE '^(OPENAI_API_KEY|BOURBAKI_VISUALIZATION_SECRET)=' "$ENV_FILE" > "${ENV_FILE}.next" || true
+          grep -vE '^(OPENAI_API_KEY|BOURBAKI_VISUALIZATION_SECRET|PR_STUDIO_GATEWAY_TOKEN)=' "$ENV_FILE" > "${ENV_FILE}.next" || true
           printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" >> "${ENV_FILE}.next"
           printf 'BOURBAKI_VISUALIZATION_SECRET=%s\n' "$BOURBAKI_VISUALIZATION_SECRET" >> "${ENV_FILE}.next"
+          printf 'PR_STUDIO_GATEWAY_TOKEN=%s\n' "$PR_STUDIO_GATEWAY_TOKEN" >> "${ENV_FILE}.next"
           mv "${ENV_FILE}.next" "$ENV_FILE"
 
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
@@ -193,6 +199,7 @@ jobs:
           docker exec "$CONTAINER" sh -lc '
             test -n "$OPENAI_API_KEY"
             test -n "$BOURBAKI_VISUALIZATION_SECRET"
+            test -n "$PR_STUDIO_GATEWAY_TOKEN"
             test "$AI_GATEWAY_ROLE" = "gateway"
           '
 
@@ -262,6 +269,22 @@ jobs:
           test "$NEVERENDING_NOVEL_LITERARY_EDITOR_CODE" = "400"
           grep -q 'NEVERENDING_NOVEL_LITERARY_EDITOR_INVALID_INPUT' "$BODY_FILE"
 
+          PR_STUDIO_DENIED_CODE="$(curl -sS -o "$BODY_FILE" -w '%{http_code}' \
+            --connect-timeout 10 --max-time 25 \
+            http://127.0.0.1:8090/internal/ai/pr-studio/health)"
+
+          test "$PR_STUDIO_DENIED_CODE" = "403"
+          grep -q 'PR_STUDIO_GATEWAY_ACCESS_DENIED' "$BODY_FILE"
+
+          PR_STUDIO_HEALTH_CODE="$(curl -sS -o "$BODY_FILE" -w '%{http_code}' \
+            --connect-timeout 10 --max-time 25 \
+            -H "x-pr-studio-gateway-token: $PR_STUDIO_GATEWAY_TOKEN" \
+            http://127.0.0.1:8090/internal/ai/pr-studio/health)"
+
+          test "$PR_STUDIO_HEALTH_CODE" = "200"
+          grep -q '"service":"pr-studio-ai-gateway"' "$BODY_FILE"
+          grep -q '"openaiConfigured":true' "$BODY_FILE"
+
           BOURBAKI_CODE="$(curl -sS -o "$BODY_FILE" -w '%{http_code}' \
             --connect-timeout 10 --max-time 25 \
             -X POST http://127.0.0.1:8090/internal/ai/bourbaki/render-v2 \
@@ -271,7 +294,7 @@ jobs:
 
           test "$BOURBAKI_CODE" = "400" || test "$BOURBAKI_CODE" = "422"
 
-          echo "AI gateway deployed; wardrobe, Neverending Novel Architect, Opening Arc Planner, Chapter Planner, Writer, Literary Editor and Bourbaki endpoints smoke-tested"
+          echo "AI gateway deployed; PR Studio health, wardrobe, Neverending Novel Architect, Opening Arc Planner, Chapter Planner, Writer, Literary Editor and Bourbaki endpoints smoke-tested"
           REMOTE
 
 
