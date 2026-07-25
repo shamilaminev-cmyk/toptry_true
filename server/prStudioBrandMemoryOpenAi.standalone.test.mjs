@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildPrStudioBrandMemoryConsolidationInstructions,
   parsePrStudioBrandMemoryConsolidationInput,
   parsePrStudioBrandMemoryInput,
 } from "./prStudioBrandMemoryOpenAi.mjs";
@@ -56,6 +57,18 @@ test("accepts reviewed claims for conservative consolidation", () => {
   });
   assert.equal(parsed.claims.length, 2);
   assert.equal(parsed.claims[0].status, "confirmed");
+});
+
+test("instructs consolidation to merge compatible Bourbaki address claims", () => {
+  const instructions = buildPrStudioBrandMemoryConsolidationInstructions();
+
+  assert.match(instructions, /fully subsumed by a more complete claim/);
+  assert.match(instructions, /compatible partially overlapping claims/);
+  assert.match(instructions, /Claims do not need identical factual breadth/);
+  assert.match(instructions, /Малая Дмитровка/);
+  assert.match(instructions, /should form one group/);
+  assert.match(instructions, /Do not merge conflicting dates, prices, numbers/);
+  assert.match(instructions, /legal-address claim remains distinct/);
 });
 
 test("rejects unsupported consolidation statuses", () => {
