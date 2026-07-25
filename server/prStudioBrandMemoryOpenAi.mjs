@@ -182,6 +182,32 @@ export function parsePrStudioBrandMemoryConsolidationInput(value) {
   return { brand: { name }, sectionKeys, claims };
 }
 
+export function buildPrStudioBrandMemoryConsolidationInstructions() {
+  return [
+    "You consolidate compatible Brand Memory claims without losing any explicit fact.",
+    "Return a group only when every member has the same sectionKey, the same review status, and describes the same real-world subject or fact cluster.",
+    "Consolidate exact duplicates, paraphrases, claims fully subsumed by a more complete claim, and compatible partially overlapping claims about the same subject.",
+    "Claims do not need identical factual breadth. canonicalValue may combine their explicitly stated facts when the union is lossless and non-conflicting.",
+    "Different wording, punctuation, abbreviations, address formatting, or repeated boilerplate must not prevent consolidation.",
+    "Overlapping lists may be consolidated only when they describe the same list scope; canonicalValue may combine only items explicitly present in member claims.",
+    "Never add facts, infer facts, or broaden the scope beyond the union of the member claims.",
+    "Do not merge conflicting dates, prices, numbers, names, addresses, contacts, product scopes, roles, or other qualifiers.",
+    "A legal-address claim remains distinct from operational-location claims unless the claims explicitly state that the legal and operational addresses are the same.",
+    "Compatible labels such as atelier, salon, and workshop may describe one location when the claims share the same precise address and do not contradict one another.",
+    "When uncertain whether the subjects match or whether the union is lossless, leave claims separate.",
+    "Every claim ID may occur in at most one returned group.",
+    "canonicalValue must be the clearest complete formulation supported only by that group's member claims and must remain in the source language.",
+    "Do not return singleton groups.",
+    [
+      "Positive example: these Russian claims should form one group when sectionKey and status match:",
+      "\"Салон и мастерская Bourbaki находятся по адресу: Москва, ул. Малая Дмитровка, д. 23/15, стр. 2.\"",
+      "\"Адрес ателье Bourbaki: Москва, улица Малая Дмитровка, дом 23/15, строение 2.\"",
+      "\"Основные работы выполняются в мастерской Bourbaki на втором этаже по адресу: Москва, ул. Малая Дмитровка, д. 23/15, стр. 2.\"",
+      "The canonical value must preserve the shared address and may mention the second floor and the compatible atelier, salon, and workshop labels because those details are explicitly present.",
+    ].join(" "),
+  ].join("\n");
+}
+
 export async function consolidatePrStudioBrandMemory(input) {
   const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
   if (!apiKey) {
@@ -194,19 +220,7 @@ export async function consolidatePrStudioBrandMemory(input) {
   const claimIds = parsed.claims.map((claim) => claim.id);
   const response = await client.responses.create({
     model: String(process.env.PR_STUDIO_TEXT_MODEL || DEFAULT_MODEL).trim(),
-    instructions: [
-      "You conservatively consolidate duplicate Brand Memory claims.",
-      "Return a group only when every member has the same sectionKey, the same review status, and the same factual meaning.",
-      "Different wording, punctuation, or repeated boilerplate may be consolidated.",
-      "Overlapping lists may be consolidated only when they describe the same list scope; canonicalValue may combine only items explicitly present in member claims.",
-      "Never add facts, infer facts, or broaden the scope.",
-      "Do not merge a legal address with an atelier, shop, office, showroom, or contact address unless the claims explicitly identify the same place and role.",
-      "Do not merge conflicting dates, prices, numbers, names, addresses, contacts, product scopes, or other qualifiers.",
-      "When uncertain, leave claims separate.",
-      "Every claim ID may occur in at most one returned group.",
-      "canonicalValue must be the clearest complete formulation supported only by that group's member claims and must remain in the source language.",
-      "Do not return singleton groups.",
-    ].join("\n"),
+    instructions: buildPrStudioBrandMemoryConsolidationInstructions(),
     input: JSON.stringify(parsed),
     text: {
       format: {
