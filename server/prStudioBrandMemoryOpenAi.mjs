@@ -145,6 +145,10 @@ export function parsePrStudioBrandMemoryConsolidationInput(value) {
   }
   const allowedSections = new Set(sectionKeys);
   const allowedStatuses = new Set(["suggested", "confirmed", "rejected"]);
+  const mode = cleanString(value.mode, 20) || "reviewed";
+  if (!["reviewed", "ingestion"].includes(mode)) {
+    throw invalidInput("Unsupported Brand Memory consolidation mode");
+  }
 
   if (
     !Array.isArray(value.claims) ||
@@ -163,6 +167,7 @@ export function parsePrStudioBrandMemoryConsolidationInput(value) {
     const sectionKey = cleanString(claim?.sectionKey, 80);
     const status = cleanString(claim?.status, 20);
     const claimValue = cleanString(claim?.value, MAX_CLAIM_TEXT);
+    const origin = cleanString(claim?.origin, 20) || "existing";
     if (!id || ids.has(id)) throw invalidInput("Each claim ID must be unique");
     if (!allowedSections.has(sectionKey)) {
       throw invalidInput("Each claim must use a supplied section key");
@@ -170,22 +175,41 @@ export function parsePrStudioBrandMemoryConsolidationInput(value) {
     if (!allowedStatuses.has(status)) {
       throw invalidInput("Each claim must use a supported review status");
     }
+    if (!["existing", "incoming"].includes(origin)) {
+      throw invalidInput("Each claim must use a supported origin");
+    }
     if (!claimValue) throw invalidInput("Each claim must include a value");
     ids.add(id);
     totalText += claimValue.length;
-    return { id, sectionKey, status, value: claimValue };
+    return { id, sectionKey, status, value: claimValue, origin };
   });
   if (totalText > MAX_CONSOLIDATION_TEXT) {
     throw invalidInput("Claim text exceeds the consolidation limit");
   }
 
-  return { brand: { name }, sectionKeys, claims };
+  if (mode === "ingestion" && !claims.some((claim) => claim.origin === "incoming")) {
+    throw invalidInput("Ingestion consolidation requires incoming claims");
+  }
+
+  return { brand: { name }, sectionKeys, claims, mode };
 }
 
-export function buildPrStudioBrandMemoryConsolidationInstructions() {
+export function buildPrStudioBrandMemoryConsolidationInstructions(
+  mode = "reviewed",
+) {
+  const ingestion = mode === "ingestion";
+
   return [
     "You consolidate compatible Brand Memory claims without losing any explicit fact.",
-    "Return a group only when every member has the same sectionKey, the same review status, and describes the same real-world subject or fact cluster.",
+    ingestion
+      ? "This is pre-review ingestion. Return a group only when every member has the same sectionKey and describes the same real-world subject or fact cluster; review statuses may differ."
+      : "Return a group only when every member has the same sectionKey, the same review status, and describes the same real-world subject or fact cluster.",
+    ingestion
+      ? "Every returned group must contain at least one claim whose origin is incoming. Never return a group containing only existing claims."
+      : "Every returned group must contain claims with the same review status.",
+    ingestion
+      ? "The caller will preserve every human-reviewed status and wording. Your task is only to identify factual equivalence and provide a source-supported canonical wording."
+      : "Preserve the shared review decision represented by each group.",
     "Consolidate exact duplicates, paraphrases, claims fully subsumed by a more complete claim, and compatible partially overlapping claims about the same subject.",
     "Claims do not need identical factual breadth. canonicalValue may combine their explicitly stated facts when the union is lossless and non-conflicting.",
     "Different wording, punctuation, abbreviations, address formatting, or repeated boilerplate must not prevent consolidation.",
@@ -199,7 +223,7 @@ export function buildPrStudioBrandMemoryConsolidationInstructions() {
     "canonicalValue must be the clearest complete formulation supported only by that group's member claims and must remain in the source language.",
     "Do not return singleton groups.",
     [
-      "Positive example: these Russian claims should form one group when sectionKey and status match:",
+      "Positive example: these Russian claims should form one group when the applicable section and review-status rules above are satisfied:",
       "\"Салон и мастерская Bourbaki находятся по адресу: Москва, ул. Малая Дмитровка, д. 23/15, стр. 2.\"",
       "\"Адрес ателье Bourbaki: Москва, улица Малая Дмитровка, дом 23/15, строение 2.\"",
       "\"Основные работы выполняются в мастерской Bourbaki на втором этаже по адресу: Москва, ул. Малая Дмитровка, д. 23/15, стр. 2.\"",
@@ -220,7 +244,7 @@ export async function consolidatePrStudioBrandMemory(input) {
   const claimIds = parsed.claims.map((claim) => claim.id);
   const response = await client.responses.create({
     model: String(process.env.PR_STUDIO_TEXT_MODEL || DEFAULT_MODEL).trim(),
-    instructions: buildPrStudioBrandMemoryConsolidationInstructions(),
+    instructions: buildPrStudioBrandMemoryConsolidationInstructions(parsed.mode),
     input: JSON.stringify(parsed),
     text: {
       format: {
@@ -266,10 +290,62 @@ export async function consolidatePrStudioBrandMemory(input) {
     throw error;
   }
   return {
-    groups: output.groups,
+    groups: validateConsolidationGroups(output.groups, parsed),
     model: response.model || String(process.env.PR_STUDIO_TEXT_MODEL || DEFAULT_MODEL).trim(),
     responseId: response.id || null,
   };
+}
+
+
+function validateConsolidationGroups(groups, input) {
+  const claimsById = new Map(input.claims.map((claim) => [claim.id, claim]));
+  const consumed = new Set();
+  const valid = [];
+
+  for (const group of groups) {
+    if (!group || typeof group !== "object" || !Array.isArray(group.memberIds)) {
+      continue;
+    }
+
+    const memberIds = [...new Set(group.memberIds)];
+    const members = memberIds.map((id) => claimsById.get(id));
+
+    if (
+      memberIds.length < 2 ||
+      members.some((claim) => !claim) ||
+      memberIds.some((id) => consumed.has(id))
+    ) {
+      continue;
+    }
+
+    const sectionKey = members[0].sectionKey;
+    if (members.some((claim) => claim.sectionKey !== sectionKey)) continue;
+
+    if (
+      input.mode === "reviewed" &&
+      members.some((claim) => claim.status !== members[0].status)
+    ) {
+      continue;
+    }
+
+    if (
+      input.mode === "ingestion" &&
+      !members.some((claim) => claim.origin === "incoming")
+    ) {
+      continue;
+    }
+
+    const canonicalValue = cleanString(
+      group.canonicalValue,
+      MAX_CLAIM_TEXT,
+    );
+    if (!canonicalValue) continue;
+
+    memberIds.forEach((id) => consumed.add(id));
+    valid.push({ memberIds, canonicalValue });
+  }
+
+  return valid;
 }
 
 function cleanString(value, maxLength) {

@@ -95,3 +95,66 @@ test("rejects unsupported consolidation statuses", () => {
     /supported review status/,
   );
 });
+
+test("accepts mixed review statuses only for incoming ingestion", () => {
+  const parsed = parsePrStudioBrandMemoryConsolidationInput({
+    mode: "ingestion",
+    brand: { name: "Example" },
+    sectionKeys: ["contacts"],
+    claims: [
+      {
+        id: "claim-1",
+        sectionKey: "contacts",
+        status: "confirmed",
+        value: "Office address: 10 Main Street.",
+        origin: "existing",
+      },
+      {
+        id: "incoming-1",
+        sectionKey: "contacts",
+        status: "suggested",
+        value: "The office is at 10 Main Street.",
+        origin: "incoming",
+      },
+    ],
+  });
+
+  assert.equal(parsed.mode, "ingestion");
+  assert.equal(parsed.claims[1].origin, "incoming");
+});
+
+test("requires an incoming claim in ingestion mode", () => {
+  assert.throws(
+    () =>
+      parsePrStudioBrandMemoryConsolidationInput({
+        mode: "ingestion",
+        brand: { name: "Example" },
+        sectionKeys: ["contacts"],
+        claims: [
+          {
+            id: "claim-1",
+            sectionKey: "contacts",
+            status: "confirmed",
+            value: "Office address: 10 Main Street.",
+          },
+          {
+            id: "claim-2",
+            sectionKey: "contacts",
+            status: "suggested",
+            value: "The office is at 10 Main Street.",
+          },
+        ],
+      }),
+    /requires incoming claims/,
+  );
+});
+
+test("adds ingestion-specific consolidation safeguards", () => {
+  const instructions =
+    buildPrStudioBrandMemoryConsolidationInstructions("ingestion");
+
+  assert.match(instructions, /pre-review ingestion/);
+  assert.match(instructions, /origin is incoming/);
+  assert.match(instructions, /review statuses may differ/);
+  assert.match(instructions, /compatible partially overlapping claims/);
+});
