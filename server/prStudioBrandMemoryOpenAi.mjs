@@ -94,6 +94,9 @@ export async function analyzePrStudioBrandMemory(input) {
       "Do not return cookie notices, navigation labels, page titles by themselves, legal boilerplate, generic advice, background knowledge or technical page content.",
       "Do not infer praise, market leadership, audience traits, values, positioning, exclusions, or policies without explicit evidence.",
       "Return concise atomic answers and claims in the language used by the source.",
+      "A profile answer must answer only its selected question. Do not append facts that belong to neighboring questions, even when they are supported by the same pages.",
+      "Use the shortest complete supported formulation, normally one to three sentences. Do not write a general brand summary inside a single answer.",
+      "For origin or history questions, include only the supported origin, motivation, naming context, dates, and milestones relevant to that question; exclude products, service quality, fit, materials, and other positioning details.",
       "Every result must cite one or more exact supplied page URLs and a short supporting excerpt.",
       "Keep prices, dates, addresses, contacts and other changeable facts precise.",
       "Do not merge conflicting facts. Return each conflict as a separate profileAnswers item for the same questionKey.",
@@ -119,7 +122,7 @@ export async function analyzePrStudioBrandMemory(input) {
                 properties: {
                   sectionKey: { type: "string", enum: parsed.sectionKeys },
                   questionKey: { type: "string", enum: parsed.questions.map((question) => question.questionKey) },
-                  value: { type: "string", minLength: 1, maxLength: 4_000 },
+                  value: { type: "string", minLength: 1, maxLength: 1_200 },
                   confidence: { type: "number", minimum: 0, maximum: 1 },
                   sources: {
                     type: "array",

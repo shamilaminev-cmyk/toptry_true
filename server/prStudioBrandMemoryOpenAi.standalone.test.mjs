@@ -247,3 +247,15 @@ test("rejects a profile answer assigned to the wrong section", () => {
     /invalid Brand Memory response/,
   );
 });
+
+
+test("requires question-focused concise profile answers", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) =>
+    readFile(new URL("./prStudioBrandMemoryOpenAi.mjs", import.meta.url), "utf8"),
+  );
+
+  assert.match(source, /answer only its selected question/);
+  assert.match(source, /one to three sentences/);
+  assert.match(source, /Do not write a general brand summary/);
+  assert.match(source, /maxLength: 1_200/);
+});
