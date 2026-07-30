@@ -11,6 +11,13 @@ test("accepts a bounded website analysis request", () => {
   const parsed = parsePrStudioBrandMemoryInput({
     brand: { name: "Example", description: "A company" },
     sectionKeys: ["identity", "products"],
+    questions: [
+      {
+        questionKey: "identity.official_name",
+        question: "What is the official brand name?",
+        helpText: null,
+      },
+    ],
     pages: [
       {
         url: "https://example.com/about",
@@ -22,6 +29,7 @@ test("accepts a bounded website analysis request", () => {
   assert.equal(parsed.brand.name, "Example");
   assert.equal(parsed.pages.length, 1);
   assert.deepEqual(parsed.sectionKeys, ["identity", "products"]);
+  assert.equal(parsed.questions[0].questionKey, "identity.official_name");
 });
 
 test("rejects non-web page URLs", () => {
@@ -30,6 +38,13 @@ test("rejects non-web page URLs", () => {
       parsePrStudioBrandMemoryInput({
         brand: { name: "Example" },
         sectionKeys: ["identity"],
+        questions: [
+          {
+            questionKey: "identity.official_name",
+            question: "What is the official brand name?",
+            helpText: null,
+          },
+        ],
         pages: [{ url: "file:///etc/passwd", text: "not allowed" }],
       }),
     /HTTP or HTTPS/,

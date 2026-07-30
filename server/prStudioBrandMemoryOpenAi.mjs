@@ -4,6 +4,7 @@ const DEFAULT_MODEL = "gpt-5-mini";
 const MAX_PAGES = 50;
 const MAX_PAGE_TEXT = 6_000;
 const MAX_TOTAL_TEXT = 240_000;
+const MAX_PROFILE_QUESTIONS = 100;
 const MAX_CONSOLIDATION_CLAIMS = 250;
 const MAX_CLAIM_TEXT = 4_000;
 const MAX_CONSOLIDATION_TEXT = 240_000;
@@ -21,6 +22,24 @@ export function parsePrStudioBrandMemoryInput(value) {
     : [];
   if (!sectionKeys.length || sectionKeys.length > 50) {
     throw invalidInput("Brand Memory section keys are required");
+  }
+
+  const questions = Array.isArray(value.questions)
+    ? value.questions.map((question) => ({
+        questionKey: cleanString(question?.questionKey, 120),
+        question: cleanString(question?.question, 500),
+        helpText: cleanNullableString(question?.helpText, 1_000),
+      }))
+    : [];
+  if (!questions.length || questions.length > MAX_PROFILE_QUESTIONS) {
+    throw invalidInput(`Profile questions must contain between 1 and ${MAX_PROFILE_QUESTIONS} items`);
+  }
+  const questionKeys = questions.map(({ questionKey }) => questionKey);
+  if (questionKeys.some((key) => !key) || new Set(questionKeys).size !== questionKeys.length) {
+    throw invalidInput("Profile question keys must be unique and non-empty");
+  }
+  if (questions.some(({ question }) => !question)) {
+    throw invalidInput("Each profile question must include question text");
   }
 
   if (!Array.isArray(value.pages) || !value.pages.length || value.pages.length > MAX_PAGES) {
@@ -45,7 +64,7 @@ export function parsePrStudioBrandMemoryInput(value) {
     return { url: parsed.href, title, text };
   });
   if (totalText > MAX_TOTAL_TEXT) throw invalidInput("Website text exceeds the analysis limit");
-  return { brand: { name, description }, sectionKeys, pages };
+  return { brand: { name, description }, sectionKeys, questions, pages };
 }
 
 export async function analyzePrStudioBrandMemory(input) {
@@ -60,8 +79,12 @@ export async function analyzePrStudioBrandMemory(input) {
   const response = await client.responses.create({
     model: String(process.env.PR_STUDIO_TEXT_MODEL || DEFAULT_MODEL).trim(),
     instructions: [
-      "You extract evidence-backed Brand Memory claims for a universal PR product.",
+      "You extract evidence-backed answers for a structured brand profile.",
       "Use only facts explicitly supported by the supplied website pages.",
+      "The supplied questions are the canonical profile structure. Map a claim to questionKey only when it directly answers that exact question.",
+      "Set memoryRole to profile when questionKey is present. Set memoryRole to additional only for a genuinely useful brand-specific fact that does not answer any supplied question.",
+      "Do not return claims from general editorial, educational, fashion-history or industry-history content unless they explicitly describe this brand.",
+      "Do not return cookie notices, navigation, legal boilerplate, generic advice, background knowledge or technical page content.",
       "Do not infer praise, market leadership, audience traits, values, or positioning without evidence.",
       "Return concise atomic claims in the language used by the source.",
       "Every claim must cite one or more exact supplied page URLs and a short supporting excerpt.",
@@ -88,6 +111,13 @@ export async function analyzePrStudioBrandMemory(input) {
                 additionalProperties: false,
                 properties: {
                   sectionKey: { type: "string", enum: parsed.sectionKeys },
+                  questionKey: {
+                    anyOf: [
+                      { type: "string", enum: parsed.questions.map((question) => question.questionKey) },
+                      { type: "null" },
+                    ],
+                  },
+                  memoryRole: { type: "string", enum: ["profile", "additional"] },
                   value: { type: "string", minLength: 1, maxLength: 4_000 },
                   confidence: { type: "number", minimum: 0, maximum: 1 },
                   sources: {
@@ -108,7 +138,7 @@ export async function analyzePrStudioBrandMemory(input) {
                     },
                   },
                 },
-                required: ["sectionKey", "value", "confidence", "sources"],
+                required: ["sectionKey", "questionKey", "memoryRole", "value", "confidence", "sources"],
               },
             },
           },
