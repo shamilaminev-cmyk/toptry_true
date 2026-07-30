@@ -259,3 +259,19 @@ test("requires question-focused concise profile answers", async () => {
   assert.match(source, /Do not write a general brand summary/);
   assert.match(source, /maxLength: 1_200/);
 });
+
+test("allows supported profile synthesis without turning historical opinions into current facts", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) =>
+    readFile(new URL("./prStudioBrandMemoryOpenAi.mjs", import.meta.url), "utf8"),
+  );
+
+  assert.match(source, /synthesized from several compatible excerpts/);
+  assert.match(source, /Do not require the source to repeat the question wording/);
+  assert.match(source, /prefer profileAnswers/);
+  assert.match(source, /relative-age statements/);
+  assert.match(source, /original article, interview, event, or publication year/);
+  assert.match(source, /founding year only when/);
+  assert.match(source, /Distinguish neutral facts from opinions/);
+  assert.match(source, /Attribute source opinions explicitly/);
+  assert.match(source, /must not be returned as an unqualified fact/);
+});
