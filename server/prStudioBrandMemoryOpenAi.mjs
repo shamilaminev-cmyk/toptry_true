@@ -27,6 +27,7 @@ export function parsePrStudioBrandMemoryInput(value) {
   const questions = Array.isArray(value.questions)
     ? value.questions.map((question) => ({
         questionKey: cleanString(question?.questionKey, 120),
+        sectionKey: cleanString(question?.sectionKey, 80),
         question: cleanString(question?.question, 500),
         helpText: cleanNullableString(question?.helpText, 1_000),
       }))
@@ -40,6 +41,10 @@ export function parsePrStudioBrandMemoryInput(value) {
   }
   if (questions.some(({ question }) => !question)) {
     throw invalidInput("Each profile question must include question text");
+  }
+  const allowedSections = new Set(sectionKeys);
+  if (questions.some(({ sectionKey }) => !allowedSections.has(sectionKey))) {
+    throw invalidInput("Each profile question must use a supplied section key");
   }
 
   if (!Array.isArray(value.pages) || !value.pages.length || value.pages.length > MAX_PAGES) {
@@ -81,17 +86,19 @@ export async function analyzePrStudioBrandMemory(input) {
     instructions: [
       "You extract evidence-backed answers for a structured brand profile.",
       "Use only facts explicitly supported by the supplied website pages.",
-      "The supplied questions are the canonical profile structure. Map a claim to questionKey only when it directly answers that exact question.",
-      "Set memoryRole to profile when questionKey is present. Set memoryRole to additional only for a genuinely useful brand-specific fact that does not answer any supplied question.",
+      "The supplied questions are the canonical profile structure. Search for direct answers to those questions before considering any additional claim.",
+      "Return a profileAnswers item only when the evidence directly answers one exact supplied question. Omit the question when no supported answer is present.",
+      "Never convert missing information, uncertainty, silence, or the absence of a statement into an answer or claim.",
+      "Use additionalClaims only for a genuinely useful, brand-specific fact that does not answer any supplied question. Keep this list small.",
       "Do not return claims from general editorial, educational, fashion-history or industry-history content unless they explicitly describe this brand.",
-      "Do not return cookie notices, navigation, legal boilerplate, generic advice, background knowledge or technical page content.",
-      "Do not infer praise, market leadership, audience traits, values, or positioning without evidence.",
-      "Return concise atomic claims in the language used by the source.",
-      "Every claim must cite one or more exact supplied page URLs and a short supporting excerpt.",
+      "Do not return cookie notices, navigation labels, page titles by themselves, legal boilerplate, generic advice, background knowledge or technical page content.",
+      "Do not infer praise, market leadership, audience traits, values, positioning, exclusions, or policies without explicit evidence.",
+      "Return concise atomic answers and claims in the language used by the source.",
+      "Every result must cite one or more exact supplied page URLs and a short supporting excerpt.",
       "Keep prices, dates, addresses, contacts and other changeable facts precise.",
-      "Do not merge conflicting facts. Return each conflict as separate claims.",
+      "Do not merge conflicting facts. Return each conflict as a separate profileAnswers item for the same questionKey.",
+      "Use the sectionKey attached to the selected question for every profile answer.",
       "Use only the supplied section keys.",
-      "Prefer useful claims over navigation labels, cookie text, boilerplate and duplicated page content.",
     ].join("\n"),
     input: JSON.stringify(parsed),
     text: {
@@ -103,7 +110,7 @@ export async function analyzePrStudioBrandMemory(input) {
           type: "object",
           additionalProperties: false,
           properties: {
-            claims: {
+            profileAnswers: {
               type: "array",
               maxItems: 150,
               items: {
@@ -111,13 +118,7 @@ export async function analyzePrStudioBrandMemory(input) {
                 additionalProperties: false,
                 properties: {
                   sectionKey: { type: "string", enum: parsed.sectionKeys },
-                  questionKey: {
-                    anyOf: [
-                      { type: "string", enum: parsed.questions.map((question) => question.questionKey) },
-                      { type: "null" },
-                    ],
-                  },
-                  memoryRole: { type: "string", enum: ["profile", "additional"] },
+                  questionKey: { type: "string", enum: parsed.questions.map((question) => question.questionKey) },
                   value: { type: "string", minLength: 1, maxLength: 4_000 },
                   confidence: { type: "number", minimum: 0, maximum: 1 },
                   sources: {
@@ -128,36 +129,86 @@ export async function analyzePrStudioBrandMemory(input) {
                       type: "object",
                       additionalProperties: false,
                       properties: {
-                        url: {
-                          type: "string",
-                          enum: parsed.pages.map((page) => page.url),
-                        },
+                        url: { type: "string", enum: parsed.pages.map((page) => page.url) },
                         excerpt: { type: "string", minLength: 1, maxLength: 2_000 },
                       },
                       required: ["url", "excerpt"],
                     },
                   },
                 },
-                required: ["sectionKey", "questionKey", "memoryRole", "value", "confidence", "sources"],
+                required: ["sectionKey", "questionKey", "value", "confidence", "sources"],
+              },
+            },
+            additionalClaims: {
+              type: "array",
+              maxItems: 50,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  sectionKey: { type: "string", enum: parsed.sectionKeys },
+                  value: { type: "string", minLength: 1, maxLength: 4_000 },
+                  confidence: { type: "number", minimum: 0, maximum: 1 },
+                  sources: {
+                    type: "array",
+                    minItems: 1,
+                    maxItems: 5,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      properties: {
+                        url: { type: "string", enum: parsed.pages.map((page) => page.url) },
+                        excerpt: { type: "string", minLength: 1, maxLength: 2_000 },
+                      },
+                      required: ["url", "excerpt"],
+                    },
+                  },
+                },
+                required: ["sectionKey", "value", "confidence", "sources"],
               },
             },
           },
-          required: ["claims"],
+          required: ["profileAnswers", "additionalClaims"],
         },
       },
     },
   });
   const output = JSON.parse(response.output_text || "{}");
-  if (!Array.isArray(output.claims)) {
-    const error = new Error("OpenAI returned an invalid Brand Memory response");
-    error.code = "PR_STUDIO_OPENAI_INVALID_RESPONSE";
-    throw error;
-  }
   return {
-    claims: output.claims,
+    claims: normalizePrStudioBrandMemoryOutput(parsed, output),
     model: response.model || String(process.env.PR_STUDIO_TEXT_MODEL || DEFAULT_MODEL).trim(),
     responseId: response.id || null,
   };
+}
+
+export function normalizePrStudioBrandMemoryOutput(parsed, output) {
+  if (!output || typeof output !== "object" || Array.isArray(output)) {
+    throw invalidResponse();
+  }
+  if (!Array.isArray(output.profileAnswers) || !Array.isArray(output.additionalClaims)) {
+    throw invalidResponse();
+  }
+
+  const questions = new Map(
+    parsed.questions.map((question) => [question.questionKey, question]),
+  );
+  const profileAnswers = output.profileAnswers.map((answer) => {
+    const question = questions.get(answer?.questionKey);
+    if (!question || answer?.sectionKey !== question.sectionKey) throw invalidResponse();
+    return { ...answer, questionKey: question.questionKey, memoryRole: "profile" };
+  });
+  const additionalClaims = output.additionalClaims.map((claim) => ({
+    ...claim,
+    questionKey: null,
+    memoryRole: "additional",
+  }));
+  return [...profileAnswers, ...additionalClaims];
+}
+
+function invalidResponse() {
+  const error = new Error("OpenAI returned an invalid Brand Memory response");
+  error.code = "PR_STUDIO_OPENAI_INVALID_RESPONSE";
+  return error;
 }
 
 export function parsePrStudioBrandMemoryConsolidationInput(value) {

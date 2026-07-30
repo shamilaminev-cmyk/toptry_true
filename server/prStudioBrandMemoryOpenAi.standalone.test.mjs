@@ -5,6 +5,7 @@ import {
   buildPrStudioBrandMemoryConsolidationInstructions,
   parsePrStudioBrandMemoryConsolidationInput,
   parsePrStudioBrandMemoryInput,
+  normalizePrStudioBrandMemoryOutput,
 } from "./prStudioBrandMemoryOpenAi.mjs";
 
 test("accepts a bounded website analysis request", () => {
@@ -14,6 +15,7 @@ test("accepts a bounded website analysis request", () => {
     questions: [
       {
         questionKey: "identity.official_name",
+        sectionKey: "identity",
         question: "What is the official brand name?",
         helpText: null,
       },
@@ -41,6 +43,7 @@ test("rejects non-web page URLs", () => {
         questions: [
           {
             questionKey: "identity.official_name",
+            sectionKey: "identity",
             question: "What is the official brand name?",
             helpText: null,
           },
@@ -172,4 +175,75 @@ test("adds ingestion-specific consolidation safeguards", () => {
   assert.match(instructions, /origin is incoming/);
   assert.match(instructions, /review statuses may differ/);
   assert.match(instructions, /compatible partially overlapping claims/);
+});
+
+
+test("normalizes profile answers separately from additional claims", () => {
+  const parsed = parsePrStudioBrandMemoryInput({
+    brand: { name: "Example" },
+    sectionKeys: ["identity", "products"],
+    questions: [
+      {
+        questionKey: "identity.official_name",
+        sectionKey: "identity",
+        question: "What is the official brand name?",
+        helpText: null,
+      },
+    ],
+    pages: [{ url: "https://example.com/about", text: "Example is the official name." }],
+  });
+  const claims = normalizePrStudioBrandMemoryOutput(parsed, {
+    profileAnswers: [
+      {
+        sectionKey: "identity",
+        questionKey: "identity.official_name",
+        value: "Example",
+        confidence: 0.99,
+        sources: [{ url: "https://example.com/about", excerpt: "Example" }],
+      },
+    ],
+    additionalClaims: [
+      {
+        sectionKey: "products",
+        value: "The company offers a workshop tour.",
+        confidence: 0.8,
+        sources: [{ url: "https://example.com/about", excerpt: "workshop tour" }],
+      },
+    ],
+  });
+  assert.equal(claims[0].questionKey, "identity.official_name");
+  assert.equal(claims[0].memoryRole, "profile");
+  assert.equal(claims[1].questionKey, null);
+  assert.equal(claims[1].memoryRole, "additional");
+});
+
+test("rejects a profile answer assigned to the wrong section", () => {
+  const parsed = parsePrStudioBrandMemoryInput({
+    brand: { name: "Example" },
+    sectionKeys: ["identity", "products"],
+    questions: [
+      {
+        questionKey: "identity.official_name",
+        sectionKey: "identity",
+        question: "What is the official brand name?",
+        helpText: null,
+      },
+    ],
+    pages: [{ url: "https://example.com/about", text: "Example is the official name." }],
+  });
+  assert.throws(
+    () => normalizePrStudioBrandMemoryOutput(parsed, {
+      profileAnswers: [
+        {
+          sectionKey: "products",
+          questionKey: "identity.official_name",
+          value: "Example",
+          confidence: 0.99,
+          sources: [{ url: "https://example.com/about", excerpt: "Example" }],
+        },
+      ],
+      additionalClaims: [],
+    }),
+    /invalid Brand Memory response/,
+  );
 });
