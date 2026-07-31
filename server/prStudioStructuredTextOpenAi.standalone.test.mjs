@@ -89,6 +89,7 @@ test("builds a provider request without accepting a caller-selected model", () =
       }),
     );
     assert.equal(request.model, "gateway-controlled-model");
+    assert.equal(request.reasoning.effort, "low");
     assert.equal(request.store, false);
     assert.equal(request.text.format.type, "json_schema");
     assert.equal(request.text.format.strict, true);
@@ -128,6 +129,63 @@ test("executes through an injected client and returns normalized provider metada
   assert.equal(result.usage.totalTokens, 160);
   assert.equal(result.usage.cachedInputTokens, 20);
   assert.equal(capturedRequest.store, false);
+});
+
+test("rejects incomplete structured output with provider diagnostics", async () => {
+  const client = {
+    responses: {
+      create: async () => ({
+        id: "resp_incomplete_123",
+        _request_id: "req_incomplete_123",
+        model: "gpt-5-mini",
+        status: "incomplete",
+        incomplete_details: { reason: "max_output_tokens" },
+        output_text: '{"claims":[',
+        output: [{ type: "reasoning" }, { type: "message", content: [] }],
+        usage: {
+          input_tokens: 300,
+          output_tokens: 2_000,
+          total_tokens: 2_300,
+          output_tokens_details: { reasoning_tokens: 1_900 },
+        },
+      }),
+    },
+  };
+
+  await assert.rejects(
+    () => executePrStudioStructuredText(validInput(), { client }),
+    (error) =>
+      error?.code === "PR_STUDIO_TRANSPORT_INCOMPLETE_RESPONSE" &&
+      error?.incompleteReason === "max_output_tokens" &&
+      error?.providerRequestId === "req_incomplete_123" &&
+      error?.usage?.reasoningTokens === 1_900,
+  );
+});
+
+test("extracts structured output from response items when output_text is absent", async () => {
+  const client = {
+    responses: {
+      create: async () => ({
+        id: "resp_items_123",
+        model: "gpt-5-mini",
+        status: "completed",
+        output: [
+          {
+            type: "message",
+            content: [
+              {
+                type: "output_text",
+                text: '{"claims":[{"value":"Example was founded in 2020.","confidence":0.95}]}',
+              },
+            ],
+          },
+        ],
+      }),
+    },
+  };
+
+  const result = await executePrStudioStructuredText(validInput(), { client });
+  assert.equal(result.output.claims[0].confidence, 0.95);
 });
 
 test("rejects malformed provider JSON", async () => {

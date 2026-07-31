@@ -5644,6 +5644,14 @@ app.post("/internal/ai/pr-studio/text/structured", async (req, res) => {
       promptVersion: requestedPromptVersion,
       code,
       message: error instanceof Error ? error.message.slice(0, 700) : String(error).slice(0, 700),
+      providerStatus: error?.providerStatus ?? null,
+      incompleteReason: error?.incompleteReason ?? null,
+      providerRequestId: error?.providerRequestId ?? null,
+      responseId: error?.responseId ?? null,
+      model: error?.model ?? null,
+      usage: error?.usage ?? null,
+      outputItemTypes: error?.outputItemTypes ?? [],
+      outputLength: error?.outputLength ?? null,
     });
     return res.status(status).json({
       ok: false,

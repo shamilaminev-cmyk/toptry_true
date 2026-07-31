@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 const DEFAULT_MODEL = "gpt-5-mini";
+const DEFAULT_REASONING_EFFORT = "low";
 const DEFAULT_MAX_OUTPUT_TOKENS = 6_000;
 const MIN_MAX_OUTPUT_TOKENS = 256;
 const MAX_MAX_OUTPUT_TOKENS = 12_000;
@@ -98,6 +99,7 @@ export function buildPrStudioStructuredTextRequest(parsed) {
   const model = String(process.env.PR_STUDIO_TEXT_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
   return {
     model,
+    reasoning: { effort: DEFAULT_REASONING_EFFORT },
     instructions: parsed.instructions,
     input: parsed.serializedInput,
     max_output_tokens: parsed.maxOutputTokens,
@@ -119,15 +121,52 @@ export async function executePrStudioStructuredText(input, options = {}) {
   const client = options.client || createOpenAiClient(apiKey);
   const request = buildPrStudioStructuredTextRequest(parsed);
   const response = await client.responses.create(request);
+  const diagnostics = collectProviderDiagnostics(response);
+
+  if (response?.status === "incomplete") {
+    const reason = diagnostics.incompleteReason || "unknown_reason";
+    throw invalidResponse(`OpenAI response was incomplete: ${reason}`, {
+      code: "PR_STUDIO_TRANSPORT_INCOMPLETE_RESPONSE",
+      ...diagnostics,
+    });
+  }
+  if (response?.status && response.status !== "completed") {
+    throw invalidResponse(`OpenAI response status was ${response.status}`, {
+      code: "PR_STUDIO_TRANSPORT_INVALID_RESPONSE",
+      ...diagnostics,
+    });
+  }
+
+  const refusal = extractRefusal(response);
+  if (refusal) {
+    throw invalidResponse("OpenAI refused structured output", {
+      code: "PR_STUDIO_TRANSPORT_REFUSAL",
+      ...diagnostics,
+    });
+  }
+
+  const outputText = extractOutputText(response);
+  if (!outputText) {
+    throw invalidResponse("OpenAI returned no structured output", {
+      ...diagnostics,
+      outputLength: 0,
+    });
+  }
 
   let output;
   try {
-    output = JSON.parse(response.output_text || "");
+    output = JSON.parse(outputText);
   } catch {
-    throw invalidResponse("OpenAI returned malformed JSON");
+    throw invalidResponse("OpenAI returned malformed JSON", {
+      ...diagnostics,
+      outputLength: outputText.length,
+    });
   }
   if (!output || typeof output !== "object" || Array.isArray(output)) {
-    throw invalidResponse("OpenAI returned an invalid structured response");
+    throw invalidResponse("OpenAI returned an invalid structured response", {
+      ...diagnostics,
+      outputLength: outputText.length,
+    });
   }
 
   return {
@@ -138,6 +177,54 @@ export async function executePrStudioStructuredText(input, options = {}) {
     responseId: response.id || null,
     usage: normalizeUsage(response.usage),
   };
+}
+
+function collectProviderDiagnostics(response) {
+  return {
+    providerStatus:
+      typeof response?.status === "string" ? response.status : null,
+    incompleteReason:
+      typeof response?.incomplete_details?.reason === "string"
+        ? response.incomplete_details.reason
+        : null,
+    providerRequestId:
+      typeof response?._request_id === "string" ? response._request_id : null,
+    responseId: typeof response?.id === "string" ? response.id : null,
+    model: typeof response?.model === "string" ? response.model : null,
+    usage: normalizeUsage(response?.usage),
+    outputItemTypes: Array.isArray(response?.output)
+      ? response.output
+          .map((item) => (typeof item?.type === "string" ? item.type : "unknown"))
+          .slice(0, 20)
+      : [],
+  };
+}
+
+function extractOutputText(response) {
+  if (typeof response?.output_text === "string" && response.output_text.trim()) {
+    return response.output_text;
+  }
+
+  const parts = [];
+  for (const item of Array.isArray(response?.output) ? response.output : []) {
+    if (item?.type !== "message" || !Array.isArray(item.content)) continue;
+    for (const content of item.content) {
+      if (content?.type === "output_text" && typeof content.text === "string") {
+        parts.push(content.text);
+      }
+    }
+  }
+  return parts.join("");
+}
+
+function extractRefusal(response) {
+  for (const item of Array.isArray(response?.output) ? response.output : []) {
+    if (item?.type !== "message" || !Array.isArray(item.content)) continue;
+    for (const content of item.content) {
+      if (content?.type === "refusal") return true;
+    }
+  }
+  return false;
 }
 
 function createOpenAiClient(apiKey) {
@@ -386,8 +473,12 @@ function invalidInput(message) {
   return error;
 }
 
-function invalidResponse(message) {
+function invalidResponse(message, details = {}) {
   const error = new Error(message);
-  error.code = "PR_STUDIO_TRANSPORT_INVALID_RESPONSE";
+  error.code =
+    details.code || "PR_STUDIO_TRANSPORT_INVALID_RESPONSE";
+  for (const [key, value] of Object.entries(details)) {
+    if (key !== "code") error[key] = value;
+  }
   return error;
 }
