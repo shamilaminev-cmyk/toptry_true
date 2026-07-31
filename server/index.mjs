@@ -64,6 +64,7 @@ import {
   parsePrStudioBrandMemoryInput,
   parsePrStudioBrandMemoryConsolidationInput,
 } from "./prStudioBrandMemoryOpenAi.mjs";
+import { executePrStudioStructuredText } from "./prStudioStructuredTextOpenAi.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
 
@@ -5576,12 +5577,83 @@ app.get("/internal/ai/pr-studio/health", (req, res) => {
   return res.status(200).json({
     ok: true,
     service: "pr-studio-ai-gateway",
+    capabilities: {
+      structuredText: true,
+    },
     provider: {
       openaiConfigured: Boolean(
         String(process.env.OPENAI_API_KEY || "").trim()
       ),
     },
   });
+});
+
+app.post("/internal/ai/pr-studio/text/structured", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+  if (
+    String(process.env.AI_GATEWAY_ROLE || "")
+      .trim()
+      .toLowerCase() !== "gateway"
+  ) {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+
+  const requestedOperation =
+    typeof req.body?.operation === "string"
+      ? req.body.operation.trim().slice(0, 100)
+      : null;
+  const requestedPromptVersion =
+    typeof req.body?.promptVersion === "string"
+      ? req.body.promptVersion.trim().slice(0, 80)
+      : null;
+
+  try {
+    const result = await executePrStudioStructuredText(req.body);
+    console.info("PR Studio structured text completed", {
+      operation: result.operation,
+      promptVersion: result.promptVersion,
+      model: result.model,
+      responseId: result.responseId,
+      usage: result.usage,
+    });
+    return res.status(200).json({
+      ok: true,
+      operation: result.operation,
+      promptVersion: result.promptVersion,
+      output: result.output,
+      provider: {
+        model: result.model,
+        responseId: result.responseId,
+        usage: result.usage,
+      },
+    });
+  } catch (error) {
+    const code = error?.code || "PR_STUDIO_TRANSPORT_UPSTREAM_FAILED";
+    const status =
+      code === "PR_STUDIO_TRANSPORT_INVALID_INPUT"
+        ? 400
+        : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED"
+          ? 503
+          : 502;
+    console.error("PR Studio structured text failed", {
+      operation: requestedOperation,
+      promptVersion: requestedPromptVersion,
+      code,
+      message: error instanceof Error ? error.message.slice(0, 700) : String(error).slice(0, 700),
+    });
+    return res.status(status).json({
+      ok: false,
+      error:
+        status === 400
+          ? error.message
+          : "Structured text generation is temporarily unavailable",
+      code,
+    });
+  }
 });
 
 app.post("/internal/ai/pr-studio/brand-memory/analyze", async (req, res) => {
