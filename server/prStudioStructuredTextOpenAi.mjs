@@ -2,6 +2,10 @@ import OpenAI from "openai";
 
 const DEFAULT_MODEL = "gpt-5-mini";
 const DEFAULT_REASONING_EFFORT = "low";
+const REASONING_EFFORT_BY_OPERATION = new Map([
+  ["brand-memory.website-batch-analysis", "medium"],
+  ["brand-memory.website-profile-synthesis", "medium"],
+]);
 const DEFAULT_MAX_OUTPUT_TOKENS = 6_000;
 const MIN_MAX_OUTPUT_TOKENS = 256;
 const MAX_MAX_OUTPUT_TOKENS = 12_000;
@@ -99,7 +103,7 @@ export function buildPrStudioStructuredTextRequest(parsed) {
   const model = String(process.env.PR_STUDIO_TEXT_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
   return {
     model,
-    reasoning: { effort: DEFAULT_REASONING_EFFORT },
+    reasoning: { effort: reasoningEffortForOperation(parsed.operation) },
     instructions: parsed.instructions,
     input: parsed.serializedInput,
     max_output_tokens: parsed.maxOutputTokens,
@@ -113,6 +117,10 @@ export function buildPrStudioStructuredTextRequest(parsed) {
       },
     },
   };
+}
+
+function reasoningEffortForOperation(operation) {
+  return REASONING_EFFORT_BY_OPERATION.get(operation) || DEFAULT_REASONING_EFFORT;
 }
 
 export async function executePrStudioStructuredText(input, options = {}) {

@@ -78,6 +78,26 @@ test("rejects unsupported schema capabilities", () => {
   );
 });
 
+test("uses medium reasoning for website analysis and synthesis only", () => {
+  const websiteBatch = buildPrStudioStructuredTextRequest(
+    parsePrStudioStructuredTextInput(
+      validInput({ operation: "brand-memory.website-batch-analysis" }),
+    ),
+  );
+  const websiteSynthesis = buildPrStudioStructuredTextRequest(
+    parsePrStudioStructuredTextInput(
+      validInput({ operation: "brand-memory.website-profile-synthesis" }),
+    ),
+  );
+  const documentBatch = buildPrStudioStructuredTextRequest(
+    parsePrStudioStructuredTextInput(validInput()),
+  );
+
+  assert.equal(websiteBatch.reasoning.effort, "medium");
+  assert.equal(websiteSynthesis.reasoning.effort, "medium");
+  assert.equal(documentBatch.reasoning.effort, "low");
+});
+
 test("builds a provider request without accepting a caller-selected model", () => {
   const previous = process.env.PR_STUDIO_TEXT_MODEL;
   process.env.PR_STUDIO_TEXT_MODEL = "gateway-controlled-model";
