@@ -65,6 +65,7 @@ import {
   parsePrStudioBrandMemoryConsolidationInput,
 } from "./prStudioBrandMemoryOpenAi.mjs";
 import { executePrStudioStructuredText } from "./prStudioStructuredTextOpenAi.mjs";
+import { executePrStudioWebResearch } from "./prStudioWebResearchOpenAi.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
 
@@ -5579,6 +5580,7 @@ app.get("/internal/ai/pr-studio/health", (req, res) => {
     service: "pr-studio-ai-gateway",
     capabilities: {
       structuredText: true,
+      webResearch: true,
     },
     provider: {
       openaiConfigured: Boolean(
@@ -5659,6 +5661,96 @@ app.post("/internal/ai/pr-studio/text/structured", async (req, res) => {
         status === 400
           ? error.message
           : "Structured text generation is temporarily unavailable",
+      code,
+    });
+  }
+});
+
+
+app.post("/internal/ai/pr-studio/web/research", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+  if (
+    String(process.env.AI_GATEWAY_ROLE || "")
+      .trim()
+      .toLowerCase() !== "gateway"
+  ) {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+
+  const questionKey =
+    typeof req.body?.question?.questionKey === "string"
+      ? req.body.question.questionKey.trim().slice(0, 120)
+      : null;
+  const researchPolicy =
+    typeof req.body?.question?.researchPolicy === "string"
+      ? req.body.question.researchPolicy.trim().slice(0, 60)
+      : null;
+
+  try {
+    const result = await executePrStudioWebResearch(req.body);
+    console.info("PR Studio targeted web research completed", {
+      questionKey: result.questionKey,
+      researchPolicy: result.researchPolicy,
+      outcome: result.outcome,
+      citationCount: result.citations.length,
+      sourceCount: result.sources.length,
+      queryCount: result.queries.length,
+      model: result.model,
+      responseId: result.responseId,
+      usage: result.usage,
+    });
+    return res.status(200).json({
+      ok: true,
+      questionKey: result.questionKey,
+      researchPolicy: result.researchPolicy,
+      outcome: result.outcome,
+      answer: result.answer,
+      rationale: result.rationale,
+      confidence: result.confidence,
+      citations: result.citations,
+      sources: result.sources,
+      queries: result.queries,
+      provider: {
+        model: result.model,
+        responseId: result.responseId,
+        usage: result.usage,
+      },
+    });
+  } catch (error) {
+    const code = error?.code || "PR_STUDIO_WEB_RESEARCH_UPSTREAM_FAILED";
+    const status =
+      code === "PR_STUDIO_TRANSPORT_INVALID_INPUT"
+        ? 400
+        : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED"
+          ? 503
+          : 502;
+    console.error("PR Studio targeted web research failed", {
+      questionKey,
+      researchPolicy,
+      code,
+      message:
+        error instanceof Error
+          ? error.message.slice(0, 700)
+          : String(error).slice(0, 700),
+      providerStatus: error?.providerStatus ?? null,
+      incompleteReason: error?.incompleteReason ?? null,
+      providerRequestId: error?.providerRequestId ?? null,
+      responseId: error?.responseId ?? null,
+      model: error?.model ?? null,
+      usage: error?.usage ?? null,
+      outputItemTypes: error?.outputItemTypes ?? [],
+      outputLength: error?.outputLength ?? null,
+    });
+    return res.status(status).json({
+      ok: false,
+      error:
+        status === 400
+          ? error.message
+          : "Targeted web research is temporarily unavailable",
       code,
     });
   }
