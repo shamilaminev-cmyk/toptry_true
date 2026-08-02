@@ -60,6 +60,18 @@ test("rejects unregistered operations", () => {
   );
 });
 
+test("accepts only the registered Content Studio roles", () => {
+  for (const operation of ["content.research", "content.copywrite", "content.edit"]) {
+    const parsed = parsePrStudioStructuredTextInput(validInput({ operation }));
+    assert.equal(parsed.operation, operation);
+    assert.equal(buildPrStudioStructuredTextRequest(parsed).reasoning.effort, "medium");
+  }
+  assert.throws(
+    () => parsePrStudioStructuredTextInput(validInput({ operation: "content.publish" })),
+    /operation is not allowed/,
+  );
+});
+
 test("requires strict closed JSON schemas", () => {
   const input = validInput();
   input.responseSchema.schema.additionalProperties = true;

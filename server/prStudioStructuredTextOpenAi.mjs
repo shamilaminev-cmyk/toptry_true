@@ -5,6 +5,9 @@ const DEFAULT_REASONING_EFFORT = "low";
 const REASONING_EFFORT_BY_OPERATION = new Map([
   ["brand-memory.website-batch-analysis", "medium"],
   ["brand-memory.website-profile-synthesis", "medium"],
+  ["content.research", "medium"],
+  ["content.copywrite", "medium"],
+  ["content.edit", "medium"],
 ]);
 const DEFAULT_MAX_OUTPUT_TOKENS = 6_000;
 const MIN_MAX_OUTPUT_TOKENS = 256;
@@ -24,6 +27,9 @@ const ALLOWED_OPERATIONS = new Set([
   "brand-memory.claim-consolidation",
   "brand-memory.document-batch-analysis",
   "brand-memory.document-profile-synthesis",
+  "content.research",
+  "content.copywrite",
+  "content.edit",
 ]);
 
 const ALLOWED_SCHEMA_KEYS = new Set([

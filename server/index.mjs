@@ -5581,6 +5581,7 @@ app.get("/internal/ai/pr-studio/health", (req, res) => {
     capabilities: {
       structuredText: true,
       webResearch: true,
+      contentProduction: true,
     },
     provider: {
       openaiConfigured: Boolean(
