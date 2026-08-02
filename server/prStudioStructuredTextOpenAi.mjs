@@ -2,12 +2,35 @@ import OpenAI from "openai";
 
 const DEFAULT_MODEL = "gpt-5-mini";
 const DEFAULT_REASONING_EFFORT = "low";
+const CONTENT_MODEL_BY_OPERATION = new Map([
+  [
+    "content.research",
+    {
+      environmentName: "PR_STUDIO_CONTENT_RESEARCH_MODEL",
+      defaultModel: "gpt-5.6-luna",
+    },
+  ],
+  [
+    "content.copywrite",
+    {
+      environmentName: "PR_STUDIO_CONTENT_COPYWRITE_MODEL",
+      defaultModel: "gpt-5.6-terra",
+    },
+  ],
+  [
+    "content.edit",
+    {
+      environmentName: "PR_STUDIO_CONTENT_EDIT_MODEL",
+      defaultModel: "gpt-5.6-sol",
+    },
+  ],
+]);
 const REASONING_EFFORT_BY_OPERATION = new Map([
   ["brand-memory.website-batch-analysis", "medium"],
   ["brand-memory.website-profile-synthesis", "medium"],
   ["content.research", "medium"],
-  ["content.copywrite", "medium"],
-  ["content.edit", "medium"],
+  ["content.copywrite", "high"],
+  ["content.edit", "high"],
 ]);
 const DEFAULT_MAX_OUTPUT_TOKENS = 6_000;
 const MIN_MAX_OUTPUT_TOKENS = 256;
@@ -106,7 +129,7 @@ export function parsePrStudioStructuredTextInput(value) {
 }
 
 export function buildPrStudioStructuredTextRequest(parsed) {
-  const model = String(process.env.PR_STUDIO_TEXT_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
+  const model = modelForOperation(parsed.operation);
   return {
     model,
     reasoning: { effort: reasoningEffortForOperation(parsed.operation) },
@@ -123,6 +146,17 @@ export function buildPrStudioStructuredTextRequest(parsed) {
       },
     },
   };
+}
+
+function modelForOperation(operation) {
+  const route = CONTENT_MODEL_BY_OPERATION.get(operation);
+  if (route) {
+    return (
+      String(process.env[route.environmentName] || route.defaultModel).trim() ||
+      route.defaultModel
+    );
+  }
+  return String(process.env.PR_STUDIO_TEXT_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
 }
 
 function reasoningEffortForOperation(operation) {

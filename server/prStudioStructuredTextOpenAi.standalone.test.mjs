@@ -64,12 +64,58 @@ test("accepts only the registered Content Studio roles", () => {
   for (const operation of ["content.research", "content.copywrite", "content.edit"]) {
     const parsed = parsePrStudioStructuredTextInput(validInput({ operation }));
     assert.equal(parsed.operation, operation);
-    assert.equal(buildPrStudioStructuredTextRequest(parsed).reasoning.effort, "medium");
   }
   assert.throws(
     () => parsePrStudioStructuredTextInput(validInput({ operation: "content.publish" })),
     /operation is not allowed/,
   );
+});
+
+test("routes Content Studio roles to gateway-controlled GPT-5.6 tiers", () => {
+  const environmentNames = [
+    "PR_STUDIO_TEXT_MODEL",
+    "PR_STUDIO_CONTENT_RESEARCH_MODEL",
+    "PR_STUDIO_CONTENT_COPYWRITE_MODEL",
+    "PR_STUDIO_CONTENT_EDIT_MODEL",
+  ];
+  const previous = Object.fromEntries(
+    environmentNames.map((name) => [name, process.env[name]]),
+  );
+  process.env.PR_STUDIO_TEXT_MODEL = "generic-text-model";
+  delete process.env.PR_STUDIO_CONTENT_RESEARCH_MODEL;
+  delete process.env.PR_STUDIO_CONTENT_COPYWRITE_MODEL;
+  delete process.env.PR_STUDIO_CONTENT_EDIT_MODEL;
+
+  try {
+    const research = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(validInput({ operation: "content.research" })),
+    );
+    const copywrite = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(validInput({ operation: "content.copywrite" })),
+    );
+    const edit = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(validInput({ operation: "content.edit" })),
+    );
+
+    assert.equal(research.model, "gpt-5.6-luna");
+    assert.equal(research.reasoning.effort, "medium");
+    assert.equal(copywrite.model, "gpt-5.6-terra");
+    assert.equal(copywrite.reasoning.effort, "high");
+    assert.equal(edit.model, "gpt-5.6-sol");
+    assert.equal(edit.reasoning.effort, "high");
+
+    process.env.PR_STUDIO_CONTENT_EDIT_MODEL = "custom-editor-model";
+    const overriddenEdit = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(validInput({ operation: "content.edit" })),
+    );
+    assert.equal(overriddenEdit.model, "custom-editor-model");
+  } finally {
+    for (const name of environmentNames) {
+      const value = previous[name];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 });
 
 test("requires strict closed JSON schemas", () => {
