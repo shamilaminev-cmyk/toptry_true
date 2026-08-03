@@ -66,6 +66,10 @@ import {
 } from "./prStudioBrandMemoryOpenAi.mjs";
 import { executePrStudioStructuredText } from "./prStudioStructuredTextOpenAi.mjs";
 import { executePrStudioWebResearch } from "./prStudioWebResearchOpenAi.mjs";
+import {
+  executePrStudioImageGeneration,
+  executePrStudioImageSearch,
+} from "./prStudioImageOpenAi.mjs";
 
 dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || ".env" });
 
@@ -5582,6 +5586,8 @@ app.get("/internal/ai/pr-studio/health", (req, res) => {
       structuredText: true,
       webResearch: true,
       contentProduction: true,
+      imageSearch: true,
+      imageGeneration: true,
     },
     provider: {
       openaiConfigured: Boolean(
@@ -5752,6 +5758,87 @@ app.post("/internal/ai/pr-studio/web/research", async (req, res) => {
         status === 400
           ? error.message
           : "Targeted web research is temporarily unavailable",
+      code,
+    });
+  }
+});
+
+
+app.post("/internal/ai/pr-studio/images/search", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+  if (String(process.env.AI_GATEWAY_ROLE || "").trim().toLowerCase() !== "gateway") {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+  try {
+    const result = await executePrStudioImageSearch(req.body);
+    console.info("PR Studio image search completed", {
+      query: result.query.slice(0, 200),
+      candidateCount: result.candidates.length,
+      model: result.model,
+      responseId: result.responseId,
+      usage: result.usage,
+    });
+    return res.status(200).json({ ok: true, ...result });
+  } catch (error) {
+    const code = error?.code || "PR_STUDIO_IMAGE_SEARCH_UPSTREAM_FAILED";
+    const status = code === "PR_STUDIO_TRANSPORT_INVALID_INPUT"
+      ? 400
+      : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED"
+        ? 503
+        : 502;
+    console.error("PR Studio image search failed", {
+      code,
+      message: error instanceof Error ? error.message.slice(0, 700) : String(error).slice(0, 700),
+      providerStatus: error?.providerStatus ?? null,
+      providerRequestId: error?.providerRequestId ?? null,
+    });
+    return res.status(status).json({
+      ok: false,
+      error: status === 400 ? error.message : "Image search is temporarily unavailable",
+      code,
+    });
+  }
+});
+
+app.post("/internal/ai/pr-studio/images/generate", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+  if (String(process.env.AI_GATEWAY_ROLE || "").trim().toLowerCase() !== "gateway") {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+  try {
+    const result = await executePrStudioImageGeneration(req.body);
+    console.info("PR Studio image generation completed", {
+      aspectRatio: result.aspectRatio,
+      width: result.width,
+      height: result.height,
+      model: result.model,
+      responseId: result.responseId,
+    });
+    return res.status(200).json({ ok: true, ...result });
+  } catch (error) {
+    const code = error?.code || "PR_STUDIO_IMAGE_UPSTREAM_FAILED";
+    const status = code === "PR_STUDIO_TRANSPORT_INVALID_INPUT"
+      ? 400
+      : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED"
+        ? 503
+        : 502;
+    console.error("PR Studio image generation failed", {
+      code,
+      message: error instanceof Error ? error.message.slice(0, 700) : String(error).slice(0, 700),
+      providerStatus: error?.providerStatus ?? null,
+      providerRequestId: error?.providerRequestId ?? null,
+    });
+    return res.status(status).json({
+      ok: false,
+      error: status === 400 ? error.message : "Image generation is temporarily unavailable",
       code,
     });
   }
