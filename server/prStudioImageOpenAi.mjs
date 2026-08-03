@@ -12,14 +12,35 @@ const MAX_PAGE_BYTES = 1_500_000;
 const FETCH_TIMEOUT_MS = 12_000;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ASPECT_RATIOS = new Set(["1:1", "4:5", "16:9", "9:16"]);
+const COMPOSITIONS = new Set(["single_scene", "product", "process", "interior", "portrait", "collage"]);
+const SEARCH_STYLE_STOP_WORDS = new Set([
+  "editorial", "illustration", "illustrations", "image", "images", "photo", "photos", "photograph", "photography",
+  "premium", "luxury", "official", "article", "cover", "visual", "press", "kit", "newsroom", "media",
+  "иллюстрация", "иллюстрации", "изображение", "изображения", "фото", "фотография", "обложка", "статья",
+  "премиальный", "редакционный", "официальный", "найти", "для", "про", "или", "and", "the", "for", "with",
+]);
 
 const SEARCH_RESPONSE_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
     summary: { type: "string", minLength: 1, maxLength: 1_200 },
+    candidatePages: {
+      type: "array",
+      minItems: 0,
+      maxItems: 12,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          pageUrl: { type: "string", minLength: 8, maxLength: 2_000 },
+          reason: { type: "string", minLength: 1, maxLength: 400 },
+        },
+        required: ["pageUrl", "reason"],
+      },
+    },
   },
-  required: ["summary"],
+  required: ["summary", "candidatePages"],
 };
 
 export function parsePrStudioImageSearchInput(value) {
@@ -36,6 +57,7 @@ export function parsePrStudioImageSearchInput(value) {
       brandName: cleanNullableString(value.context?.brandName, 160),
       title: cleanNullableString(value.context?.title, 240),
       summary: cleanNullableString(value.context?.summary, 4_000),
+      contentExcerpt: cleanNullableString(value.context?.contentExcerpt, 6_000),
     },
   };
 }
@@ -46,11 +68,16 @@ export function buildPrStudioImageSearchRequest(parsed) {
     model,
     reasoning: { effort: "low" },
     instructions: [
-      "Find webpages that contain strong candidate illustrations for the supplied editorial material.",
+      "Find webpages containing photographs or illustrations that directly depict the subject of the supplied material.",
       "You must use web search and must not answer from memory.",
-      "Prefer primary sources, official sites, museums, archives, Wikimedia Commons, reputable editorial publications, Unsplash, Pexels and Pixabay when relevant.",
+      "Treat the query, title, brand name and content excerpt as factual subject constraints. Visual-style words such as editorial, premium, illustration, cover or photography are not the subject and must not dominate the search.",
+      "Run two to four precise searches. When a named company, person, place, product or material is present, use the exact name in at least one search.",
+      "Prefer the named subject's official site and newsroom, primary sources, museums, archives, Wikimedia Commons file pages, and reputable specialist publications. Use stock libraries only when they depict the exact subject.",
+      "Reject generic press-kit templates, unrelated newsrooms, concerts, celebrities, animals, abstract graphics and pages that merely contain words such as editorial or illustration.",
+      "Look for a strong hero image with one readable subject, adequate resolution and a clear connection to the article. Do not select logos, separators, banners or tiny thumbnails.",
       "Do not treat a search result as permission to republish an image. The application will separately inspect source and licensing metadata.",
-      "Return a concise summary only; candidate URLs are collected from the web-search source metadata.",
+      "In candidatePages return only webpages you actually opened through web search and judged directly relevant. Do not return search-result pages or invented URLs.",
+      "Select pages because their hero image is likely useful, not merely because their text mentions the subject.",
     ].join("\n"),
     input: JSON.stringify(parsed),
     tools: [{ type: "web_search", search_context_size: "medium", external_web_access: true }],
@@ -79,16 +106,18 @@ export async function executePrStudioImageSearch(input, options = {}) {
   ensureCompletedResponse(response, "image search");
   const outputText = extractOutputText(response);
   if (!outputText) throw invalidResponse("OpenAI returned no image-search output");
+  let selection;
   try {
-    JSON.parse(outputText);
+    selection = JSON.parse(outputText);
   } catch {
     throw invalidResponse("OpenAI returned malformed image-search JSON");
   }
   const sources = collectWebSources(response);
+  const selectedSources = selectPrStudioImageSearchSources(sources, selection?.candidatePages);
   const inspected = await Promise.allSettled(
-    sources.slice(0, 16).map((source) => inspectSourcePage(source)),
+    selectedSources.slice(0, 16).map((source) => inspectSourcePage(source)),
   );
-  const candidates = [];
+  const inspectedCandidates = [];
   const seenImages = new Set();
   for (const result of inspected) {
     if (result.status !== "fulfilled" || !result.value) continue;
@@ -96,9 +125,11 @@ export async function executePrStudioImageSearch(input, options = {}) {
     const key = normalizeComparableUrl(candidate.imageUrl);
     if (!key || seenImages.has(key)) continue;
     seenImages.add(key);
-    candidates.push(candidate);
-    if (candidates.length >= parsed.maxResults) break;
+    inspectedCandidates.push(candidate);
   }
+  const candidates = rankPrStudioImageSearchCandidates(inspectedCandidates, parsed)
+    .slice(0, parsed.maxResults)
+    .map(({ relevanceScore: _relevanceScore, relevanceText: _relevanceText, ...candidate }) => candidate);
   return {
     query: parsed.query,
     candidates,
@@ -116,6 +147,8 @@ export function parsePrStudioImageGenerateInput(value) {
   if (!prompt) throw invalidInput("prompt is required");
   const aspectRatio = cleanString(value.aspectRatio, 12);
   if (!ASPECT_RATIOS.has(aspectRatio)) throw invalidInput("aspectRatio is invalid");
+  const composition = cleanString(value.composition, 24) || "single_scene";
+  if (!COMPOSITIONS.has(composition)) throw invalidInput("composition is invalid");
   const references = Array.isArray(value.references) ? value.references : [];
   if (references.length > MAX_REFERENCES) throw invalidInput(`No more than ${MAX_REFERENCES} references are allowed`);
   const normalizedReferences = references.map((reference, index) => {
@@ -137,7 +170,7 @@ export function parsePrStudioImageGenerateInput(value) {
       name: cleanNullableString(reference.name, 160) || `reference-${index + 1}`,
     };
   });
-  return { prompt, aspectRatio, references: normalizedReferences };
+  return { prompt, aspectRatio, composition, references: normalizedReferences };
 }
 
 export async function executePrStudioImageGeneration(input, options = {}) {
@@ -148,9 +181,15 @@ export async function executePrStudioImageGeneration(input, options = {}) {
   const quality = normalizeQuality(process.env.PR_STUDIO_IMAGE_QUALITY);
   const client = options.client || new OpenAI({ apiKey, timeout: 600_000, maxRetries: 1 });
   const canvas = canvasForAspect(parsed.aspectRatio);
+  const compositionInstruction = compositionInstructionFor(parsed.composition);
   const prompt = [
     parsed.prompt,
-    "Create a polished editorial illustration suitable for publication.",
+    "Create a polished editorial image suitable for publication.",
+    compositionInstruction,
+    parsed.composition === "collage"
+      ? "The collage must remain simple, coherent and readable as a small preview."
+      : "Use one coherent frame, one dominant visual subject and one clear focal point. Do not create a collage, moodboard, split screen, diptych, triptych, contact sheet, montage or multiple panels.",
+    "The image must remain immediately readable at thumbnail size. Avoid scattered props, repeated scenes and competing focal points.",
     "No visible text, captions, logos, signatures or watermarks unless they are naturally present in a supplied reference and explicitly requested.",
     "Avoid generic stock-photo staging, exaggerated luxury clichés and obvious AI artefacts.",
     `Compose for a final ${parsed.aspectRatio} crop and keep important subjects inside the safe central area.`,
@@ -212,6 +251,8 @@ async function inspectSourcePage(source) {
       title: source.title || new URL(finalUrl).hostname,
       author: null,
       license: null,
+      description: source.title || "",
+      imageAlt: source.title || "",
       rawHtml: "",
     });
   }
@@ -223,18 +264,21 @@ async function inspectSourcePage(source) {
   const html = bytes.toString("utf8");
   const title = metaValue(html, ["og:title", "twitter:title"]) || htmlTitle(html) || source.title || new URL(finalUrl).hostname;
   const author = metaValue(html, ["author", "article:author", "parsely-author"]);
+  const description = metaValue(html, ["og:description", "twitter:description", "description"]) || "";
   const license = metaValue(html, ["license", "dc.rights", "dcterms.license", "copyright"])
     || linkRelValue(html, "license")
     || visibleLicenseHint(html);
-  const rawImage = metaValue(html, ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"])
-    || firstImageSrc(html);
+  const metaImage = metaValue(html, ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"]);
+  const inlineImage = firstImageInfo(html);
+  const rawImage = metaImage || inlineImage?.src;
+  const imageAlt = metaValue(html, ["og:image:alt", "twitter:image:alt"]) || inlineImage?.alt || "";
   if (!rawImage) return null;
   const imageUrl = new URL(decodeHtml(rawImage), finalUrl).toString();
   await assertSafePublicUrl(imageUrl);
-  return buildCandidate({ pageUrl: finalUrl, imageUrl, title, author, license, rawHtml: html });
+  return buildCandidate({ pageUrl: finalUrl, imageUrl, title, author, license, description, imageAlt, rawHtml: html });
 }
 
-function buildCandidate({ pageUrl, imageUrl, title, author, license, rawHtml }) {
+function buildCandidate({ pageUrl, imageUrl, title, author, license, description = "", imageAlt = "", rawHtml }) {
   const domain = new URL(pageUrl).hostname.replace(/^www\./, "");
   const rights = classifyRights({ license, author, domain, rawHtml });
   return {
@@ -246,7 +290,78 @@ function buildCandidate({ pageUrl, imageUrl, title, author, license, rawHtml }) 
     license: cleanNullableString(license, 500),
     rightsStatus: rights.status,
     rightsNote: rights.note,
+    relevanceText: [title, description, imageAlt, pageUrl, imageUrl].filter(Boolean).join(" "),
   };
+}
+
+export function selectPrStudioImageSearchSources(sources, candidatePages) {
+  const byUrl = new Map(sources.map((source) => [normalizeComparableUrl(source.url), source]));
+  const selected = [];
+  const seen = new Set();
+  for (const candidate of Array.isArray(candidatePages) ? candidatePages : []) {
+    const key = normalizeComparableUrl(candidate?.pageUrl);
+    const source = key ? byUrl.get(key) : null;
+    if (!source || seen.has(key)) continue;
+    seen.add(key);
+    selected.push(source);
+  }
+  return selected.length ? selected : sources;
+}
+
+export function rankPrStudioImageSearchCandidates(candidates, parsed) {
+  const subjectText = [
+    parsed?.query,
+    parsed?.context?.brandName,
+    parsed?.context?.title,
+    parsed?.context?.summary,
+    parsed?.context?.contentExcerpt,
+  ].filter(Boolean).join(" ");
+  const subjectTokens = subjectTokensFrom(subjectText);
+  const brandPhrase = normalizeSearchText(parsed?.context?.brandName || "");
+  return candidates
+    .map((candidate) => {
+      const text = normalizeSearchText(candidate.relevanceText || [candidate.title, candidate.domain, candidate.pageUrl, candidate.imageUrl].join(" "));
+      const candidateTokens = new Set(subjectTokensFrom(text));
+      let relevanceScore = 0;
+      for (const token of subjectTokens) {
+        if (candidateTokens.has(token)) relevanceScore += token.length >= 7 ? 1.5 : 1;
+      }
+      if (brandPhrase && text.includes(brandPhrase)) relevanceScore += 5;
+      const domain = String(candidate.domain || "").toLowerCase();
+      if (brandPhrase) {
+        const compactBrand = brandPhrase.replace(/[^a-z0-9а-яё]/g, "");
+        const compactDomain = domain.replace(/[^a-z0-9а-яё]/g, "");
+        if (compactBrand.length >= 4 && compactDomain.includes(compactBrand)) relevanceScore += 4;
+      }
+      if (/commons\.wikimedia\.org|museum|archive|\.gov$|\.edu$/.test(domain)) relevanceScore += 0.35;
+      if (/press[ -]?kit|pod studio|concert|newsroom/.test(text) && relevanceScore < 2) relevanceScore -= 2;
+      return { ...candidate, relevanceScore };
+    })
+    .filter((candidate) => candidate.relevanceScore >= 1)
+    .sort((left, right) => right.relevanceScore - left.relevanceScore);
+}
+
+function subjectTokensFrom(value) {
+  return [...new Set(normalizeSearchText(value)
+    .split(/[^a-z0-9а-яё]+/u)
+    .filter((token) => token.length >= 3 && !SEARCH_STYLE_STOP_WORDS.has(token))
+    .slice(0, 80))];
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function compositionInstructionFor(composition) {
+  if (composition === "product") return "Create one clean product-focused frame with a single dominant object and restrained supporting context.";
+  if (composition === "process") return "Create one continuous documentary-style scene showing a single work process in progress.";
+  if (composition === "interior") return "Create one coherent interior scene with a clear focal area and no inset views.";
+  if (composition === "portrait") return "Create one portrait-led frame with a single principal person and uncluttered context.";
+  if (composition === "collage") return "Create a deliberately composed editorial collage only because the user explicitly selected collage composition.";
+  return "Create one continuous scene captured as a single photograph or single illustration, not a layout of separate images.";
 }
 
 function classifyRights({ license, author, domain, rawHtml }) {
@@ -395,9 +510,13 @@ function htmlTitle(html) {
   return match?.[1] ? decodeHtml(match[1].replace(/\s+/g, " ").trim()) : null;
 }
 
-function firstImageSrc(html) {
-  const match = html.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
-  return match?.[1] || null;
+function firstImageInfo(html) {
+  const tag = html.match(/<img\b[^>]*>/i)?.[0] || "";
+  if (!tag) return null;
+  const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1] || null;
+  if (!src) return null;
+  const alt = tag.match(/\balt=["']([^"']*)["']/i)?.[1] || "";
+  return { src, alt: decodeHtml(alt) };
 }
 
 function linkRelValue(html, rel) {
