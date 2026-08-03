@@ -11,6 +11,7 @@ const MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
 const MAX_PAGE_BYTES = 1_500_000;
 const FETCH_TIMEOUT_MS = 12_000;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const SEARCHABLE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
 const ASPECT_RATIOS = new Set(["1:1", "4:5", "16:9", "9:16"]);
 const COMPOSITIONS = new Set(["single_scene", "product", "process", "interior", "portrait", "collage"]);
 const SEARCH_STYLE_STOP_WORDS = new Set([
@@ -25,6 +26,12 @@ const SEARCH_RESPONSE_SCHEMA = {
   additionalProperties: false,
   properties: {
     summary: { type: "string", minLength: 1, maxLength: 1_200 },
+    queries: {
+      type: "array",
+      minItems: 1,
+      maxItems: 6,
+      items: { type: "string", minLength: 3, maxLength: 300 },
+    },
     candidatePages: {
       type: "array",
       minItems: 0,
@@ -40,7 +47,7 @@ const SEARCH_RESPONSE_SCHEMA = {
       },
     },
   },
-  required: ["summary", "candidatePages"],
+  required: ["summary", "queries", "candidatePages"],
 };
 
 export function parsePrStudioImageSearchInput(value) {
@@ -50,14 +57,22 @@ export function parsePrStudioImageSearchInput(value) {
   const query = cleanString(value.query, 800);
   if (!query) throw invalidInput("query is required");
   const maxResults = boundedInteger(value.maxResults, 6, 1, MAX_SEARCH_RESULTS, "maxResults");
+  const searchQueries = Array.isArray(value.searchQueries)
+    ? [...new Set(value.searchQueries.map((entry) => cleanString(entry, 300)).filter(Boolean))].slice(0, 6)
+    : [];
   return {
     query,
+    searchQueries,
     maxResults,
+    mainIdea: cleanNullableString(value.mainIdea, 1_500),
+    mustShow: cleanNullableString(value.mustShow, 2_000),
+    avoid: cleanNullableString(value.avoid, 2_000),
+    visualDirection: cleanNullableString(value.visualDirection, 80),
     context: {
       brandName: cleanNullableString(value.context?.brandName, 160),
       title: cleanNullableString(value.context?.title, 240),
       summary: cleanNullableString(value.context?.summary, 4_000),
-      contentExcerpt: cleanNullableString(value.context?.contentExcerpt, 6_000),
+      contentExcerpt: cleanNullableString(value.context?.contentExcerpt, 8_000),
     },
   };
 }
@@ -68,22 +83,24 @@ export function buildPrStudioImageSearchRequest(parsed) {
     model,
     reasoning: { effort: "low" },
     instructions: [
-      "Find webpages containing photographs or illustrations that directly depict the subject of the supplied material.",
+      "Find webpages containing photographs or illustrations that visually express the main idea of the supplied article, not merely its broad topic.",
       "You must use web search and must not answer from memory.",
-      "Treat the query, title, brand name and content excerpt as factual subject constraints. Visual-style words such as editorial, premium, illustration, cover or photography are not the subject and must not dominate the search.",
-      "Run two to four precise searches. When a named company, person, place, product or material is present, use the exact name in at least one search.",
-      "Prefer the named subject's official site and newsroom, primary sources, museums, archives, Wikimedia Commons file pages, and reputable specialist publications. Use stock libraries only when they depict the exact subject.",
+      "Treat mainIdea, mustShow, title, named entities and content excerpt as factual subject constraints. Visual-style words such as editorial, premium, illustration, cover or photography are presentation preferences and must not dominate the search.",
+      "Use the supplied searchQueries when present, improve them where necessary, and run three to six precise searches. Return the actual queries used in the queries field.",
+      "When a named company, person, place, product or material is present, preserve the exact name in multiple searches. For non-English subjects, search in English and the relevant local language when useful.",
+      "Prefer the named subject's official site, official publications, primary sources, museums, archives, Wikimedia Commons file pages, and reputable specialist publications. Official pages with unclear reuse rights are still relevant candidates and must not be discarded for that reason.",
       "Reject generic press-kit templates, unrelated newsrooms, concerts, celebrities, animals, abstract graphics and pages that merely contain words such as editorial or illustration.",
-      "Look for a strong hero image with one readable subject, adequate resolution and a clear connection to the article. Do not select logos, separators, banners or tiny thumbnails.",
+      "Look for a strong hero image with one readable subject and a clear connection to the article's argument. Do not select logos, separators, generic banners or tiny thumbnails.",
       "Do not treat a search result as permission to republish an image. The application will separately inspect source and licensing metadata.",
       "In candidatePages return only webpages you actually opened through web search and judged directly relevant. Do not return search-result pages or invented URLs.",
-      "Select pages because their hero image is likely useful, not merely because their text mentions the subject.",
+      "If direct image access or licensing is unclear, still return the relevant source page. Technical availability must not erase topical relevance.",
+      "Select pages because their hero or article image is likely useful, not merely because their text mentions the subject.",
     ].join("\n"),
     input: JSON.stringify(parsed),
-    tools: [{ type: "web_search", search_context_size: "medium", external_web_access: true }],
+    tools: [{ type: "web_search", search_context_size: "high", external_web_access: true }],
     tool_choice: "required",
     include: ["web_search_call.action.sources"],
-    max_output_tokens: 1_200,
+    max_output_tokens: 1_600,
     store: false,
     text: {
       format: {
@@ -115,27 +132,60 @@ export async function executePrStudioImageSearch(input, options = {}) {
   const sources = collectWebSources(response);
   const selectedSources = selectPrStudioImageSearchSources(sources, selection?.candidatePages);
   const inspected = await Promise.allSettled(
-    selectedSources.slice(0, 16).map((source) => inspectSourcePage(source)),
+    selectedSources.slice(0, 24).map((source) => inspectSourcePage(source)),
   );
   const inspectedCandidates = [];
   const seenImages = new Set();
+  let inspectionFailures = 0;
   for (const result of inspected) {
-    if (result.status !== "fulfilled" || !result.value) continue;
-    const candidate = result.value;
-    const key = normalizeComparableUrl(candidate.imageUrl);
-    if (!key || seenImages.has(key)) continue;
-    seenImages.add(key);
-    inspectedCandidates.push(candidate);
+    if (result.status !== "fulfilled") {
+      inspectionFailures += 1;
+      continue;
+    }
+    for (const candidate of Array.isArray(result.value) ? result.value : []) {
+      const key = normalizeComparableUrl(candidate.imageUrl);
+      if (!key || seenImages.has(key)) continue;
+      seenImages.add(key);
+      inspectedCandidates.push(candidate);
+    }
   }
-  const candidates = rankPrStudioImageSearchCandidates(inspectedCandidates, parsed)
+  const strictRanked = rankPrStudioImageSearchCandidates(inspectedCandidates, parsed, { minimumScore: 1 });
+  const fallbackRanked = strictRanked.length
+    ? strictRanked
+    : rankPrStudioImageSearchCandidates(inspectedCandidates, parsed, { minimumScore: 0.25, requireCoreSubject: true });
+  const candidates = fallbackRanked
     .slice(0, parsed.maxResults)
     .map(({ relevanceScore: _relevanceScore, relevanceText: _relevanceText, ...candidate }) => candidate);
+  const usage = normalizeUsage(response.usage) || {};
+  const reasonsByUrl = new Map(
+    (Array.isArray(selection?.candidatePages) ? selection.candidatePages : [])
+      .map((entry) => [normalizeComparableUrl(entry?.pageUrl), cleanNullableString(entry?.reason, 400)])
+      .filter(([url]) => Boolean(url)),
+  );
+  const sourcePages = selectedSources.slice(0, 12).map((source) => ({
+    pageUrl: source.url,
+    title: source.title || new URL(source.url).hostname,
+    reason: reasonsByUrl.get(normalizeComparableUrl(source.url)) || null,
+  }));
   return {
     query: parsed.query,
+    queries: Array.isArray(selection?.queries) ? selection.queries.map((entry) => cleanString(entry, 300)).filter(Boolean).slice(0, 6) : parsed.searchQueries,
+    summary: cleanNullableString(selection?.summary, 1_200),
+    sourcePages,
     candidates,
+    diagnostics: {
+      sourcesFound: sources.length,
+      selectedPages: selectedSources.length,
+      pagesInspected: inspected.length,
+      inspectionFailures,
+      imageCandidatesFound: inspectedCandidates.length,
+      strictMatches: strictRanked.length,
+      fallbackUsed: strictRanked.length === 0 && fallbackRanked.length > 0,
+      returnedCandidates: candidates.length,
+    },
     model: response.model || request.model,
     responseId: response.id || null,
-    usage: normalizeUsage(response.usage),
+    usage,
   };
 }
 
@@ -170,7 +220,22 @@ export function parsePrStudioImageGenerateInput(value) {
       name: cleanNullableString(reference.name, 160) || `reference-${index + 1}`,
     };
   });
-  return { prompt, aspectRatio, composition, references: normalizedReferences };
+  return {
+    prompt,
+    aspectRatio,
+    composition,
+    references: normalizedReferences,
+    mainIdea: cleanNullableString(value.mainIdea, 1_500),
+    mustShow: cleanNullableString(value.mustShow, 2_000),
+    avoid: cleanNullableString(value.avoid, 2_000),
+    visualDirection: cleanNullableString(value.visualDirection, 80),
+    context: {
+      brandName: cleanNullableString(value.context?.brandName, 160),
+      title: cleanNullableString(value.context?.title, 240),
+      summary: cleanNullableString(value.context?.summary, 4_000),
+      contentExcerpt: cleanNullableString(value.context?.contentExcerpt, 8_000),
+    },
+  };
 }
 
 export async function executePrStudioImageGeneration(input, options = {}) {
@@ -183,8 +248,14 @@ export async function executePrStudioImageGeneration(input, options = {}) {
   const canvas = canvasForAspect(parsed.aspectRatio);
   const compositionInstruction = compositionInstructionFor(parsed.composition);
   const prompt = [
+    parsed.mainIdea ? `ARTICLE MAIN IDEA: ${parsed.mainIdea}` : null,
+    parsed.context?.title ? `ARTICLE TITLE: ${parsed.context.title}` : null,
+    parsed.context?.summary ? `ARTICLE PURPOSE: ${parsed.context.summary}` : null,
+    parsed.visualDirection ? `SELECTED VISUAL DIRECTION: ${parsed.visualDirection}` : null,
+    parsed.mustShow ? `MUST VISUALLY COMMUNICATE: ${parsed.mustShow}` : null,
+    parsed.avoid ? `MUST AVOID: ${parsed.avoid}` : null,
     parsed.prompt,
-    "Create a polished editorial image suitable for publication.",
+    "Create a polished editorial image suitable for publication. The image must communicate the article's main argument, not merely show a generic object from the same industry.",
     compositionInstruction,
     parsed.composition === "collage"
       ? "The collage must remain simple, coherent and readable as a small preview."
@@ -193,7 +264,7 @@ export async function executePrStudioImageGeneration(input, options = {}) {
     "No visible text, captions, logos, signatures or watermarks unless they are naturally present in a supplied reference and explicitly requested.",
     "Avoid generic stock-photo staging, exaggerated luxury clichés and obvious AI artefacts.",
     `Compose for a final ${parsed.aspectRatio} crop and keep important subjects inside the safe central area.`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
   let response;
   try {
     const referenceFiles = parsed.references.map(referenceToFile);
@@ -235,6 +306,7 @@ export async function executePrStudioImageGeneration(input, options = {}) {
     aspectRatio: parsed.aspectRatio,
     model,
     responseId: response?._request_id || response?.request_id || null,
+    effectivePrompt: prompt,
   };
 }
 
@@ -244,8 +316,8 @@ async function inspectSourcePage(source) {
   const contentType = String(response.headers.get("content-type") || "").toLowerCase();
   const finalUrl = await assertSafePublicUrl(response.url || pageUrl);
   if (contentType.startsWith("image/")) {
-    if (!ALLOWED_MIME_TYPES.has(contentType.split(";")[0])) return null;
-    return buildCandidate({
+    if (!SEARCHABLE_MIME_TYPES.has(contentType.split(";")[0])) return [];
+    return [buildCandidate({
       pageUrl: finalUrl,
       imageUrl: finalUrl,
       title: source.title || new URL(finalUrl).hostname,
@@ -254,13 +326,14 @@ async function inspectSourcePage(source) {
       description: source.title || "",
       imageAlt: source.title || "",
       rawHtml: "",
-    });
+      imagePriority: 3,
+    })];
   }
-  if (!contentType.includes("text/html")) return null;
+  if (!contentType.includes("text/html")) return [];
   const length = Number(response.headers.get("content-length") || 0);
-  if (length > MAX_PAGE_BYTES) return null;
+  if (length > MAX_PAGE_BYTES) return [];
   const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length > MAX_PAGE_BYTES) return null;
+  if (bytes.length > MAX_PAGE_BYTES) return [];
   const html = bytes.toString("utf8");
   const title = metaValue(html, ["og:title", "twitter:title"]) || htmlTitle(html) || source.title || new URL(finalUrl).hostname;
   const author = metaValue(html, ["author", "article:author", "parsely-author"]);
@@ -268,17 +341,31 @@ async function inspectSourcePage(source) {
   const license = metaValue(html, ["license", "dc.rights", "dcterms.license", "copyright"])
     || linkRelValue(html, "license")
     || visibleLicenseHint(html);
-  const metaImage = metaValue(html, ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"]);
-  const inlineImage = firstImageInfo(html);
-  const rawImage = metaImage || inlineImage?.src;
-  const imageAlt = metaValue(html, ["og:image:alt", "twitter:image:alt"]) || inlineImage?.alt || "";
-  if (!rawImage) return null;
-  const imageUrl = new URL(decodeHtml(rawImage), finalUrl).toString();
-  await assertSafePublicUrl(imageUrl);
-  return buildCandidate({ pageUrl: finalUrl, imageUrl, title, author, license, description, imageAlt, rawHtml: html });
+  const imageInfos = extractImageInfos(html);
+  const candidates = [];
+  for (const image of imageInfos.slice(0, 8)) {
+    try {
+      const imageUrl = new URL(decodeHtml(image.src), finalUrl).toString();
+      await assertSafePublicUrl(imageUrl);
+      candidates.push(buildCandidate({
+        pageUrl: finalUrl,
+        imageUrl,
+        title,
+        author,
+        license,
+        description,
+        imageAlt: image.alt,
+        rawHtml: html,
+        imagePriority: image.priority,
+      }));
+    } catch {
+      continue;
+    }
+  }
+  return candidates;
 }
 
-function buildCandidate({ pageUrl, imageUrl, title, author, license, description = "", imageAlt = "", rawHtml }) {
+function buildCandidate({ pageUrl, imageUrl, title, author, license, description = "", imageAlt = "", rawHtml, imagePriority = 0 }) {
   const domain = new URL(pageUrl).hostname.replace(/^www\./, "");
   const rights = classifyRights({ license, author, domain, rawHtml });
   return {
@@ -290,6 +377,7 @@ function buildCandidate({ pageUrl, imageUrl, title, author, license, description
     license: cleanNullableString(license, 500),
     rightsStatus: rights.status,
     rightsNote: rights.note,
+    imagePriority,
     relevanceText: [title, description, imageAlt, pageUrl, imageUrl].filter(Boolean).join(" "),
   };
 }
@@ -308,7 +396,7 @@ export function selectPrStudioImageSearchSources(sources, candidatePages) {
   return selected.length ? selected : sources;
 }
 
-export function rankPrStudioImageSearchCandidates(candidates, parsed) {
+export function rankPrStudioImageSearchCandidates(candidates, parsed, options = {}) {
   const subjectText = [
     parsed?.query,
     parsed?.context?.brandName,
@@ -318,6 +406,8 @@ export function rankPrStudioImageSearchCandidates(candidates, parsed) {
   ].filter(Boolean).join(" ");
   const subjectTokens = subjectTokensFrom(subjectText);
   const brandPhrase = normalizeSearchText(parsed?.context?.brandName || "");
+  const mainIdeaTokens = new Set(subjectTokensFrom(parsed?.mainIdea || parsed?.context?.summary || parsed?.context?.title || parsed?.query || ""));
+  const minimumScore = Number.isFinite(options.minimumScore) ? options.minimumScore : 1;
   return candidates
     .map((candidate) => {
       const text = normalizeSearchText(candidate.relevanceText || [candidate.title, candidate.domain, candidate.pageUrl, candidate.imageUrl].join(" "));
@@ -334,10 +424,15 @@ export function rankPrStudioImageSearchCandidates(candidates, parsed) {
         if (compactBrand.length >= 4 && compactDomain.includes(compactBrand)) relevanceScore += 4;
       }
       if (/commons\.wikimedia\.org|museum|archive|\.gov$|\.edu$/.test(domain)) relevanceScore += 0.35;
+      relevanceScore += Math.min(1.2, Number(candidate.imagePriority || 0) * 0.3);
       if (/press[ -]?kit|pod studio|concert|newsroom/.test(text) && relevanceScore < 2) relevanceScore -= 2;
-      return { ...candidate, relevanceScore };
+      const hasCoreSubject = brandPhrase
+        ? text.includes(brandPhrase) || mainIdeaTokens.size > 0 && [...mainIdeaTokens].some((token) => candidateTokens.has(token))
+        : mainIdeaTokens.size === 0 || [...mainIdeaTokens].some((token) => candidateTokens.has(token));
+      return { ...candidate, relevanceScore, hasCoreSubject };
     })
-    .filter((candidate) => candidate.relevanceScore >= 1)
+    .filter((candidate) => candidate.relevanceScore >= minimumScore && (!options.requireCoreSubject || candidate.hasCoreSubject))
+    .map(({ hasCoreSubject: _hasCoreSubject, ...candidate }) => candidate)
     .sort((left, right) => right.relevanceScore - left.relevanceScore);
 }
 
@@ -510,13 +605,31 @@ function htmlTitle(html) {
   return match?.[1] ? decodeHtml(match[1].replace(/\s+/g, " ").trim()) : null;
 }
 
-function firstImageInfo(html) {
-  const tag = html.match(/<img\b[^>]*>/i)?.[0] || "";
-  if (!tag) return null;
-  const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1] || null;
-  if (!src) return null;
-  const alt = tag.match(/\balt=["']([^"']*)["']/i)?.[1] || "";
-  return { src, alt: decodeHtml(alt) };
+function extractImageInfos(html) {
+  const results = [];
+  const seen = new Set();
+  const push = (src, alt = "", priority = 0) => {
+    const value = decodeHtml(src || "").trim();
+    if (!value || seen.has(value) || /^data:/i.test(value) || /(?:\.svg(?:[?#]|$)|favicon|sprite)/i.test(value)) return;
+    seen.add(value);
+    results.push({ src: value, alt: decodeHtml(alt || ""), priority });
+  };
+  push(metaValue(html, ["og:image:secure_url", "og:image"]), metaValue(html, ["og:image:alt"]), 4);
+  push(metaValue(html, ["twitter:image", "twitter:image:src"]), metaValue(html, ["twitter:image:alt"]), 3);
+  for (const match of html.matchAll(/"(?:contentUrl|image|thumbnailUrl)"\s*:\s*"([^"]+)"/gi)) push(match[1], "", 2);
+  for (const match of html.matchAll(/<img\b[^>]*>/gi)) {
+    const tag = match[0];
+    const src = tag.match(/\b(?:data-src|data-lazy-src|src)=["']([^"']+)["']/i)?.[1];
+    const srcset = tag.match(/\bsrcset=["']([^"']+)["']/i)?.[1];
+    const bestSrcset = srcset ? srcset.split(",").map((part) => part.trim().split(/\s+/)[0]).filter(Boolean).at(-1) : null;
+    const alt = tag.match(/\balt=["']([^"']*)["']/i)?.[1] || "";
+    const width = Number(tag.match(/\bwidth=["']?(\d+)/i)?.[1] || 0);
+    const height = Number(tag.match(/\bheight=["']?(\d+)/i)?.[1] || 0);
+    const priority = width * height >= 500_000 ? 2 : width * height >= 150_000 ? 1 : 0;
+    push(bestSrcset || src, alt, priority);
+    if (results.length >= 12) break;
+  }
+  return results;
 }
 
 function linkRelValue(html, rel) {
@@ -532,6 +645,7 @@ function visibleLicenseHint(html) {
 
 function decodeHtml(value) {
   return String(value || "")
+    .replace(/\\\//g, "/")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&apos;/gi, "'")

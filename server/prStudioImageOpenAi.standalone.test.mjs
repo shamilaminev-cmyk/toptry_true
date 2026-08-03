@@ -15,15 +15,22 @@ test("accepts bounded editorial image search input", () => {
   const parsed = parsePrStudioImageSearchInput({
     query: "bespoke tailoring workshop editorial photograph",
     maxResults: 6,
+    mainIdea: "Bespoke differs from MTM through an individually drafted pattern and iterative fittings.",
+    mustShow: "individual pattern work and fitting",
+    searchQueries: ["bespoke individual pattern fitting", "Savile Row bespoke fitting"],
     context: { brandName: "Bourbaki", title: "Bespoke and MTM" },
   });
   assert.equal(parsed.maxResults, 6);
+  assert.equal(parsed.searchQueries.length, 2);
+  assert.match(parsed.mainIdea, /individually drafted pattern/);
   const request = buildPrStudioImageSearchRequest(parsed);
   assert.equal(request.tools[0].type, "web_search");
   assert.deepEqual(request.include, ["web_search_call.action.sources"]);
   assert.match(request.instructions, /exact name/);
   assert.match(request.instructions, /generic press-kit templates/);
   assert.equal(request.text.format.schema.required.includes("candidatePages"), true);
+  assert.equal(request.text.format.schema.required.includes("queries"), true);
+  assert.equal(request.tools[0].search_context_size, "high");
 });
 
 test("uses only model-selected pages that exist in web-search sources", () => {
@@ -76,6 +83,26 @@ test("filters unrelated web-image candidates and ranks exact subject matches fir
   assert.ok(ranked[0].relevanceScore >= 5);
 });
 
+
+test("keeps a relevant low-score official candidate as a controlled fallback", () => {
+  const parsed = parsePrStudioImageSearchInput({
+    query: "Loro Piana textile tradition bespoke",
+    mainIdea: "Loro Piana connects Piedmont textile tradition and modern fine cloth used in bespoke tailoring.",
+    context: { title: "Loro Piana", summary: "Piedmont textile tradition and bespoke fabrics" },
+  });
+  const ranked = rankPrStudioImageSearchCandidates([
+    {
+      title: "Loro Piana textile heritage",
+      domain: "loropiana.com",
+      pageUrl: "https://www.loropiana.com/textile-heritage",
+      imageUrl: "https://www.loropiana.com/heritage.webp",
+      relevanceText: "Loro Piana Piedmont textile heritage fine cloth",
+      imagePriority: 1,
+    },
+  ], parsed, { minimumScore: 0.25, requireCoreSubject: true });
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0].domain, "loropiana.com");
+});
 test("rejects unsupported generation aspect ratios and oversized reference sets", () => {
   assert.throws(() => parsePrStudioImageGenerateInput({ prompt: "x", aspectRatio: "3:2" }));
   assert.throws(() => parsePrStudioImageGenerateInput({ prompt: "x", aspectRatio: "1:1", composition: "moodboard" }));
@@ -109,7 +136,17 @@ test("generates and crops a publication image through an injected OpenAI client"
     },
   };
   const result = await executePrStudioImageGeneration(
-    { prompt: "A quiet tailoring atelier", aspectRatio: "16:9", composition: "single_scene", references: [] },
+    {
+      prompt: "A quiet tailoring atelier",
+      mainIdea: "The article explains how an individual cloth choice connects textile heritage with bespoke craft.",
+      mustShow: "a tailor selecting fine suiting cloth from a professional sample book",
+      avoid: "generic linen, raw interior fabric, logos",
+      visualDirection: "process",
+      context: { title: "Loro Piana", summary: "Textile tradition and bespoke cloth" },
+      aspectRatio: "16:9",
+      composition: "single_scene",
+      references: [],
+    },
     { client },
   );
   assert.equal(result.aspectRatio, "16:9");
@@ -120,4 +157,8 @@ test("generates and crops a publication image through an injected OpenAI client"
   assert.match(providerPrompt, /one dominant visual subject/);
   assert.match(providerPrompt, /Do not create a collage/);
   assert.match(providerPrompt, /thumbnail size/);
+  assert.match(providerPrompt, /ARTICLE MAIN IDEA/);
+  assert.match(providerPrompt, /textile heritage with bespoke craft/);
+  assert.match(providerPrompt, /MUST VISUALLY COMMUNICATE/);
+  assert.match(result.effectivePrompt, /ARTICLE TITLE: Loro Piana/);
 });
