@@ -4,6 +4,9 @@ import sharp from "sharp";
 
 import {
   buildPrStudioImageSearchRequest,
+  classifyPrStudioImageRights,
+  decodePrStudioHtmlEntities,
+  dedupePrStudioImageSearchCandidates,
   executePrStudioImageGeneration,
   parsePrStudioImageGenerateInput,
   parsePrStudioImageSearchInput,
@@ -103,6 +106,30 @@ test("keeps a relevant low-score official candidate as a controlled fallback", (
   assert.equal(ranked.length, 1);
   assert.equal(ranked[0].domain, "loropiana.com");
 });
+
+test("decodes HTML entities and does not mistake software licenses for image rights", () => {
+  assert.equal(decodePrStudioHtmlEntities("L&amp;rsquo;arredamento &rsquo; &#8212;"), "L’arredamento ’ —");
+  assert.equal(decodePrStudioHtmlEntities("L&rsquo;arredamento"), "L’arredamento");
+  const rights = classifyPrStudioImageRights({
+    license: "Licensed under MIT https://github.com/twbs/bootstrap/blob/main/LICENSE",
+    author: null,
+    domain: "example.com",
+    pageUrl: "https://example.com/article",
+  });
+  assert.equal(rights.status, "unknown");
+  assert.match(rights.note, /программного кода/);
+});
+
+test("keeps only the highest-ranked image from one source page and removes resized duplicates", () => {
+  const candidates = dedupePrStudioImageSearchCandidates([
+    { pageUrl: "https://example.com/story", imageUrl: "https://cdn.example.com/photo-1600x1000.jpg?w=1600", title: "First", relevanceScore: 10 },
+    { pageUrl: "https://example.com/story", imageUrl: "https://cdn.example.com/photo-1080x1350.jpg?w=1080", title: "Second", relevanceScore: 9 },
+    { pageUrl: "https://other.example.com/story", imageUrl: "https://cdn.example.com/photo-1600x1000.jpg?w=800", title: "Duplicate", relevanceScore: 8 },
+  ]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].title, "First");
+});
+
 test("rejects unsupported generation aspect ratios and oversized reference sets", () => {
   assert.throws(() => parsePrStudioImageGenerateInput({ prompt: "x", aspectRatio: "3:2" }));
   assert.throws(() => parsePrStudioImageGenerateInput({ prompt: "x", aspectRatio: "1:1", composition: "moodboard" }));

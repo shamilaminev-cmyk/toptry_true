@@ -6,6 +6,7 @@ import sharp from "sharp";
 const SEARCH_MODEL = "gpt-5-mini";
 const IMAGE_MODEL = "gpt-image-2";
 const MAX_SEARCH_RESULTS = 8;
+const MAX_RESULTS_PER_SOURCE_PAGE = 1;
 const MAX_REFERENCES = 4;
 const MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
 const MAX_PAGE_BYTES = 1_500_000;
@@ -153,7 +154,7 @@ export async function executePrStudioImageSearch(input, options = {}) {
   const fallbackRanked = strictRanked.length
     ? strictRanked
     : rankPrStudioImageSearchCandidates(inspectedCandidates, parsed, { minimumScore: 0.25, requireCoreSubject: true });
-  const candidates = fallbackRanked
+  const candidates = dedupePrStudioImageSearchCandidates(fallbackRanked)
     .slice(0, parsed.maxResults)
     .map(({ relevanceScore: _relevanceScore, relevanceText: _relevanceText, ...candidate }) => candidate);
   const usage = normalizeUsage(response.usage) || {};
@@ -335,12 +336,10 @@ async function inspectSourcePage(source) {
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length > MAX_PAGE_BYTES) return [];
   const html = bytes.toString("utf8");
-  const title = metaValue(html, ["og:title", "twitter:title"]) || htmlTitle(html) || source.title || new URL(finalUrl).hostname;
-  const author = metaValue(html, ["author", "article:author", "parsely-author"]);
-  const description = metaValue(html, ["og:description", "twitter:description", "description"]) || "";
-  const license = metaValue(html, ["license", "dc.rights", "dcterms.license", "copyright"])
-    || linkRelValue(html, "license")
-    || visibleLicenseHint(html);
+  const title = decodeHtml(metaValue(html, ["og:title", "twitter:title"]) || htmlTitle(html) || source.title || new URL(finalUrl).hostname);
+  const author = decodeHtml(metaValue(html, ["author", "article:author", "parsely-author"]) || "") || null;
+  const description = decodeHtml(metaValue(html, ["og:description", "twitter:description", "description"]) || "");
+  const license = extractImageLicenseEvidence(html, finalUrl);
   const imageInfos = extractImageInfos(html);
   const candidates = [];
   for (const image of imageInfos.slice(0, 8)) {
@@ -365,20 +364,37 @@ async function inspectSourcePage(source) {
   return candidates;
 }
 
-function buildCandidate({ pageUrl, imageUrl, title, author, license, description = "", imageAlt = "", rawHtml, imagePriority = 0 }) {
+function buildCandidate({ pageUrl, imageUrl, title, author, license, description = "", imageAlt = "", rawHtml: _rawHtml, imagePriority = 0 }) {
   const domain = new URL(pageUrl).hostname.replace(/^www\./, "");
-  const rights = classifyRights({ license, author, domain, rawHtml });
+  const decodedTitle = cleanString(decodeHtml(title), 500) || domain;
+  const decodedDescription = cleanString(decodeHtml(description), 1_000);
+  const decodedAlt = cleanString(decodeHtml(imageAlt), 500);
+  const decodedAuthor = cleanNullableString(decodeHtml(author), 300);
+  const decodedLicense = cleanNullableString(decodeHtml(license), 500);
+  const rights = classifyPrStudioImageRights({
+    license: decodedLicense,
+    author: decodedAuthor,
+    domain,
+    pageUrl,
+  });
+  const suggestedAltText = cleanString(decodedAlt || decodedTitle, 500);
+  const suggestedCaption = cleanString(decodedAlt || decodedTitle, 500);
+  const suggestedCredit = cleanString(decodedAuthor ? `${decodedAuthor} · ${domain}` : `Источник: ${domain}`, 500);
   return {
     pageUrl,
     imageUrl,
-    title: cleanString(title, 500) || domain,
+    title: decodedTitle,
     domain,
-    author: cleanNullableString(author, 300),
-    license: cleanNullableString(license, 500),
+    author: decodedAuthor,
+    license: decodedLicense,
     rightsStatus: rights.status,
     rightsNote: rights.note,
+    imageAlt: decodedAlt || null,
+    suggestedCaption,
+    suggestedAltText,
+    suggestedCredit,
     imagePriority,
-    relevanceText: [title, description, imageAlt, pageUrl, imageUrl].filter(Boolean).join(" "),
+    relevanceText: [decodedTitle, decodedDescription, decodedAlt, pageUrl, imageUrl].filter(Boolean).join(" "),
   };
 }
 
@@ -394,6 +410,26 @@ export function selectPrStudioImageSearchSources(sources, candidatePages) {
     selected.push(source);
   }
   return selected.length ? selected : sources;
+}
+
+export function dedupePrStudioImageSearchCandidates(candidates) {
+  const results = [];
+  const perPage = new Map();
+  const seenImages = new Set();
+  const seenVisuals = new Set();
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    const pageKey = normalizeComparableUrl(candidate?.pageUrl);
+    const imageKey = normalizeComparableImageUrl(candidate?.imageUrl);
+    const visualKey = visualCandidateKey(candidate);
+    if (!imageKey || seenImages.has(imageKey) || (visualKey && seenVisuals.has(visualKey))) continue;
+    const pageCount = perPage.get(pageKey) || 0;
+    if (pageKey && pageCount >= MAX_RESULTS_PER_SOURCE_PAGE) continue;
+    seenImages.add(imageKey);
+    if (visualKey) seenVisuals.add(visualKey);
+    if (pageKey) perPage.set(pageKey, pageCount + 1);
+    results.push(candidate);
+  }
+  return results;
 }
 
 export function rankPrStudioImageSearchCandidates(candidates, parsed, options = {}) {
@@ -459,16 +495,42 @@ function compositionInstructionFor(composition) {
   return "Create one continuous scene captured as a single photograph or single illustration, not a layout of separate images.";
 }
 
-function classifyRights({ license, author, domain, rawHtml }) {
-  const text = `${license || ""} ${rawHtml.slice(0, 100_000)}`.toLowerCase();
-  if (/creative commons|cc[- ]by|public domain|creativecommons\.org\/licenses|creativecommons\.org\/publicdomain/.test(text)) {
-    return { status: author ? "attribution" : "confirmed", note: license || "На странице обнаружена открытая лицензия" };
+export function classifyPrStudioImageRights({ license, author, domain, pageUrl }) {
+  const normalizedLicense = String(license || "").trim();
+  const text = normalizedLicense.toLowerCase();
+  const softwareLicense = /(?:^|\b)(mit|apache|gpl|gnu|bsd|isc|mpl)(?:\b| license)|bootstrap|source code|software license|github\.com\/twbs|npmjs\.com/i;
+  if (softwareLicense.test(text)) {
+    return {
+      status: "unknown",
+      note: "На странице обнаружена лицензия программного кода; она не подтверждает права на изображение",
+    };
   }
   if (domain === "commons.wikimedia.org" || domain.endsWith(".wikimedia.org")) {
-    return { status: "attribution", note: license || "Wikimedia Commons: проверьте условия конкретного файла и укажите атрибуцию" };
+    return {
+      status: "attribution",
+      note: normalizedLicense || "Wikimedia Commons: проверьте лицензию конкретного файла и укажите требуемую атрибуцию",
+    };
   }
-  if (author || license) {
-    return { status: "attribution", note: license || "Обнаружены сведения об авторе; условия использования нужно проверить" };
+  if (/creative commons|cc[- ]by|public domain|creativecommons\.org\/(?:licenses|publicdomain)/i.test(text)) {
+    return {
+      status: "attribution",
+      note: `${normalizedLicense}. Проверьте, что лицензия относится именно к выбранному изображению`,
+    };
+  }
+  if (author) {
+    return {
+      status: "attribution",
+      note: "Обнаружены сведения об авторе; условия использования конкретного изображения нужно проверить",
+    };
+  }
+  if (normalizedLicense) {
+    return {
+      status: "unknown",
+      note: "На странице обнаружены сведения о правах, но их связь с конкретным изображением не подтверждена",
+    };
+  }
+  if (/^https?:\/\//i.test(String(pageUrl || ""))) {
+    return { status: "unknown", note: "Условия использования конкретного изображения не определены автоматически" };
   }
   return { status: "unknown", note: "Условия использования не определены автоматически" };
 }
@@ -638,19 +700,76 @@ function linkRelValue(html, rel) {
   return match?.[1] || null;
 }
 
-function visibleLicenseHint(html) {
-  const match = html.match(/(?:license|licence|лицензи[яи]|creative commons|public domain)[^<]{0,240}/i);
-  return match?.[0] ? decodeHtml(match[0].replace(/\s+/g, " ").trim()) : null;
+function extractImageLicenseEvidence(html, pageUrl) {
+  const direct = metaValue(html, ["license", "dc.rights", "dcterms.license"])
+    || linkRelValue(html, "license");
+  if (!direct) return null;
+  const decoded = decodeHtml(direct).replace(/\s+/g, " ").trim();
+  if (!decoded) return null;
+  if (/mit license|apache license|bootstrap|gnu general public|gpl|bsd license|isc license|github\.com\/twbs|software/i.test(decoded)) {
+    return decoded;
+  }
+  const domain = new URL(pageUrl).hostname.replace(/^www\./, "");
+  if (domain === "commons.wikimedia.org" || domain.endsWith(".wikimedia.org")) return decoded;
+  if (/creative commons|creativecommons\.org|public domain|cc[- ]by/i.test(decoded)) return decoded;
+  return decoded;
+}
+
+export function decodePrStudioHtmlEntities(value) {
+  const named = new Map([
+    ["amp", "&"], ["quot", '"'], ["apos", "'"], ["lt", "<"], ["gt", ">"],
+    ["nbsp", " "], ["rsquo", "’"], ["lsquo", "‘"], ["rdquo", "”"], ["ldquo", "“"],
+    ["ndash", "–"], ["mdash", "—"], ["hellip", "…"], ["laquo", "«"], ["raquo", "»"],
+  ]);
+  let decoded = String(value || "").replace(/\\\//g, "/");
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = decoded
+      .replace(/&#x([0-9a-f]+);/gi, (_match, hex) => safeCodePoint(parseInt(hex, 16)))
+      .replace(/&#(\d+);/g, (_match, decimal) => safeCodePoint(parseInt(decimal, 10)))
+      .replace(/&([a-z]+);/gi, (match, name) => named.get(String(name).toLowerCase()) ?? match);
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
+}
+
+function safeCodePoint(value) {
+  try {
+    return Number.isInteger(value) && value >= 0 && value <= 0x10ffff ? String.fromCodePoint(value) : "";
+  } catch {
+    return "";
+  }
 }
 
 function decodeHtml(value) {
-  return String(value || "")
-    .replace(/\\\//g, "/")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">");
+  return decodePrStudioHtmlEntities(value);
+}
+
+function normalizeComparableImageUrl(value) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(?:w|h|width|height|size|quality|q|crop|fit|format|fm|auto)$/i.test(key)) url.searchParams.delete(key);
+    }
+    return url.toString().toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function visualCandidateKey(candidate) {
+  const urlKey = normalizeComparableImageUrl(candidate?.imageUrl);
+  const title = normalizeSearchText(candidate?.title || "").replace(/[^a-z0-9а-яё]+/gu, " ").trim();
+  const alt = normalizeSearchText(candidate?.imageAlt || "").replace(/[^a-z0-9а-яё]+/gu, " ").trim();
+  const filename = (() => {
+    try {
+      return new URL(urlKey).pathname.split("/").pop()?.replace(/[-_](?:\d{2,4}x\d{2,4}|\d{2,4})/g, "") || "";
+    } catch {
+      return "";
+    }
+  })();
+  return [filename, alt || title].filter(Boolean).join("|").slice(0, 800);
 }
 
 function normalizeComparableUrl(value) {
