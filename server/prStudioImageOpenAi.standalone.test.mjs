@@ -37,13 +37,15 @@ test("accepts bounded editorial image search input", () => {
   assert.deepEqual(request.include, ["web_search_call.action.sources"]);
   assert.match(request.instructions, /exact name/);
   assert.match(request.instructions, /generic press-kit templates/);
+  assert.match(request.instructions, /Do not search for or prefer a particular aspect ratio/);
+  assert.match(request.instructions, /exact named entity plus concrete object plus action/);
   assert.match(request.instructions, /bourbaki\.ru/);
   assert.equal(request.text.format.schema.required.includes("candidatePages"), true);
   assert.equal(request.text.format.schema.required.includes("queries"), true);
   assert.equal(request.tools[0].search_context_size, "high");
 });
 
-test("uses only model-selected pages that exist in web-search sources", () => {
+test("prioritizes model-selected pages without hiding other grounded image sources", () => {
   const sources = [
     { url: "https://example.com/relevant", title: "Relevant" },
     { url: "https://example.com/unrelated", title: "Unrelated" },
@@ -52,7 +54,7 @@ test("uses only model-selected pages that exist in web-search sources", () => {
     { pageUrl: "https://example.com/relevant", reason: "Exact subject" },
     { pageUrl: "https://hallucinated.invalid/page", reason: "Not in sources" },
   ]);
-  assert.deepEqual(selected, [sources[0]]);
+  assert.deepEqual(selected, [sources[0], sources[1]]);
 });
 
 test("filters unrelated web-image candidates and ranks exact subject matches first", () => {
@@ -150,6 +152,7 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   const image = await sharp({ create: { width: 32, height: 32, channels: 3, background: { r: 80, g: 90, b: 100 } } }).webp().toBuffer();
   const parsed = parsePrStudioImageReviewInput({
     mainIdea: "The article connects fine cloth selection with bespoke craft.",
+    targetAspectRatio: "16:9",
     candidates: [
       { id: "a", mimeType: "image/webp", data: image.toString("base64"), title: "Fabric sample book" },
       { id: "b", mimeType: "image/webp", data: image.toString("base64"), title: "Atelier interior" },
@@ -158,6 +161,8 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   const request = buildPrStudioImageReviewRequest(parsed);
   assert.equal(request.input[0].content.filter((entry) => entry.type === "input_image").length, 2);
   assert.match(request.instructions, /Do not reject every image/);
+  assert.match(request.instructions, /native aspect ratio differs/);
+  assert.equal(request.input[0].content[0].text.includes("targetAspectRatio"), true);
   const client = { responses: { create: async () => ({
     status: "completed",
     model: "gpt-5-mini",
@@ -165,13 +170,14 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
     output_text: JSON.stringify({
       summary: "Neither is ideal",
       evaluations: [
-        { id: "a", mainIdeaScore: 20, topicScore: 20, readabilityScore: 50, verdict: "reject", reason: "Weak" },
-        { id: "b", mainIdeaScore: 25, topicScore: 30, readabilityScore: 60, verdict: "reject", reason: "Also weak" },
+        { id: "a", mainIdeaScore: 20, topicScore: 20, readabilityScore: 50, cropScore: 80, verdict: "reject", reason: "Weak" },
+        { id: "b", mainIdeaScore: 25, topicScore: 30, readabilityScore: 60, cropScore: 70, verdict: "reject", reason: "Also weak" },
       ],
     }),
   }) } };
   const result = await executePrStudioImageReview({
     mainIdea: "The article connects fine cloth selection with bespoke craft.",
+    targetAspectRatio: "16:9",
     candidates: parsed.candidates,
   }, { client });
   assert.equal(result.evaluations.some((entry) => entry.verdict !== "reject"), true);

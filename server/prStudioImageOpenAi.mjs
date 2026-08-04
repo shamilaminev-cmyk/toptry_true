@@ -9,7 +9,9 @@ const MAX_SEARCH_RESULTS = 8;
 const MAX_RESULTS_PER_SOURCE_PAGE = 5;
 const MAX_REFERENCES = 4;
 const MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
-const MAX_REVIEW_IMAGES = 8;
+const MAX_REVIEW_IMAGES = 12;
+const MAX_SEARCH_SOURCE_PAGES = 18;
+const MAX_SEARCH_RETURN_PAGES = 18;
 const MAX_REVIEW_IMAGE_BYTES = 1_500_000;
 const MAX_PAGE_BYTES = 1_500_000;
 const FETCH_TIMEOUT_MS = 12_000;
@@ -70,10 +72,11 @@ const REVIEW_RESPONSE_SCHEMA = {
           mainIdeaScore: { type: "integer", minimum: 0, maximum: 100 },
           topicScore: { type: "integer", minimum: 0, maximum: 100 },
           readabilityScore: { type: "integer", minimum: 0, maximum: 100 },
+          cropScore: { type: "integer", minimum: 0, maximum: 100 },
           verdict: { type: "string", enum: ["recommended", "usable", "weak", "reject"] },
           reason: { type: "string", minLength: 1, maxLength: 500 },
         },
-        required: ["id", "mainIdeaScore", "topicScore", "readabilityScore", "verdict", "reason"],
+        required: ["id", "mainIdeaScore", "topicScore", "readabilityScore", "cropScore", "verdict", "reason"],
       },
     },
   },
@@ -114,10 +117,12 @@ export function buildPrStudioImageSearchRequest(parsed) {
     model,
     reasoning: { effort: "low" },
     instructions: [
-      "Find webpages containing photographs or illustrations that visually express the main idea of the supplied article, not merely its broad topic.",
+      "Discover actual publication-image candidates for the supplied article. Search broadly for image-rich source pages, then let the application inspect and rank the image pixels.",
       "You must use web search and must not answer from memory.",
-      "Treat mainIdea, mustShow, title, named entities and content excerpt as factual subject constraints. Visual-style words such as editorial, premium, illustration, cover or photography are presentation preferences and must not dominate the search.",
-      "Use the supplied searchQueries when present, improve them where necessary, and run three to six precise searches. Return the actual queries used in the queries field.",
+      "Treat mainIdea, mustShow, title and named entities as subject constraints, but do not paste the whole article thesis into a search query.",
+      "Use three to six short searches shaped as exact named entity plus concrete object plus action, for example: company name + fabric swatch book + tailoring, or company name + worker + fabric inspection.",
+      "Use the supplied searchQueries when present, simplify them where necessary, and return the actual queries used in the queries field.",
+      "Do not search for or prefer a particular aspect ratio. Square, portrait and landscape originals are equally eligible because cropping happens after human selection.",
       "When a named company, person, place, product or material is present, preserve the exact name in multiple searches. For non-English subjects, search in English and the relevant local language when useful.",
       "Prefer the named subject's official site, official publications, primary sources, museums, archives, Wikimedia Commons file pages, and reputable specialist publications. Official pages with unclear reuse rights are still relevant candidates and must not be discarded for that reason.",
       "Reject generic press-kit templates, unrelated newsrooms, concerts, celebrities, animals, abstract graphics and pages that merely contain words such as editorial or illustration.",
@@ -125,7 +130,7 @@ export function buildPrStudioImageSearchRequest(parsed) {
       "Do not treat a search result as permission to republish an image. The application will separately inspect source and licensing metadata.",
       "In candidatePages return only webpages you actually opened through web search and judged directly relevant. Do not return search-result pages or invented URLs.",
       "If direct image access or licensing is unclear, still return the relevant source page. Technical availability must not erase topical relevance.",
-      "Select pages because their hero or article image is likely useful, not merely because their text mentions the subject.",
+      "Candidate pages are only discovery hints. Include diverse image-rich sources; the application will inspect all grounded web-search sources rather than treating candidatePages as a hard filter.",
       parsed.excludedDomains.length ? `Do not use pages or images from these brand-owned domains: ${parsed.excludedDomains.join(", ")}.` : null,
     ].filter(Boolean).join("\n"),
     input: JSON.stringify(parsed),
@@ -162,9 +167,10 @@ export async function executePrStudioImageSearch(input, options = {}) {
     throw invalidResponse("OpenAI returned malformed image-search JSON");
   }
   const sources = collectWebSources(response).filter((source) => !urlUsesExcludedDomain(source.url, parsed.excludedDomains));
-  const selectedSources = selectPrStudioImageSearchSources(sources, selection?.candidatePages);
+  const prioritizedSources = prioritizePrStudioImageSearchSources(sources, selection?.candidatePages);
+  const inspectedSources = prioritizedSources.slice(0, MAX_SEARCH_SOURCE_PAGES);
   const inspected = await Promise.allSettled(
-    selectedSources.slice(0, 24).map((source) => inspectSourcePage(source)),
+    inspectedSources.map((source) => inspectSourcePage(source)),
   );
   const inspectedCandidates = [];
   const seenImages = new Set();
@@ -185,9 +191,10 @@ export async function executePrStudioImageSearch(input, options = {}) {
   const fallbackRanked = strictRanked.length
     ? strictRanked
     : rankPrStudioImageSearchCandidates(inspectedCandidates, parsed, { minimumScore: 0.25, requireCoreSubject: true });
+  const returnPageLimit = Math.min(MAX_SEARCH_RETURN_PAGES, Math.max(parsed.maxResults * 3, 12));
   const candidates = limitPrStudioImageSearchCandidatesByPage(
     dedupePrStudioImageSearchCandidates(fallbackRanked),
-    parsed.maxResults,
+    returnPageLimit,
   ).map(({ relevanceScore: _relevanceScore, relevanceText: _relevanceText, hasCoreSubject: _hasCoreSubject, ...candidate }) => candidate);
   const usage = normalizeUsage(response.usage) || {};
   const reasonsByUrl = new Map(
@@ -195,7 +202,7 @@ export async function executePrStudioImageSearch(input, options = {}) {
       .map((entry) => [normalizeComparableUrl(entry?.pageUrl), cleanNullableString(entry?.reason, 400)])
       .filter(([url]) => Boolean(url)),
   );
-  const sourcePages = selectedSources.slice(0, 12).map((source) => ({
+  const sourcePages = prioritizedSources.slice(0, MAX_SEARCH_RETURN_PAGES).map((source) => ({
     pageUrl: source.url,
     title: source.title || new URL(source.url).hostname,
     reason: reasonsByUrl.get(normalizeComparableUrl(source.url)) || null,
@@ -208,7 +215,7 @@ export async function executePrStudioImageSearch(input, options = {}) {
     candidates,
     diagnostics: {
       sourcesFound: sources.length,
-      selectedPages: selectedSources.length,
+      selectedPages: Array.isArray(selection?.candidatePages) ? selection.candidatePages.length : 0,
       pagesInspected: inspected.length,
       inspectionFailures,
       imageCandidatesFound: inspectedCandidates.length,
@@ -250,6 +257,7 @@ export function parsePrStudioImageReviewInput(value) {
     mustShow: cleanNullableString(value.mustShow, 2_000),
     avoid: cleanNullableString(value.avoid, 2_000),
     visualDirection: cleanNullableString(value.visualDirection, 80),
+    targetAspectRatio: ASPECT_RATIOS.has(cleanString(value.targetAspectRatio, 10)) ? cleanString(value.targetAspectRatio, 10) : null,
     context: {
       title: cleanNullableString(value.context?.title, 240),
       summary: cleanNullableString(value.context?.summary, 2_000),
@@ -267,6 +275,7 @@ export function buildPrStudioImageReviewRequest(parsed) {
       mustShow: parsed.mustShow,
       avoid: parsed.avoid,
       visualDirection: parsed.visualDirection,
+      targetAspectRatio: parsed.targetAspectRatio,
       context: parsed.context,
       candidates: parsed.candidates.map(({ id, title, domain, sourceReason }) => ({ id, title, domain, sourceReason })),
     }),
@@ -283,6 +292,8 @@ export function buildPrStudioImageReviewRequest(parsed) {
       "Use recommended for a strong direct match, usable for a defensible but imperfect match, weak for a marginal reserve, and reject only for clearly unrelated, misleading, empty, technical or unusable imagery.",
       "Do not reject every image merely because none is ideal. When at least one candidate is technically readable and topically connected, keep the best one as usable or weak so a human can decide.",
       "Scores are comparative and must reflect main-idea communication, topical fit and thumbnail readability.",
+      "Do not penalize an image because its native aspect ratio differs from the target. cropScore only asks whether the important subject can survive a later crop to targetAspectRatio.",
+      "Prefer concrete human action, production, inspection or material selection over product-only shots, logos, labels, shop interiors and generic brand imagery when the article thesis calls for a process.",
       "Do not infer licensing or permission from the pixels.",
     ].join("\n"),
     input: [{ role: "user", content }],
@@ -317,12 +328,13 @@ export async function executePrStudioImageReview(input, options = {}) {
       mainIdeaScore: boundedScore(entry.mainIdeaScore),
       topicScore: boundedScore(entry.topicScore),
       readabilityScore: boundedScore(entry.readabilityScore),
+      cropScore: boundedScore(entry.cropScore),
       verdict: new Set(["recommended", "usable", "weak", "reject"]).has(entry.verdict) ? entry.verdict : "weak",
       reason: cleanString(entry.reason, 500) || "Оценка модели не содержит пояснения",
     }));
   const byId = new Map(evaluations.map((entry) => [entry.id, entry]));
   for (const candidate of parsed.candidates) {
-    if (!byId.has(candidate.id)) byId.set(candidate.id, { id: candidate.id, mainIdeaScore: 40, topicScore: 40, readabilityScore: 40, verdict: "weak", reason: "Модель не вернула отдельную оценку; вариант сохранён для решения человека" });
+    if (!byId.has(candidate.id)) byId.set(candidate.id, { id: candidate.id, mainIdeaScore: 40, topicScore: 40, readabilityScore: 40, cropScore: 50, verdict: "weak", reason: "Модель не вернула отдельную оценку; вариант сохранён для решения человека" });
   }
   const normalized = [...byId.values()];
   if (normalized.length && normalized.every((entry) => entry.verdict === "reject")) {
@@ -540,18 +552,28 @@ function buildCandidate({ pageUrl, imageUrl, title, author, license, description
   };
 }
 
-export function selectPrStudioImageSearchSources(sources, candidatePages) {
+export function prioritizePrStudioImageSearchSources(sources, candidatePages) {
   const byUrl = new Map(sources.map((source) => [normalizeComparableUrl(source.url), source]));
-  const selected = [];
+  const prioritized = [];
   const seen = new Set();
   for (const candidate of Array.isArray(candidatePages) ? candidatePages : []) {
     const key = normalizeComparableUrl(candidate?.pageUrl);
     const source = key ? byUrl.get(key) : null;
     if (!source || seen.has(key)) continue;
     seen.add(key);
-    selected.push(source);
+    prioritized.push(source);
   }
-  return selected.length ? selected : sources;
+  for (const source of sources) {
+    const key = normalizeComparableUrl(source?.url);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    prioritized.push(source);
+  }
+  return prioritized;
+}
+
+export function selectPrStudioImageSearchSources(sources, candidatePages) {
+  return prioritizePrStudioImageSearchSources(sources, candidatePages);
 }
 
 export function dedupePrStudioImageSearchCandidates(candidates) {
@@ -987,7 +1009,10 @@ function boundedScore(value) {
 }
 
 function totalReviewScore(entry) {
-  return entry.mainIdeaScore * 0.55 + entry.topicScore * 0.25 + entry.readabilityScore * 0.2;
+  return entry.mainIdeaScore * 0.45
+    + entry.topicScore * 0.25
+    + entry.readabilityScore * 0.15
+    + entry.cropScore * 0.15;
 }
 
 function boundedInteger(value, fallback, minimum, maximum, field) {
