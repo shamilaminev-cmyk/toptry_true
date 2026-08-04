@@ -9,6 +9,8 @@ const MAX_SEARCH_RESULTS = 8;
 const MAX_RESULTS_PER_SOURCE_PAGE = 5;
 const MAX_REFERENCES = 4;
 const MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
+const MAX_REVIEW_IMAGES = 8;
+const MAX_REVIEW_IMAGE_BYTES = 1_500_000;
 const MAX_PAGE_BYTES = 1_500_000;
 const FETCH_TIMEOUT_MS = 12_000;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -51,6 +53,33 @@ const SEARCH_RESPONSE_SCHEMA = {
   required: ["summary", "queries", "candidatePages"],
 };
 
+const REVIEW_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    summary: { type: "string", minLength: 1, maxLength: 1_200 },
+    evaluations: {
+      type: "array",
+      minItems: 1,
+      maxItems: MAX_REVIEW_IMAGES,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          id: { type: "string", minLength: 1, maxLength: 100 },
+          mainIdeaScore: { type: "integer", minimum: 0, maximum: 100 },
+          topicScore: { type: "integer", minimum: 0, maximum: 100 },
+          readabilityScore: { type: "integer", minimum: 0, maximum: 100 },
+          verdict: { type: "string", enum: ["recommended", "usable", "weak", "reject"] },
+          reason: { type: "string", minLength: 1, maxLength: 500 },
+        },
+        required: ["id", "mainIdeaScore", "topicScore", "readabilityScore", "verdict", "reason"],
+      },
+    },
+  },
+  required: ["summary", "evaluations"],
+};
+
 export function parsePrStudioImageSearchInput(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw invalidInput("Request body must be an object");
@@ -69,6 +98,7 @@ export function parsePrStudioImageSearchInput(value) {
     mustShow: cleanNullableString(value.mustShow, 2_000),
     avoid: cleanNullableString(value.avoid, 2_000),
     visualDirection: cleanNullableString(value.visualDirection, 80),
+    excludedDomains: normalizeDomainList(value.excludedDomains),
     context: {
       brandName: cleanNullableString(value.context?.brandName, 160),
       title: cleanNullableString(value.context?.title, 240),
@@ -96,7 +126,8 @@ export function buildPrStudioImageSearchRequest(parsed) {
       "In candidatePages return only webpages you actually opened through web search and judged directly relevant. Do not return search-result pages or invented URLs.",
       "If direct image access or licensing is unclear, still return the relevant source page. Technical availability must not erase topical relevance.",
       "Select pages because their hero or article image is likely useful, not merely because their text mentions the subject.",
-    ].join("\n"),
+      parsed.excludedDomains.length ? `Do not use pages or images from these brand-owned domains: ${parsed.excludedDomains.join(", ")}.` : null,
+    ].filter(Boolean).join("\n"),
     input: JSON.stringify(parsed),
     tools: [{ type: "web_search", search_context_size: "high", external_web_access: true }],
     tool_choice: "required",
@@ -130,7 +161,7 @@ export async function executePrStudioImageSearch(input, options = {}) {
   } catch {
     throw invalidResponse("OpenAI returned malformed image-search JSON");
   }
-  const sources = collectWebSources(response);
+  const sources = collectWebSources(response).filter((source) => !urlUsesExcludedDomain(source.url, parsed.excludedDomains));
   const selectedSources = selectPrStudioImageSearchSources(sources, selection?.candidatePages);
   const inspected = await Promise.allSettled(
     selectedSources.slice(0, 24).map((source) => inspectSourcePage(source)),
@@ -145,7 +176,7 @@ export async function executePrStudioImageSearch(input, options = {}) {
     }
     for (const candidate of Array.isArray(result.value) ? result.value : []) {
       const key = normalizeComparableUrl(candidate.imageUrl);
-      if (!key || seenImages.has(key)) continue;
+      if (!key || seenImages.has(key) || urlUsesExcludedDomain(candidate.pageUrl, parsed.excludedDomains)) continue;
       seenImages.add(key);
       inspectedCandidates.push(candidate);
     }
@@ -190,6 +221,115 @@ export async function executePrStudioImageSearch(input, options = {}) {
     responseId: response.id || null,
     usage,
   };
+}
+
+export function parsePrStudioImageReviewInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw invalidInput("Request body must be an object");
+  const candidates = Array.isArray(value.candidates) ? value.candidates : [];
+  if (!candidates.length || candidates.length > MAX_REVIEW_IMAGES) throw invalidInput(`candidates must contain 1-${MAX_REVIEW_IMAGES} images`);
+  const normalizedCandidates = candidates.map((candidate, index) => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) throw invalidInput(`candidates[${index}] is invalid`);
+    const id = cleanString(candidate.id, 100);
+    const mimeType = cleanString(candidate.mimeType, 80).toLowerCase();
+    const data = cleanString(candidate.data, Math.ceil(MAX_REVIEW_IMAGE_BYTES * 1.5));
+    const bytes = Buffer.from(data, "base64");
+    if (!id || !ALLOWED_MIME_TYPES.has(mimeType) || !bytes.length || bytes.length > MAX_REVIEW_IMAGE_BYTES || !validImageSignature(mimeType, bytes)) {
+      throw invalidInput(`candidates[${index}] must contain a valid bounded image`);
+    }
+    return {
+      id,
+      mimeType,
+      data,
+      title: cleanNullableString(candidate.title, 500),
+      domain: cleanNullableString(candidate.domain, 300),
+      sourceReason: cleanNullableString(candidate.sourceReason, 500),
+    };
+  });
+  return {
+    mainIdea: cleanString(value.mainIdea, 1_500),
+    mustShow: cleanNullableString(value.mustShow, 2_000),
+    avoid: cleanNullableString(value.avoid, 2_000),
+    visualDirection: cleanNullableString(value.visualDirection, 80),
+    context: {
+      title: cleanNullableString(value.context?.title, 240),
+      summary: cleanNullableString(value.context?.summary, 2_000),
+    },
+    candidates: normalizedCandidates,
+  };
+}
+
+export function buildPrStudioImageReviewRequest(parsed) {
+  const model = String(process.env.PR_STUDIO_IMAGE_REVIEW_MODEL || process.env.PR_STUDIO_IMAGE_SEARCH_MODEL || SEARCH_MODEL).trim() || SEARCH_MODEL;
+  const content = [{
+    type: "input_text",
+    text: JSON.stringify({
+      mainIdea: parsed.mainIdea,
+      mustShow: parsed.mustShow,
+      avoid: parsed.avoid,
+      visualDirection: parsed.visualDirection,
+      context: parsed.context,
+      candidates: parsed.candidates.map(({ id, title, domain, sourceReason }) => ({ id, title, domain, sourceReason })),
+    }),
+  }];
+  for (const candidate of parsed.candidates) {
+    content.push({ type: "input_text", text: `CANDIDATE ${candidate.id}` });
+    content.push({ type: "input_image", image_url: `data:${candidate.mimeType};base64,${candidate.data}`, detail: "low" });
+  }
+  return {
+    model,
+    reasoning: { effort: "low" },
+    instructions: [
+      "Rank publication-image candidates against the article's main idea. Judge the actual pixels, not merely the source page title.",
+      "Use recommended for a strong direct match, usable for a defensible but imperfect match, weak for a marginal reserve, and reject only for clearly unrelated, misleading, empty, technical or unusable imagery.",
+      "Do not reject every image merely because none is ideal. When at least one candidate is technically readable and topically connected, keep the best one as usable or weak so a human can decide.",
+      "Scores are comparative and must reflect main-idea communication, topical fit and thumbnail readability.",
+      "Do not infer licensing or permission from the pixels.",
+    ].join("\n"),
+    input: [{ role: "user", content }],
+    max_output_tokens: 1_600,
+    store: false,
+    text: { format: { type: "json_schema", name: "pr_studio_image_review", strict: true, schema: REVIEW_RESPONSE_SCHEMA } },
+  };
+}
+
+export async function executePrStudioImageReview(input, options = {}) {
+  const parsed = parsePrStudioImageReviewInput(input);
+  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+  if (!apiKey && !options.client) throw notConfigured();
+  const client = options.client || new OpenAI({ apiKey, timeout: 300_000, maxRetries: 1 });
+  const request = buildPrStudioImageReviewRequest(parsed);
+  let response;
+  try {
+    response = await client.responses.create(request);
+  } catch (error) {
+    throw normalizeProviderError(error);
+  }
+  ensureCompletedResponse(response, "image review");
+  const outputText = extractOutputText(response);
+  if (!outputText) throw invalidResponse("OpenAI returned no image-review output");
+  let output;
+  try { output = JSON.parse(outputText); } catch { throw invalidResponse("OpenAI returned malformed image-review JSON"); }
+  const validIds = new Set(parsed.candidates.map((candidate) => candidate.id));
+  const evaluations = (Array.isArray(output?.evaluations) ? output.evaluations : [])
+    .filter((entry) => validIds.has(cleanString(entry?.id, 100)))
+    .map((entry) => ({
+      id: cleanString(entry.id, 100),
+      mainIdeaScore: boundedScore(entry.mainIdeaScore),
+      topicScore: boundedScore(entry.topicScore),
+      readabilityScore: boundedScore(entry.readabilityScore),
+      verdict: new Set(["recommended", "usable", "weak", "reject"]).has(entry.verdict) ? entry.verdict : "weak",
+      reason: cleanString(entry.reason, 500) || "Оценка модели не содержит пояснения",
+    }));
+  const byId = new Map(evaluations.map((entry) => [entry.id, entry]));
+  for (const candidate of parsed.candidates) {
+    if (!byId.has(candidate.id)) byId.set(candidate.id, { id: candidate.id, mainIdeaScore: 40, topicScore: 40, readabilityScore: 40, verdict: "weak", reason: "Модель не вернула отдельную оценку; вариант сохранён для решения человека" });
+  }
+  const normalized = [...byId.values()];
+  if (normalized.length && normalized.every((entry) => entry.verdict === "reject")) {
+    normalized.sort((a, b) => totalReviewScore(b) - totalReviewScore(a));
+    normalized[0] = { ...normalized[0], verdict: "weak", reason: `${normalized[0].reason} Лучший технически пригодный вариант сохранён как резерв для решения человека.` };
+  }
+  return { summary: cleanNullableString(output?.summary, 1_200), evaluations: normalized, model: response.model || request.model, responseId: response.id || null, usage: normalizeUsage(response.usage) };
 }
 
 export function parsePrStudioImageGenerateInput(value) {
@@ -821,6 +961,33 @@ function normalizeUsage(usage) {
 
 function finiteNumberOrNull(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeDomainList(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((entry) => normalizeDomain(entry)).filter(Boolean))].slice(0, 30);
+}
+
+function normalizeDomain(value) {
+  const raw = cleanString(value, 300).toLowerCase().replace(/^https?:\/\//, "").split("/")[0].replace(/^www\./, "").replace(/\.$/, "");
+  return raw && /^[a-z0-9.-]+$/.test(raw) ? raw : "";
+}
+
+function urlUsesExcludedDomain(value, excludedDomains) {
+  if (!excludedDomains?.length) return false;
+  try {
+    const host = new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+    return excludedDomains.some((domain) => host === domain || host.endsWith(`.${domain}`));
+  } catch { return false; }
+}
+
+function boundedScore(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(100, Math.round(number))) : 0;
+}
+
+function totalReviewScore(entry) {
+  return entry.mainIdeaScore * 0.55 + entry.topicScore * 0.25 + entry.readabilityScore * 0.2;
 }
 
 function boundedInteger(value, fallback, minimum, maximum, field) {

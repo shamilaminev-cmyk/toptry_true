@@ -68,6 +68,7 @@ import { executePrStudioStructuredText } from "./prStudioStructuredTextOpenAi.mj
 import { executePrStudioWebResearch } from "./prStudioWebResearchOpenAi.mjs";
 import {
   executePrStudioImageGeneration,
+  executePrStudioImageReview,
   executePrStudioImageSearch,
 } from "./prStudioImageOpenAi.mjs";
 
@@ -5801,6 +5802,23 @@ app.post("/internal/ai/pr-studio/images/search", async (req, res) => {
       error: status === 400 ? error.message : "Image search is temporarily unavailable",
       code,
     });
+  }
+});
+
+app.post("/internal/ai/pr-studio/images/review", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+  if (String(process.env.AI_GATEWAY_ROLE || "").trim().toLowerCase() !== "gateway") {
+    return res.status(409).json({ ok: false, error: "This route is available only on the AI gateway", code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED" });
+  }
+  try {
+    const result = await executePrStudioImageReview(req.body);
+    console.info("PR Studio image review completed", { candidateCount: result.evaluations.length, model: result.model, responseId: result.responseId });
+    return res.status(200).json({ ok: true, ...result });
+  } catch (error) {
+    const code = error?.code || "PR_STUDIO_IMAGE_REVIEW_UPSTREAM_FAILED";
+    const status = code === "PR_STUDIO_TRANSPORT_INVALID_INPUT" ? 400 : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED" ? 503 : 502;
+    console.error("PR Studio image review failed", { code, message: error instanceof Error ? error.message.slice(0, 700) : String(error).slice(0, 700), providerStatus: error?.providerStatus ?? null, providerRequestId: error?.providerRequestId ?? null });
+    return res.status(status).json({ ok: false, error: status === 400 ? error.message : "Image review is temporarily unavailable", code });
   }
 });
 

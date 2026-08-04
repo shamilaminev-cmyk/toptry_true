@@ -3,13 +3,16 @@ import test from "node:test";
 import sharp from "sharp";
 
 import {
+  buildPrStudioImageReviewRequest,
   buildPrStudioImageSearchRequest,
   classifyPrStudioImageRights,
   decodePrStudioHtmlEntities,
   dedupePrStudioImageSearchCandidates,
   limitPrStudioImageSearchCandidatesByPage,
   executePrStudioImageGeneration,
+  executePrStudioImageReview,
   parsePrStudioImageGenerateInput,
+  parsePrStudioImageReviewInput,
   parsePrStudioImageSearchInput,
   rankPrStudioImageSearchCandidates,
   selectPrStudioImageSearchSources,
@@ -22,16 +25,19 @@ test("accepts bounded editorial image search input", () => {
     mainIdea: "Bespoke differs from MTM through an individually drafted pattern and iterative fittings.",
     mustShow: "individual pattern work and fitting",
     searchQueries: ["bespoke individual pattern fitting", "Savile Row bespoke fitting"],
+    excludedDomains: ["bourbaki.ru", "https://www.example.com/path"],
     context: { brandName: "Bourbaki", title: "Bespoke and MTM" },
   });
   assert.equal(parsed.maxResults, 6);
   assert.equal(parsed.searchQueries.length, 2);
+  assert.deepEqual(parsed.excludedDomains, ["bourbaki.ru", "example.com"]);
   assert.match(parsed.mainIdea, /individually drafted pattern/);
   const request = buildPrStudioImageSearchRequest(parsed);
   assert.equal(request.tools[0].type, "web_search");
   assert.deepEqual(request.include, ["web_search_call.action.sources"]);
   assert.match(request.instructions, /exact name/);
   assert.match(request.instructions, /generic press-kit templates/);
+  assert.match(request.instructions, /bourbaki\.ru/);
   assert.equal(request.text.format.schema.required.includes("candidatePages"), true);
   assert.equal(request.text.format.schema.required.includes("queries"), true);
   assert.equal(request.tools[0].search_context_size, "high");
@@ -137,6 +143,39 @@ test("keeps ranked backup images per source page while removing resized duplicat
   ], 2);
   assert.equal(new Set(limited.map(({ pageUrl }) => pageUrl)).size, 2);
   assert.equal(limited.some(({ title }) => title === "Workers"), true);
+});
+
+
+test("reviews actual image pixels without creating an all-rejected dead end", async () => {
+  const image = await sharp({ create: { width: 32, height: 32, channels: 3, background: { r: 80, g: 90, b: 100 } } }).webp().toBuffer();
+  const parsed = parsePrStudioImageReviewInput({
+    mainIdea: "The article connects fine cloth selection with bespoke craft.",
+    candidates: [
+      { id: "a", mimeType: "image/webp", data: image.toString("base64"), title: "Fabric sample book" },
+      { id: "b", mimeType: "image/webp", data: image.toString("base64"), title: "Atelier interior" },
+    ],
+  });
+  const request = buildPrStudioImageReviewRequest(parsed);
+  assert.equal(request.input[0].content.filter((entry) => entry.type === "input_image").length, 2);
+  assert.match(request.instructions, /Do not reject every image/);
+  const client = { responses: { create: async () => ({
+    status: "completed",
+    model: "gpt-5-mini",
+    id: "resp_review",
+    output_text: JSON.stringify({
+      summary: "Neither is ideal",
+      evaluations: [
+        { id: "a", mainIdeaScore: 20, topicScore: 20, readabilityScore: 50, verdict: "reject", reason: "Weak" },
+        { id: "b", mainIdeaScore: 25, topicScore: 30, readabilityScore: 60, verdict: "reject", reason: "Also weak" },
+      ],
+    }),
+  }) } };
+  const result = await executePrStudioImageReview({
+    mainIdea: "The article connects fine cloth selection with bespoke craft.",
+    candidates: parsed.candidates,
+  }, { client });
+  assert.equal(result.evaluations.some((entry) => entry.verdict !== "reject"), true);
+  assert.match(result.evaluations.find((entry) => entry.verdict === "weak").reason, /решения человека/);
 });
 
 test("rejects unsupported generation aspect ratios and oversized reference sets", () => {
