@@ -7,6 +7,7 @@ import {
   classifyPrStudioImageRights,
   decodePrStudioHtmlEntities,
   dedupePrStudioImageSearchCandidates,
+  limitPrStudioImageSearchCandidatesByPage,
   executePrStudioImageGeneration,
   parsePrStudioImageGenerateInput,
   parsePrStudioImageSearchInput,
@@ -120,14 +121,22 @@ test("decodes HTML entities and does not mistake software licenses for image rig
   assert.match(rights.note, /программного кода/);
 });
 
-test("keeps only the highest-ranked image from one source page and removes resized duplicates", () => {
+test("keeps ranked backup images per source page while removing resized duplicates", () => {
   const candidates = dedupePrStudioImageSearchCandidates([
-    { pageUrl: "https://example.com/story", imageUrl: "https://cdn.example.com/photo-1600x1000.jpg?w=1600", title: "First", relevanceScore: 10 },
-    { pageUrl: "https://example.com/story", imageUrl: "https://cdn.example.com/photo-1080x1350.jpg?w=1080", title: "Second", relevanceScore: 9 },
-    { pageUrl: "https://other.example.com/story", imageUrl: "https://cdn.example.com/photo-1600x1000.jpg?w=800", title: "Duplicate", relevanceScore: 8 },
+    { pageUrl: "https://example.com/story", imageUrl: "https://cdn.example.com/photo-1600x1000.jpg?w=1600", title: "First", imageAlt: "loom", relevanceScore: 10 },
+    { pageUrl: "https://example.com/story", imageUrl: "https://cdn.example.com/photo-1080x1350.jpg?w=1080", title: "Second", imageAlt: "loom", relevanceScore: 9 },
+    { pageUrl: "https://example.com/story", imageUrl: "https://cdn.example.com/workers.jpg", title: "Workers", imageAlt: "workers handling cloth", relevanceScore: 8 },
+    { pageUrl: "https://other.example.com/story", imageUrl: "https://cdn.example.com/photo-1600x1000.jpg?w=800", title: "Duplicate", imageAlt: "loom", relevanceScore: 7 },
   ]);
-  assert.equal(candidates.length, 1);
-  assert.equal(candidates[0].title, "First");
+  assert.equal(candidates.length, 2);
+  assert.deepEqual(candidates.map(({ title }) => title), ["First", "Workers"]);
+  const limited = limitPrStudioImageSearchCandidatesByPage([
+    ...candidates,
+    { pageUrl: "https://second.example.com/story", imageUrl: "https://second.example.com/hero.jpg", title: "Second page" },
+    { pageUrl: "https://third.example.com/story", imageUrl: "https://third.example.com/hero.jpg", title: "Third page" },
+  ], 2);
+  assert.equal(new Set(limited.map(({ pageUrl }) => pageUrl)).size, 2);
+  assert.equal(limited.some(({ title }) => title === "Workers"), true);
 });
 
 test("rejects unsupported generation aspect ratios and oversized reference sets", () => {

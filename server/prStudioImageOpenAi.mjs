@@ -6,7 +6,7 @@ import sharp from "sharp";
 const SEARCH_MODEL = "gpt-5-mini";
 const IMAGE_MODEL = "gpt-image-2";
 const MAX_SEARCH_RESULTS = 8;
-const MAX_RESULTS_PER_SOURCE_PAGE = 1;
+const MAX_RESULTS_PER_SOURCE_PAGE = 5;
 const MAX_REFERENCES = 4;
 const MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
 const MAX_PAGE_BYTES = 1_500_000;
@@ -154,9 +154,10 @@ export async function executePrStudioImageSearch(input, options = {}) {
   const fallbackRanked = strictRanked.length
     ? strictRanked
     : rankPrStudioImageSearchCandidates(inspectedCandidates, parsed, { minimumScore: 0.25, requireCoreSubject: true });
-  const candidates = dedupePrStudioImageSearchCandidates(fallbackRanked)
-    .slice(0, parsed.maxResults)
-    .map(({ relevanceScore: _relevanceScore, relevanceText: _relevanceText, ...candidate }) => candidate);
+  const candidates = limitPrStudioImageSearchCandidatesByPage(
+    dedupePrStudioImageSearchCandidates(fallbackRanked),
+    parsed.maxResults,
+  ).map(({ relevanceScore: _relevanceScore, relevanceText: _relevanceText, hasCoreSubject: _hasCoreSubject, ...candidate }) => candidate);
   const usage = normalizeUsage(response.usage) || {};
   const reasonsByUrl = new Map(
     (Array.isArray(selection?.candidatePages) ? selection.candidatePages : [])
@@ -183,6 +184,7 @@ export async function executePrStudioImageSearch(input, options = {}) {
       strictMatches: strictRanked.length,
       fallbackUsed: strictRanked.length === 0 && fallbackRanked.length > 0,
       returnedCandidates: candidates.length,
+      returnedPages: new Set(candidates.map((candidate) => normalizeComparableUrl(candidate.pageUrl)).filter(Boolean)).size,
     },
     model: response.model || request.model,
     responseId: response.id || null,
@@ -342,7 +344,7 @@ async function inspectSourcePage(source) {
   const license = extractImageLicenseEvidence(html, finalUrl);
   const imageInfos = extractImageInfos(html);
   const candidates = [];
-  for (const image of imageInfos.slice(0, 8)) {
+  for (const image of imageInfos.slice(0, 16)) {
     try {
       const imageUrl = new URL(decodeHtml(image.src), finalUrl).toString();
       await assertSafePublicUrl(imageUrl);
@@ -430,6 +432,23 @@ export function dedupePrStudioImageSearchCandidates(candidates) {
     results.push(candidate);
   }
   return results;
+}
+
+export function limitPrStudioImageSearchCandidatesByPage(candidates, maxPages) {
+  const pageOrder = [];
+  const pages = new Map();
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    const pageKey = normalizeComparableUrl(candidate?.pageUrl);
+    if (!pageKey) continue;
+    if (!pages.has(pageKey)) {
+      if (pageOrder.length >= maxPages) continue;
+      pageOrder.push(pageKey);
+      pages.set(pageKey, []);
+    }
+    const group = pages.get(pageKey);
+    if (group.length < MAX_RESULTS_PER_SOURCE_PAGE) group.push(candidate);
+  }
+  return pageOrder.flatMap((pageKey) => pages.get(pageKey));
 }
 
 export function rankPrStudioImageSearchCandidates(candidates, parsed, options = {}) {
@@ -682,14 +701,21 @@ function extractImageInfos(html) {
   for (const match of html.matchAll(/<img\b[^>]*>/gi)) {
     const tag = match[0];
     const src = tag.match(/\b(?:data-src|data-lazy-src|src)=["']([^"']+)["']/i)?.[1];
-    const srcset = tag.match(/\bsrcset=["']([^"']+)["']/i)?.[1];
-    const bestSrcset = srcset ? srcset.split(",").map((part) => part.trim().split(/\s+/)[0]).filter(Boolean).at(-1) : null;
+    const srcset = tag.match(/\b(?:data-srcset|srcset)=["']([^"']+)["']/i)?.[1];
     const alt = tag.match(/\balt=["']([^"']*)["']/i)?.[1] || "";
     const width = Number(tag.match(/\bwidth=["']?(\d+)/i)?.[1] || 0);
     const height = Number(tag.match(/\bheight=["']?(\d+)/i)?.[1] || 0);
     const priority = width * height >= 500_000 ? 2 : width * height >= 150_000 ? 1 : 0;
-    push(bestSrcset || src, alt, priority);
-    if (results.length >= 12) break;
+    const srcsetEntries = srcset
+      ? srcset.split(",").map((part) => {
+          const [url, descriptor = ""] = part.trim().split(/\s+/, 2);
+          const numeric = Number(descriptor.replace(/[^0-9.]/g, "")) || 0;
+          return { url, numeric };
+        }).filter(({ url }) => Boolean(url)).sort((left, right) => right.numeric - left.numeric)
+      : [];
+    for (const entry of srcsetEntries.slice(0, 4)) push(entry.url, alt, priority + 1);
+    push(src, alt, priority);
+    if (results.length >= 24) break;
   }
   return results;
 }
