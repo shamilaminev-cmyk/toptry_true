@@ -119,8 +119,10 @@ export function buildPrStudioImageSearchRequest(parsed) {
     instructions: [
       "Act as a publication photo editor conducting visual research, not as a keyword matcher. Find photographs that communicate the article's meaning visually.",
       "You must use web search and must not answer from memory.",
-      "Treat the supplied searchQueries as semantic coverage constraints, not as finished search strings. Preserve the selected themes, but independently decide how each theme should be researched visually.",
-      "Before searching, derive three to six distinct visual hypotheses from the supplied article context. Each hypothesis must be grounded in explicit facts, entities, relationships, actions, events or circumstances present in the article context.",
+      "Treat the supplied searchQueries and mustShow as semantic coverage constraints, not as finished search strings. Preserve the user-selected themes, but independently decide how each selected theme should be researched visually.",
+      "All visual hypotheses and all searches must stay inside the user-selected semantic coverage. Diversity means finding materially different ways to visualize the selected coverage, not branching into other themes merely because they also appear elsewhere in the article.",
+      "When only one semantic direction is selected, spend the search budget exploring different grounded evidence paths for that direction and do not search other article themes.",
+      "Before searching, derive three to six distinct visual hypotheses within the selected semantic coverage from the supplied article context. Each hypothesis must be grounded in explicit facts, entities, relationships, actions, events or circumstances present in the article context.",
       "A visual hypothesis should identify what real-world visual evidence could communicate the selected meaning. Do not assume any particular visual archetype from the theme name, industry, brand category or generic expectations.",
       "Derive the scene from this article itself. Do not decide in advance that a theme requires a particular kind of person, place, object, process, historical artifact or composition.",
       "Use article-specific anchors only when they are actually supported by title, mainIdea, summary or contentExcerpt. Useful anchors may include proper nouns, dates, locations, events, organizations, works, products or distinctive phrases, but the article determines which anchors matter.",

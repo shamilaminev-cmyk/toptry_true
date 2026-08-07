@@ -40,6 +40,9 @@ test("accepts bounded editorial image search input", () => {
   assert.match(request.instructions, /Do not search for or prefer a particular aspect ratio/);
   assert.match(request.instructions, /publication photo editor/);
   assert.match(request.instructions, /semantic coverage constraints/);
+  assert.match(request.instructions, /must stay inside the user-selected semantic coverage/);
+  assert.match(request.instructions, /not branching into other themes/);
+  assert.match(request.instructions, /When only one semantic direction is selected/);
   assert.match(request.instructions, /grounded in explicit facts/);
   assert.match(request.instructions, /Do not assume any particular visual archetype/);
   assert.match(request.instructions, /Derive the scene from this article itself/);
