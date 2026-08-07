@@ -255,6 +255,7 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   if (previousReviewModel === undefined) delete process.env.PR_STUDIO_IMAGE_REVIEW_MODEL;
   else process.env.PR_STUDIO_IMAGE_REVIEW_MODEL = previousReviewModel;
   assert.equal(request.model, "gpt-5-mini");
+  assert.equal(request.max_output_tokens, 6_000);
   assert.equal(request.input[0].content.filter((entry) => entry.type === "input_image").length, 2);
   assert.match(request.instructions, /Do not reject every image/);
   assert.match(request.instructions, /native aspect ratio differs/);

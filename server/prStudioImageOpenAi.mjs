@@ -373,7 +373,7 @@ export function buildPrStudioImageReviewRequest(parsed) {
       "Do not infer licensing or permission from the pixels.",
     ].join("\n"),
     input: [{ role: "user", content }],
-    max_output_tokens: 1_600,
+    max_output_tokens: 6_000,
     store: false,
     text: { format: { type: "json_schema", name: "pr_studio_image_review", strict: true, schema: REVIEW_RESPONSE_SCHEMA } },
   };
