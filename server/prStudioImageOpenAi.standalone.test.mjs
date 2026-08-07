@@ -259,6 +259,9 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   assert.equal(request.input[0].content.filter((entry) => entry.type === "input_image").length, 2);
   assert.match(request.instructions, /Do not reject every image/);
   assert.match(request.instructions, /native aspect ratio differs/);
+  assert.match(request.instructions, /0-100 percentage scale/);
+  assert.match(request.instructions, /Never use a 1-10 scale/);
+  assert.match(request.instructions, /65-100 = visually confirmed theme/);
   assert.equal(request.input[0].content[0].text.includes("targetAspectRatio"), true);
   assert.equal(parsed.themes.length, 2);
   assert.equal(request.input[0].content[0].text.includes("Bespoke application"), true);

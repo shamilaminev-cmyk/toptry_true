@@ -367,6 +367,8 @@ export function buildPrStudioImageReviewRequest(parsed) {
       "topicScore should reflect the strongest visually supported selected theme and should normally agree with bestThemeScore.",
       "Use recommended for a strong direct match, usable for a defensible but imperfect match, weak for a marginal reserve, and reject only for clearly unrelated, misleading, empty, technical or unusable imagery.",
       "Do not reject every image merely because none is ideal. When at least one candidate is technically readable and topically connected, keep the best one as usable or weak so a human can decide.",
+      "All numerical scores use a 0-100 percentage scale. Never use a 1-10 scale. For example, 7 means extremely weak evidence, while 70 means solid evidence.",
+      "For theme scoring use this calibration consistently: 65-100 = visually confirmed theme, 35-64 = visually related but not confirmed, 0-34 = theme not visually supported.",
       "Scores are comparative and must reflect main-idea communication, topical fit and thumbnail readability.",
       "Do not penalize an image because its native aspect ratio differs from the target. cropScore only asks whether the important subject can survive a later crop to targetAspectRatio.",
       "Prefer concrete human action, production, inspection or material selection over product-only shots, logos, labels, shop interiors and generic brand imagery when the article thesis calls for a process.",
