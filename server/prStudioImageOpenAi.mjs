@@ -332,6 +332,7 @@ export function parsePrStudioImageReviewInput(value) {
     context: {
       title: cleanNullableString(value.context?.title, 240),
       summary: cleanNullableString(value.context?.summary, 2_000),
+      researchSummary: cleanNullableString(value.context?.researchSummary, 4_000),
     },
     candidates: normalizedCandidates,
   };
@@ -363,6 +364,8 @@ export function buildPrStudioImageReviewRequest(parsed) {
       "Rank publication-image candidates against the article's main idea. Judge the actual pixels, not merely the source page title.",
       "When selected themes are supplied, compare every candidate independently against every supplied theme. Do not assume that a candidate belongs to a theme because of its title, source metadata, retrieval query or earlier textual classification.",
       "For each candidate return themeScores for every supplied theme, choose bestThemeId only from the supplied theme ids, and set bestThemeScore to that theme's score. If no supplied theme is visually supported, return an empty bestThemeId and a low bestThemeScore.",
+      "When context.researchSummary is supplied, treat it as grounded visual research produced from the article before image retrieval. Use its concrete visual hypotheses to rank candidates, but never treat the research text itself as proof that an image contains something.",
+      "Prefer a candidate that visibly realizes a concrete article-grounded hypothesis from researchSummary over a more generic image that merely belongs to the same broad theme. A generic museum, exhibition, product or brand-context image should score below a candidate that visibly shows the more specific supported scene when that scene is present in the pixels.",
       "Theme scores must describe visible evidence in the pixels. A source page mentioning a theme or named entity is not visual evidence for that theme.",
       "topicScore should reflect the strongest visually supported selected theme and should normally agree with bestThemeScore.",
       "Use recommended for a strong direct match, usable for a defensible but imperfect match, weak for a marginal reserve, and reject only for clearly unrelated, misleading, empty, technical or unusable imagery.",

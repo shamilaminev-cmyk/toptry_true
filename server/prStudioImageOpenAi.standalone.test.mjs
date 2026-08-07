@@ -230,6 +230,11 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   const parsed = parsePrStudioImageReviewInput({
     mainIdea: "The article connects fine cloth selection with bespoke craft.",
     targetAspectRatio: "16:9",
+    context: {
+      title: "Fine cloth and bespoke craft",
+      summary: "The article explains how cloth enters the tailoring process.",
+      researchSummary: "The strongest grounded visual hypothesis is a tailor actively comparing cloth samples with a client; a generic showroom is weaker.",
+    },
     themes: [
       {
         id: "history",
@@ -264,8 +269,12 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   assert.match(request.instructions, /65-100 = visually confirmed theme/);
   assert.equal(request.input[0].content[0].text.includes("targetAspectRatio"), true);
   assert.equal(parsed.themes.length, 2);
+  assert.match(parsed.context.researchSummary, /strongest grounded visual hypothesis/);
   assert.equal(request.input[0].content[0].text.includes("Bespoke application"), true);
+  assert.equal(request.input[0].content[0].text.includes("generic showroom is weaker"), true);
   assert.match(request.instructions, /compare every candidate independently against every supplied theme/);
+  assert.match(request.instructions, /grounded visual research produced from the article/);
+  assert.match(request.instructions, /visibly realizes a concrete article-grounded hypothesis/);
   const client = { responses: { create: async () => ({
     status: "completed",
     model: "gpt-5-mini",
