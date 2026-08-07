@@ -11,6 +11,7 @@ import {
   limitPrStudioImageSearchCandidatesByPage,
   executePrStudioImageGeneration,
   executePrStudioImageReview,
+  executePrStudioImageSearch,
   parsePrStudioImageGenerateInput,
   parsePrStudioImageReviewInput,
   parsePrStudioImageSearchInput,
@@ -34,7 +35,10 @@ test("accepts bounded editorial image search input", () => {
   assert.match(parsed.mainIdea, /individually drafted pattern/);
   const request = buildPrStudioImageSearchRequest(parsed);
   assert.equal(request.tools[0].type, "web_search");
-  assert.deepEqual(request.include, ["web_search_call.action.sources"]);
+  assert.deepEqual(request.tools[0].search_content_types, ["image", "text"]);
+  assert.equal(request.tools[0].image_settings.caption, true);
+  assert.ok(request.tools[0].image_settings.max_results >= 6);
+  assert.deepEqual(request.include, ["web_search_call.action.sources", "web_search_call.results"]);
   assert.match(request.instructions, /exact name/);
   assert.match(request.instructions, /generic press-kit templates/);
   assert.match(request.instructions, /Do not search for or prefer a particular aspect ratio/);
@@ -53,6 +57,63 @@ test("accepts bounded editorial image search input", () => {
   assert.equal(request.text.format.schema.required.includes("candidatePages"), true);
   assert.equal(request.text.format.schema.required.includes("queries"), true);
   assert.equal(request.tools[0].search_context_size, "high");
+});
+
+test("returns native web image results without requiring HTML page discovery", async () => {
+  const imageUrl = "https://cdn.example.com/loro-piana-family-1924.jpg";
+  const sourceWebsiteUrl = "https://example.com/loro-piana-history";
+
+  const client = {
+    responses: {
+      create: async () => ({
+        status: "completed",
+        model: "gpt-5-mini",
+        id: "resp_native_image_search",
+        output_text: JSON.stringify({
+          summary: "Found a directly relevant historical image.",
+          queries: ["Loro Piana history 1924"],
+          candidatePages: [],
+        }),
+        output: [
+          {
+            type: "web_search_call",
+            action: { sources: [] },
+            results: [
+              {
+                type: "image_result",
+                image_url: imageUrl,
+                thumbnail_url: "https://cdn.example.com/loro-piana-family-1924-thumb.jpg",
+                source_website_url: sourceWebsiteUrl,
+                caption: "Loro Piana family historical photograph 1924",
+              },
+            ],
+          },
+        ],
+      }),
+    },
+  };
+
+  const result = await executePrStudioImageSearch({
+    query: '"Loro Piana" history and heritage',
+    searchQueries: ['"Loro Piana" history and heritage'],
+    maxResults: 2,
+    mainIdea: "The history and development of Loro Piana.",
+    mustShow: "Visual evidence of the selected history and heritage theme.",
+    context: {
+      brandName: "Loro Piana",
+      title: "Loro Piana",
+      summary: "History and heritage of Loro Piana",
+    },
+  }, { client });
+
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].imageUrl, imageUrl);
+  assert.equal(result.candidates[0].pageUrl, sourceWebsiteUrl);
+  assert.equal(result.candidates[0].imageAlt, "Loro Piana family historical photograph 1924");
+  assert.equal(result.sourcePages.some(({ pageUrl }) => pageUrl === sourceWebsiteUrl), true);
+  assert.equal(result.diagnostics.pagesInspected, 0);
+  assert.equal(result.diagnostics.nativeImageResultsFound, 1);
+  assert.equal(result.diagnostics.htmlImageCandidatesFound, 0);
 });
 
 test("prioritizes model-selected pages without hiding other grounded image sources", () => {

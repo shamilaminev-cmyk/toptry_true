@@ -144,9 +144,18 @@ export function buildPrStudioImageSearchRequest(parsed) {
       parsed.excludedDomains.length ? `Do not use pages or images from these brand-owned domains: ${parsed.excludedDomains.join(", ")}.` : null,
     ].filter(Boolean).join("\n"),
     input: JSON.stringify(parsed),
-    tools: [{ type: "web_search", search_context_size: "high", external_web_access: true }],
+    tools: [{
+      type: "web_search",
+      search_context_size: "high",
+      external_web_access: true,
+      search_content_types: ["image", "text"],
+      image_settings: {
+        max_results: Math.min(10, Math.max(parsed.maxResults, 6)),
+        caption: true,
+      },
+    }],
     tool_choice: "required",
-    include: ["web_search_call.action.sources"],
+    include: ["web_search_call.action.sources", "web_search_call.results"],
     max_output_tokens: 1_600,
     store: false,
     text: {
@@ -176,7 +185,12 @@ export async function executePrStudioImageSearch(input, options = {}) {
   } catch {
     throw invalidResponse("OpenAI returned malformed image-search JSON");
   }
-  const sources = collectWebSources(response).filter((source) => !urlUsesExcludedDomain(source.url, parsed.excludedDomains));
+  const sources = collectWebSources(response)
+    .filter((source) => !urlUsesExcludedDomain(source.url, parsed.excludedDomains));
+  const nativeImageResults = collectWebImageResults(response)
+    .filter((result) =>
+      !urlUsesExcludedDomain(result.imageUrl, parsed.excludedDomains)
+      && !urlUsesExcludedDomain(result.sourceWebsiteUrl, parsed.excludedDomains));
   const prioritizedSources = prioritizePrStudioImageSearchSources(sources, selection?.candidatePages);
   const inspectedSources = prioritizedSources.slice(0, MAX_SEARCH_SOURCE_PAGES);
   const inspected = await Promise.allSettled(
@@ -197,10 +211,15 @@ export async function executePrStudioImageSearch(input, options = {}) {
       inspectedCandidates.push(candidate);
     }
   }
-  const strictRanked = rankPrStudioImageSearchCandidates(inspectedCandidates, parsed, { minimumScore: 1 });
+  const nativeImageCandidates = nativeImageResults.map(buildNativeImageSearchCandidate);
+  const discoveredCandidates = dedupePrStudioImageSearchCandidates([
+    ...nativeImageCandidates,
+    ...inspectedCandidates,
+  ]);
+  const strictRanked = rankPrStudioImageSearchCandidates(discoveredCandidates, parsed, { minimumScore: 1 });
   const fallbackRanked = strictRanked.length
     ? strictRanked
-    : rankPrStudioImageSearchCandidates(inspectedCandidates, parsed, { minimumScore: 0.25, requireCoreSubject: true });
+    : rankPrStudioImageSearchCandidates(discoveredCandidates, parsed, { minimumScore: 0.25, requireCoreSubject: true });
   const returnPageLimit = Math.min(MAX_SEARCH_RETURN_PAGES, Math.max(parsed.maxResults * 3, 12));
   const candidates = limitPrStudioImageSearchCandidatesByPage(
     dedupePrStudioImageSearchCandidates(fallbackRanked),
@@ -212,7 +231,12 @@ export async function executePrStudioImageSearch(input, options = {}) {
       .map((entry) => [normalizeComparableUrl(entry?.pageUrl), cleanNullableString(entry?.reason, 400)])
       .filter(([url]) => Boolean(url)),
   );
-  const sourcePages = prioritizedSources.slice(0, MAX_SEARCH_RETURN_PAGES).map((source) => ({
+  const nativeImageSources = nativeImageResults.map((result) => ({
+    url: result.sourceWebsiteUrl,
+    title: result.caption || new URL(result.sourceWebsiteUrl).hostname,
+  }));
+  const returnedSourcePages = mergePrStudioWebSources(prioritizedSources, nativeImageSources);
+  const sourcePages = returnedSourcePages.slice(0, MAX_SEARCH_RETURN_PAGES).map((source) => ({
     pageUrl: source.url,
     title: source.title || new URL(source.url).hostname,
     reason: reasonsByUrl.get(normalizeComparableUrl(source.url)) || null,
@@ -224,11 +248,13 @@ export async function executePrStudioImageSearch(input, options = {}) {
     sourcePages,
     candidates,
     diagnostics: {
-      sourcesFound: sources.length,
+      sourcesFound: returnedSourcePages.length,
       selectedPages: Array.isArray(selection?.candidatePages) ? selection.candidatePages.length : 0,
       pagesInspected: inspected.length,
       inspectionFailures,
-      imageCandidatesFound: inspectedCandidates.length,
+      nativeImageResultsFound: nativeImageResults.length,
+      htmlImageCandidatesFound: inspectedCandidates.length,
+      imageCandidatesFound: discoveredCandidates.length,
       strictMatches: strictRanked.length,
       fallbackUsed: strictRanked.length === 0 && fallbackRanked.length > 0,
       returnedCandidates: candidates.length,
@@ -788,6 +814,99 @@ function collectWebSources(response) {
     }
   }
   return sources;
+}
+
+function collectWebImageResults(response) {
+  const results = [];
+  const seen = new Set();
+
+  for (const item of Array.isArray(response?.output) ? response.output : []) {
+    if (item?.type !== "web_search_call") continue;
+
+    for (const result of Array.isArray(item?.results) ? item.results : []) {
+      if (result?.type !== "image_result") continue;
+
+      const imageUrl = normalizeReturnedWebUrl(result?.image_url);
+      const sourceWebsiteUrl = normalizeReturnedWebUrl(result?.source_website_url);
+      if (!imageUrl || !sourceWebsiteUrl) continue;
+
+      const key = `${normalizeComparableImageUrl(imageUrl)}|${normalizeComparableUrl(sourceWebsiteUrl)}`;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+
+      results.push({
+        imageUrl,
+        sourceWebsiteUrl,
+        thumbnailUrl: normalizeReturnedWebUrl(result?.thumbnail_url) || null,
+        caption: cleanNullableString(result?.caption, 500),
+      });
+    }
+  }
+
+  return results;
+}
+
+function buildNativeImageSearchCandidate(result) {
+  const pageUrl = result.sourceWebsiteUrl;
+  const imageUrl = result.imageUrl;
+  const domain = new URL(pageUrl).hostname.replace(/^www\./, "");
+  const caption = cleanString(result.caption, 500);
+  const title = caption || `Image result from ${domain}`;
+  const rights = classifyPrStudioImageRights({
+    license: null,
+    author: null,
+    domain,
+    pageUrl,
+  });
+
+  return {
+    pageUrl,
+    imageUrl,
+    title,
+    domain,
+    author: null,
+    license: null,
+    rightsStatus: rights.status,
+    rightsNote: rights.note,
+    imageAlt: caption || null,
+    suggestedCaption: title,
+    suggestedAltText: title,
+    suggestedCredit: `Источник: ${domain}`,
+    imagePriority: 5,
+    relevanceText: [caption, pageUrl, imageUrl].filter(Boolean).join(" "),
+  };
+}
+
+function mergePrStudioWebSources(...groups) {
+  const merged = [];
+  const seen = new Set();
+
+  for (const group of groups) {
+    for (const source of Array.isArray(group) ? group : []) {
+      const url = normalizeReturnedWebUrl(source?.url);
+      const key = normalizeComparableUrl(url);
+      if (!url || !key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push({
+        url,
+        title: cleanNullableString(source?.title, 500),
+      });
+    }
+  }
+
+  return merged;
+}
+
+function normalizeReturnedWebUrl(value) {
+  const raw = cleanString(value, 2_000);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    if (!new Set(["http:", "https:"]).has(url.protocol) || url.username || url.password) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
 }
 
 function ensureCompletedResponse(response, label) {
