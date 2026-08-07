@@ -120,6 +120,7 @@ export function buildPrStudioImageSearchRequest(parsed) {
     instructions: [
       "Act as a publication photo editor conducting visual research, not as a keyword matcher. Find photographs that communicate the article's meaning visually.",
       "You must use web search and must not answer from memory.",
+      "Search directly for image results that match the grounded visual hypotheses. Source webpages are provenance evidence, not the primary retrieval target.",
       "Treat the supplied searchQueries and mustShow as semantic coverage constraints, not as finished search strings. Preserve the user-selected themes, but independently decide how each selected theme should be researched visually.",
       "All visual hypotheses and all searches must stay inside the user-selected semantic coverage. Diversity means finding materially different ways to visualize the selected coverage, not branching into other themes merely because they also appear elsewhere in the article.",
       "When only one semantic direction is selected, spend the search budget exploring different grounded evidence paths for that direction and do not search other article themes.",
@@ -149,9 +150,9 @@ export function buildPrStudioImageSearchRequest(parsed) {
       type: "web_search",
       search_context_size: "high",
       external_web_access: true,
-      search_content_types: ["image", "text"],
+      search_content_types: ["image"],
       image_settings: {
-        max_results: Math.min(10, Math.max(parsed.maxResults, 6)),
+        max_results: Math.min(10, Math.max(parsed.maxResults * 4, 8)),
         caption: true,
       },
     }],

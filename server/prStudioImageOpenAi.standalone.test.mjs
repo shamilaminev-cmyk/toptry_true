@@ -40,9 +40,10 @@ test("accepts bounded editorial image search input", () => {
   else process.env.PR_STUDIO_IMAGE_SEARCH_MODEL = previousSearchModel;
   assert.equal(request.model, "gpt-5.6");
   assert.equal(request.tools[0].type, "web_search");
-  assert.deepEqual(request.tools[0].search_content_types, ["image", "text"]);
+  assert.deepEqual(request.tools[0].search_content_types, ["image"]);
   assert.equal(request.tools[0].image_settings.caption, true);
-  assert.ok(request.tools[0].image_settings.max_results >= 6);
+  assert.ok(request.tools[0].image_settings.max_results >= 8);
+  assert.match(request.instructions, /Search directly for image results/);
   assert.deepEqual(request.include, ["web_search_call.action.sources", "web_search_call.results"]);
   assert.match(request.instructions, /exact name/);
   assert.match(request.instructions, /generic press-kit templates/);
