@@ -3,7 +3,8 @@ import net from "node:net";
 import OpenAI from "openai";
 import sharp from "sharp";
 
-const SEARCH_MODEL = "gpt-5-mini";
+const SEARCH_MODEL = "gpt-5.6";
+const REVIEW_MODEL = "gpt-5-mini";
 const IMAGE_MODEL = "gpt-image-2";
 const MAX_SEARCH_RESULTS = 8;
 const MAX_RESULTS_PER_SOURCE_PAGE = 5;
@@ -112,7 +113,7 @@ export function parsePrStudioImageSearchInput(value) {
 }
 
 export function buildPrStudioImageSearchRequest(parsed) {
-  const model = String(process.env.PR_STUDIO_IMAGE_SEARCH_MODEL || process.env.PR_STUDIO_WEB_RESEARCH_MODEL || SEARCH_MODEL).trim() || SEARCH_MODEL;
+  const model = String(process.env.PR_STUDIO_IMAGE_SEARCH_MODEL || SEARCH_MODEL).trim() || SEARCH_MODEL;
   return {
     model,
     reasoning: { effort: "low" },
@@ -303,7 +304,7 @@ export function parsePrStudioImageReviewInput(value) {
 }
 
 export function buildPrStudioImageReviewRequest(parsed) {
-  const model = String(process.env.PR_STUDIO_IMAGE_REVIEW_MODEL || process.env.PR_STUDIO_IMAGE_SEARCH_MODEL || SEARCH_MODEL).trim() || SEARCH_MODEL;
+  const model = String(process.env.PR_STUDIO_IMAGE_REVIEW_MODEL || REVIEW_MODEL).trim() || REVIEW_MODEL;
   const content = [{
     type: "input_text",
     text: JSON.stringify({

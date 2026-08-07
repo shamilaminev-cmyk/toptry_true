@@ -33,7 +33,12 @@ test("accepts bounded editorial image search input", () => {
   assert.equal(parsed.searchQueries.length, 2);
   assert.deepEqual(parsed.excludedDomains, ["bourbaki.ru", "example.com"]);
   assert.match(parsed.mainIdea, /individually drafted pattern/);
+  const previousSearchModel = process.env.PR_STUDIO_IMAGE_SEARCH_MODEL;
+  delete process.env.PR_STUDIO_IMAGE_SEARCH_MODEL;
   const request = buildPrStudioImageSearchRequest(parsed);
+  if (previousSearchModel === undefined) delete process.env.PR_STUDIO_IMAGE_SEARCH_MODEL;
+  else process.env.PR_STUDIO_IMAGE_SEARCH_MODEL = previousSearchModel;
+  assert.equal(request.model, "gpt-5.6");
   assert.equal(request.tools[0].type, "web_search");
   assert.deepEqual(request.tools[0].search_content_types, ["image", "text"]);
   assert.equal(request.tools[0].image_settings.caption, true);
@@ -229,7 +234,12 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
       { id: "b", mimeType: "image/webp", data: image.toString("base64"), title: "Atelier interior" },
     ],
   });
+  const previousReviewModel = process.env.PR_STUDIO_IMAGE_REVIEW_MODEL;
+  delete process.env.PR_STUDIO_IMAGE_REVIEW_MODEL;
   const request = buildPrStudioImageReviewRequest(parsed);
+  if (previousReviewModel === undefined) delete process.env.PR_STUDIO_IMAGE_REVIEW_MODEL;
+  else process.env.PR_STUDIO_IMAGE_REVIEW_MODEL = previousReviewModel;
+  assert.equal(request.model, "gpt-5-mini");
   assert.equal(request.input[0].content.filter((entry) => entry.type === "input_image").length, 2);
   assert.match(request.instructions, /Do not reject every image/);
   assert.match(request.instructions, /native aspect ratio differs/);
