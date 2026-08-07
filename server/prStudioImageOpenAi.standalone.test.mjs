@@ -39,6 +39,13 @@ test("accepts bounded editorial image search input", () => {
   assert.match(request.instructions, /generic press-kit templates/);
   assert.match(request.instructions, /Do not search for or prefer a particular aspect ratio/);
   assert.match(request.instructions, /exact named entity plus concrete object plus action/);
+  assert.match(request.instructions, /publication photo editor/);
+  assert.match(request.instructions, /thematic seeds, not final queries/);
+  assert.match(request.instructions, /different visual search hypothesis/);
+  assert.match(request.instructions, /history or heritage/i);
+  assert.match(request.instructions, /people, action, equipment, materials/i);
+  assert.match(request.instructions, /caption is removed/);
+  assert.match(request.instructions, /anniversary books or book features/);
   assert.match(request.instructions, /bourbaki\.ru/);
   assert.equal(request.text.format.schema.required.includes("candidatePages"), true);
   assert.equal(request.text.format.schema.required.includes("queries"), true);
