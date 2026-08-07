@@ -230,6 +230,20 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   const parsed = parsePrStudioImageReviewInput({
     mainIdea: "The article connects fine cloth selection with bespoke craft.",
     targetAspectRatio: "16:9",
+    themes: [
+      {
+        id: "history",
+        title: "History and heritage",
+        mustShow: "Visible historical evidence",
+        mustAvoid: "A contemporary scene without historical evidence",
+      },
+      {
+        id: "application",
+        title: "Bespoke application",
+        mustShow: "A person actively selecting or working with cloth",
+        mustAvoid: "An unrelated historical artifact",
+      },
+    ],
     candidates: [
       { id: "a", mimeType: "image/webp", data: image.toString("base64"), title: "Fabric sample book" },
       { id: "b", mimeType: "image/webp", data: image.toString("base64"), title: "Atelier interior" },
@@ -245,6 +259,9 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   assert.match(request.instructions, /Do not reject every image/);
   assert.match(request.instructions, /native aspect ratio differs/);
   assert.equal(request.input[0].content[0].text.includes("targetAspectRatio"), true);
+  assert.equal(parsed.themes.length, 2);
+  assert.equal(request.input[0].content[0].text.includes("Bespoke application"), true);
+  assert.match(request.instructions, /compare every candidate independently against every supplied theme/);
   const client = { responses: { create: async () => ({
     status: "completed",
     model: "gpt-5-mini",
@@ -252,18 +269,49 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
     output_text: JSON.stringify({
       summary: "Neither is ideal",
       evaluations: [
-        { id: "a", mainIdeaScore: 20, topicScore: 20, readabilityScore: 50, cropScore: 80, verdict: "reject", reason: "Weak" },
-        { id: "b", mainIdeaScore: 25, topicScore: 30, readabilityScore: 60, cropScore: 70, verdict: "reject", reason: "Also weak" },
+        {
+          id: "a",
+          mainIdeaScore: 20,
+          topicScore: 20,
+          readabilityScore: 50,
+          cropScore: 80,
+          bestThemeId: "history",
+          bestThemeScore: 20,
+          themeScores: [
+            { themeId: "history", score: 20 },
+            { themeId: "application", score: 10 },
+          ],
+          verdict: "reject",
+          reason: "Weak",
+        },
+        {
+          id: "b",
+          mainIdeaScore: 65,
+          topicScore: 82,
+          readabilityScore: 60,
+          cropScore: 70,
+          bestThemeId: "application",
+          bestThemeScore: 82,
+          themeScores: [
+            { themeId: "history", score: 8 },
+            { themeId: "application", score: 82 },
+          ],
+          verdict: "usable",
+          reason: "Visible cloth selection belongs to the application theme",
+        },
       ],
     }),
   }) } };
   const result = await executePrStudioImageReview({
     mainIdea: "The article connects fine cloth selection with bespoke craft.",
     targetAspectRatio: "16:9",
+    themes: parsed.themes,
     candidates: parsed.candidates,
   }, { client });
   assert.equal(result.evaluations.some((entry) => entry.verdict !== "reject"), true);
-  assert.match(result.evaluations.find((entry) => entry.verdict === "weak").reason, /решения человека/);
+  assert.equal(result.evaluations.find((entry) => entry.id === "b").bestThemeId, "application");
+  assert.equal(result.evaluations.find((entry) => entry.id === "b").bestThemeScore, 82);
+  assert.equal(result.evaluations.find((entry) => entry.id === "b").themeScores.length, 2);
 });
 
 test("rejects unsupported generation aspect ratios and oversized reference sets", () => {

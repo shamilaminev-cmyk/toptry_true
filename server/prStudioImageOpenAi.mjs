@@ -74,10 +74,26 @@ const REVIEW_RESPONSE_SCHEMA = {
           topicScore: { type: "integer", minimum: 0, maximum: 100 },
           readabilityScore: { type: "integer", minimum: 0, maximum: 100 },
           cropScore: { type: "integer", minimum: 0, maximum: 100 },
+          bestThemeId: { type: "string", maxLength: 100 },
+          bestThemeScore: { type: "integer", minimum: 0, maximum: 100 },
+          themeScores: {
+            type: "array",
+            minItems: 0,
+            maxItems: 5,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                themeId: { type: "string", minLength: 1, maxLength: 100 },
+                score: { type: "integer", minimum: 0, maximum: 100 },
+              },
+              required: ["themeId", "score"],
+            },
+          },
           verdict: { type: "string", enum: ["recommended", "usable", "weak", "reject"] },
           reason: { type: "string", minLength: 1, maxLength: 500 },
         },
-        required: ["id", "mainIdeaScore", "topicScore", "readabilityScore", "cropScore", "verdict", "reason"],
+        required: ["id", "mainIdeaScore", "topicScore", "readabilityScore", "cropScore", "bestThemeId", "bestThemeScore", "themeScores", "verdict", "reason"],
       },
     },
   },
@@ -290,12 +306,29 @@ export function parsePrStudioImageReviewInput(value) {
       sourceReason: cleanNullableString(candidate.sourceReason, 500),
     };
   });
+  const themes = Array.isArray(value.themes)
+    ? value.themes.slice(0, 5).map((theme, index) => {
+        if (!theme || typeof theme !== "object" || Array.isArray(theme)) {
+          throw invalidInput(`themes[${index}] is invalid`);
+        }
+        const id = cleanString(theme.id, 100);
+        const title = cleanString(theme.title, 160);
+        if (!id || !title) throw invalidInput(`themes[${index}] must contain id and title`);
+        return {
+          id,
+          title,
+          mustShow: cleanNullableString(theme.mustShow, 1_000),
+          mustAvoid: cleanNullableString(theme.mustAvoid, 1_000),
+        };
+      })
+    : [];
   return {
     mainIdea: cleanString(value.mainIdea, 1_500),
     mustShow: cleanNullableString(value.mustShow, 2_000),
     avoid: cleanNullableString(value.avoid, 2_000),
     visualDirection: cleanNullableString(value.visualDirection, 80),
     targetAspectRatio: ASPECT_RATIOS.has(cleanString(value.targetAspectRatio, 10)) ? cleanString(value.targetAspectRatio, 10) : null,
+    themes,
     context: {
       title: cleanNullableString(value.context?.title, 240),
       summary: cleanNullableString(value.context?.summary, 2_000),
@@ -314,6 +347,7 @@ export function buildPrStudioImageReviewRequest(parsed) {
       avoid: parsed.avoid,
       visualDirection: parsed.visualDirection,
       targetAspectRatio: parsed.targetAspectRatio,
+      themes: parsed.themes,
       context: parsed.context,
       candidates: parsed.candidates.map(({ id, title, domain, sourceReason }) => ({ id, title, domain, sourceReason })),
     }),
@@ -327,6 +361,10 @@ export function buildPrStudioImageReviewRequest(parsed) {
     reasoning: { effort: "low" },
     instructions: [
       "Rank publication-image candidates against the article's main idea. Judge the actual pixels, not merely the source page title.",
+      "When selected themes are supplied, compare every candidate independently against every supplied theme. Do not assume that a candidate belongs to a theme because of its title, source metadata, retrieval query or earlier textual classification.",
+      "For each candidate return themeScores for every supplied theme, choose bestThemeId only from the supplied theme ids, and set bestThemeScore to that theme's score. If no supplied theme is visually supported, return an empty bestThemeId and a low bestThemeScore.",
+      "Theme scores must describe visible evidence in the pixels. A source page mentioning a theme or named entity is not visual evidence for that theme.",
+      "topicScore should reflect the strongest visually supported selected theme and should normally agree with bestThemeScore.",
       "Use recommended for a strong direct match, usable for a defensible but imperfect match, weak for a marginal reserve, and reject only for clearly unrelated, misleading, empty, technical or unusable imagery.",
       "Do not reject every image merely because none is ideal. When at least one candidate is technically readable and topically connected, keep the best one as usable or weak so a human can decide.",
       "Scores are comparative and must reflect main-idea communication, topical fit and thumbnail readability.",
@@ -359,20 +397,48 @@ export async function executePrStudioImageReview(input, options = {}) {
   let output;
   try { output = JSON.parse(outputText); } catch { throw invalidResponse("OpenAI returned malformed image-review JSON"); }
   const validIds = new Set(parsed.candidates.map((candidate) => candidate.id));
+  const validThemeIds = new Set(parsed.themes.map((theme) => theme.id));
   const evaluations = (Array.isArray(output?.evaluations) ? output.evaluations : [])
     .filter((entry) => validIds.has(cleanString(entry?.id, 100)))
-    .map((entry) => ({
-      id: cleanString(entry.id, 100),
-      mainIdeaScore: boundedScore(entry.mainIdeaScore),
-      topicScore: boundedScore(entry.topicScore),
-      readabilityScore: boundedScore(entry.readabilityScore),
-      cropScore: boundedScore(entry.cropScore),
-      verdict: new Set(["recommended", "usable", "weak", "reject"]).has(entry.verdict) ? entry.verdict : "weak",
-      reason: cleanString(entry.reason, 500) || "Оценка модели не содержит пояснения",
-    }));
+    .map((entry) => {
+      const requestedBestThemeId = cleanString(entry.bestThemeId, 100);
+      const bestThemeId = validThemeIds.has(requestedBestThemeId) ? requestedBestThemeId : "";
+      const themeScores = (Array.isArray(entry.themeScores) ? entry.themeScores : [])
+        .map((scoreEntry) => ({
+          themeId: cleanString(scoreEntry?.themeId, 100),
+          score: boundedScore(scoreEntry?.score),
+        }))
+        .filter((scoreEntry) => validThemeIds.has(scoreEntry.themeId));
+      const bestThemeScore = bestThemeId
+        ? boundedScore(entry.bestThemeScore)
+        : 0;
+      return {
+        id: cleanString(entry.id, 100),
+        mainIdeaScore: boundedScore(entry.mainIdeaScore),
+        topicScore: boundedScore(entry.topicScore),
+        readabilityScore: boundedScore(entry.readabilityScore),
+        cropScore: boundedScore(entry.cropScore),
+        bestThemeId,
+        bestThemeScore,
+        themeScores,
+        verdict: new Set(["recommended", "usable", "weak", "reject"]).has(entry.verdict) ? entry.verdict : "weak",
+        reason: cleanString(entry.reason, 500) || "Оценка модели не содержит пояснения",
+      };
+    });
   const byId = new Map(evaluations.map((entry) => [entry.id, entry]));
   for (const candidate of parsed.candidates) {
-    if (!byId.has(candidate.id)) byId.set(candidate.id, { id: candidate.id, mainIdeaScore: 40, topicScore: 40, readabilityScore: 40, cropScore: 50, verdict: "weak", reason: "Модель не вернула отдельную оценку; вариант сохранён для решения человека" });
+    if (!byId.has(candidate.id)) byId.set(candidate.id, {
+      id: candidate.id,
+      mainIdeaScore: 40,
+      topicScore: 0,
+      readabilityScore: 40,
+      cropScore: 50,
+      bestThemeId: "",
+      bestThemeScore: 0,
+      themeScores: [],
+      verdict: "weak",
+      reason: "Модель не вернула отдельную оценку; вариант сохранён для решения человека",
+    });
   }
   const normalized = [...byId.values()];
   if (normalized.length && normalized.every((entry) => entry.verdict === "reject")) {
