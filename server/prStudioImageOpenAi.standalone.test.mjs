@@ -286,7 +286,12 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
     true,
   );
   assert.match(request.instructions, /candidate-specific facts from sourceContext/);
+  assert.match(request.instructions, /explicitly and unambiguously confirms a depicted identity/);
+  assert.match(request.instructions, /Do not make an adequately sourced caption artificially generic/);
   assert.match(request.instructions, /Never use context\.researchSummary as proof/);
+  assert.match(request.instructions, /captionSuggestion must read as final editorial copy/);
+  assert.match(request.instructions, /из атрибуции источника/);
+  assert.match(request.instructions, /Provenance belongs in the separate source\/credit fields/);
   assert.match(request.instructions, /technical retrieval labels/);
   const client = { responses: { create: async () => ({
     status: "completed",
