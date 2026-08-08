@@ -250,7 +250,7 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
       },
     ],
     candidates: [
-      { id: "a", mimeType: "image/webp", data: image.toString("base64"), title: "Fabric sample book" },
+      { id: "a", mimeType: "image/webp", data: image.toString("base64"), origin: "generated", title: "Fabric sample book" },
       {
       id: "b",
       mimeType: "image/webp",
@@ -279,6 +279,11 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   assert.equal(request.input[0].content[0].text.includes("Bespoke application"), true);
   assert.equal(request.input[0].content[0].text.includes("generic showroom is weaker"), true);
   assert.match(request.instructions, /compare every candidate independently against every supplied theme/);
+  assert.match(request.instructions, /When no themes are supplied/);
+  assert.match(request.instructions, /candidate\.origin is 'generated'/);
+  assert.match(request.instructions, /must explicitly disclose its synthetic nature/);
+  assert.match(request.instructions, /Never describe a generated scene as an archival photograph/);
+  assert.equal(request.input[0].content[0].text.includes('"origin":"generated"'), true);
   assert.match(request.instructions, /grounded visual research produced from the article/);
   assert.match(request.instructions, /visibly realizes a concrete article-grounded hypothesis/);
   assert.equal(
