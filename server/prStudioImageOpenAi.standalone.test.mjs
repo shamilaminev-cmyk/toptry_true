@@ -251,7 +251,13 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
     ],
     candidates: [
       { id: "a", mimeType: "image/webp", data: image.toString("base64"), title: "Fabric sample book" },
-      { id: "b", mimeType: "image/webp", data: image.toString("base64"), title: "Atelier interior" },
+      {
+      id: "b",
+      mimeType: "image/webp",
+      data: image.toString("base64"),
+      title: "Atelier interior",
+      sourceContext: "The source page identifies this as a tailor comparing cloth samples with a client in the atelier.",
+    },
     ],
   });
   const previousReviewModel = process.env.PR_STUDIO_IMAGE_REVIEW_MODEL;
@@ -275,6 +281,13 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   assert.match(request.instructions, /compare every candidate independently against every supplied theme/);
   assert.match(request.instructions, /grounded visual research produced from the article/);
   assert.match(request.instructions, /visibly realizes a concrete article-grounded hypothesis/);
+  assert.equal(
+    request.input[0].content[0].text.includes("tailor comparing cloth samples with a client"),
+    true,
+  );
+  assert.match(request.instructions, /candidate-specific facts from sourceContext/);
+  assert.match(request.instructions, /Never use context\.researchSummary as proof/);
+  assert.match(request.instructions, /technical retrieval labels/);
   const client = { responses: { create: async () => ({
     status: "completed",
     model: "gpt-5-mini",
@@ -296,6 +309,8 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
           ],
           verdict: "reject",
           reason: "Weak",
+          captionSuggestion: "Образцы ткани",
+          altTextSuggestion: "Образцы ткани на поверхности",
         },
         {
           id: "b",
@@ -311,6 +326,8 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
           ],
           verdict: "usable",
           reason: "Visible cloth selection belongs to the application theme",
+          captionSuggestion: "Портной сравнивает образцы ткани с клиентом",
+          altTextSuggestion: "Портной и клиент рассматривают образцы ткани",
         },
       ],
     }),
@@ -325,6 +342,14 @@ test("reviews actual image pixels without creating an all-rejected dead end", as
   assert.equal(result.evaluations.find((entry) => entry.id === "b").bestThemeId, "application");
   assert.equal(result.evaluations.find((entry) => entry.id === "b").bestThemeScore, 82);
   assert.equal(result.evaluations.find((entry) => entry.id === "b").themeScores.length, 2);
+  assert.equal(
+    result.evaluations.find((entry) => entry.id === "b").captionSuggestion,
+    "Портной сравнивает образцы ткани с клиентом",
+  );
+  assert.equal(
+    result.evaluations.find((entry) => entry.id === "b").altTextSuggestion,
+    "Портной и клиент рассматривают образцы ткани",
+  );
 });
 
 test("rejects unsupported generation aspect ratios and oversized reference sets", () => {

@@ -92,8 +92,10 @@ const REVIEW_RESPONSE_SCHEMA = {
           },
           verdict: { type: "string", enum: ["recommended", "usable", "weak", "reject"] },
           reason: { type: "string", minLength: 1, maxLength: 500 },
+          captionSuggestion: { type: "string", maxLength: 300 },
+          altTextSuggestion: { type: "string", maxLength: 500 },
         },
-        required: ["id", "mainIdeaScore", "topicScore", "readabilityScore", "cropScore", "bestThemeId", "bestThemeScore", "themeScores", "verdict", "reason"],
+        required: ["id", "mainIdeaScore", "topicScore", "readabilityScore", "cropScore", "bestThemeId", "bestThemeScore", "themeScores", "verdict", "reason", "captionSuggestion", "altTextSuggestion"],
       },
     },
   },
@@ -304,6 +306,7 @@ export function parsePrStudioImageReviewInput(value) {
       title: cleanNullableString(candidate.title, 500),
       domain: cleanNullableString(candidate.domain, 300),
       sourceReason: cleanNullableString(candidate.sourceReason, 500),
+      sourceContext: cleanNullableString(candidate.sourceContext, 1_500),
     };
   });
   const themes = Array.isArray(value.themes)
@@ -350,7 +353,13 @@ export function buildPrStudioImageReviewRequest(parsed) {
       targetAspectRatio: parsed.targetAspectRatio,
       themes: parsed.themes,
       context: parsed.context,
-      candidates: parsed.candidates.map(({ id, title, domain, sourceReason }) => ({ id, title, domain, sourceReason })),
+      candidates: parsed.candidates.map(({ id, title, domain, sourceReason, sourceContext }) => ({
+        id,
+        title,
+        domain,
+        sourceReason,
+        sourceContext,
+      })),
     }),
   }];
   for (const candidate of parsed.candidates) {
@@ -375,6 +384,13 @@ export function buildPrStudioImageReviewRequest(parsed) {
       "Scores are comparative and must reflect main-idea communication, topical fit and thumbnail readability.",
       "Do not penalize an image because its native aspect ratio differs from the target. cropScore only asks whether the important subject can survive a later crop to targetAspectRatio.",
       "Prefer concrete human action, production, inspection or material selection over product-only shots, logos, labels, shop interiors and generic brand imagery when the article thesis calls for a process.",
+      "For every candidate also return captionSuggestion and altTextSuggestion as publication-ready drafts in the language of the supplied article context.",
+      "altTextSuggestion must primarily describe what is actually visible in the pixels. Do not invent identities, dates, locations, events or relationships that cannot be established visually.",
+      "captionSuggestion may combine visible evidence with candidate-specific facts from sourceContext. Treat sourceContext as provenance for that candidate, not as visual evidence.",
+      "Never use context.researchSummary as proof that a particular candidate depicts a named person, date, place or event. Those candidate-specific facts require support from sourceContext.",
+      "If sourceContext does not support a precise identity, date, place or event, keep captionSuggestion correspondingly generic. Do not guess.",
+      "Do not use technical retrieval labels such as 'Image result from ...', filenames, URLs or domains as the publication caption or alt text.",
+      "The suggestions are drafts for human review; factual restraint is more important than decorative wording.",
       "Do not infer licensing or permission from the pixels.",
     ].join("\n"),
     input: [{ role: "user", content }],
@@ -428,6 +444,8 @@ export async function executePrStudioImageReview(input, options = {}) {
         themeScores,
         verdict: new Set(["recommended", "usable", "weak", "reject"]).has(entry.verdict) ? entry.verdict : "weak",
         reason: cleanString(entry.reason, 500) || "Оценка модели не содержит пояснения",
+        captionSuggestion: cleanString(entry.captionSuggestion, 300),
+        altTextSuggestion: cleanString(entry.altTextSuggestion, 500),
       };
     });
   const byId = new Map(evaluations.map((entry) => [entry.id, entry]));
@@ -443,6 +461,8 @@ export async function executePrStudioImageReview(input, options = {}) {
       themeScores: [],
       verdict: "weak",
       reason: "Модель не вернула отдельную оценку; вариант сохранён для решения человека",
+      captionSuggestion: "",
+      altTextSuggestion: "",
     });
   }
   const normalized = [...byId.values()];
