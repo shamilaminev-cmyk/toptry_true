@@ -7,15 +7,20 @@ import {
   parsePrStudioMonitoringDiscoveryInput,
 } from "./prStudioMonitoringOpenAi.mjs";
 
-test("builds recall-first monitoring discovery instead of canonical-answer research", () => {
+test("builds semantic query planning from structured monitoring terms", () => {
   const parsed = parsePrStudioMonitoringDiscoveryInput({
-    topicName: "Классический костюм",
-    queryPreview: "\"классический костюм\" +костюм",
+    topicName: "Ателье Москвы",
+    queryPreview: "\"ателье Москва\" +ателье site:.ru",
+    exactPhrases: ["ателье Москва"],
+    anyKeywords: ["bespoke", "индивидуальный пошив"],
+    requiredKeywords: ["ателье"],
+    excludedKeywords: [],
     lookbackDays: 7,
     language: "ru",
     region: "RU",
     runetOnly: true,
-    sourceTypes: ["news", "blogs"],
+    sourceTypes: ["search", "media", "blogs", "sites"],
+    brandName: "Ателье Bourbaki тест10",
   });
 
   const request = buildPrStudioMonitoringDiscoveryRequest(parsed);
@@ -26,33 +31,61 @@ test("builds recall-first monitoring discovery instead of canonical-answer resea
     request.include,
     ["web_search_call.action.sources"],
   );
-  assert.match(request.instructions, /recall-first/);
+
+  assert.match(request.instructions, /structured topic fields/);
+  assert.match(request.instructions, /different semantic angles/);
+  assert.match(request.instructions, /legacy display text only/);
   assert.match(
     request.instructions,
-    /not to produce a canonical answer/,
+    /Never add the brand to an independent market or editorial search/,
+  );
+  assert.match(request.instructions, /Generic business directories/);
+  assert.match(
+    request.instructions,
+    /search is the discovery transport and is not itself a page category/,
   );
   assert.match(
     request.instructions,
-    /do not discard an otherwise relevant candidate merely because its publication date is unclear/,
+    /candidatePages is the editorially selected monitoring result set/,
   );
+
   assert.doesNotMatch(
     request.instructions,
-    /return outcome insufficient/,
+    /Treat queryPreview as semantic search constraints/,
   );
 });
 
-test("returns grounded web sources even when they are not all model-selected", async () => {
+test("keeps queryPreview as a backward-compatible legacy fallback", () => {
+  const parsed = parsePrStudioMonitoringDiscoveryInput({
+    topicName: "Классический костюм",
+    queryPreview: "\"классический костюм\" +костюм",
+    lookbackDays: 7,
+  });
+
+  assert.equal(parsed.exactPhrases.length, 0);
+  assert.equal(parsed.anyKeywords.length, 0);
+  assert.equal(parsed.requiredKeywords.length, 0);
+
+  const request = buildPrStudioMonitoringDiscoveryRequest(parsed);
+
+  assert.match(
+    request.instructions,
+    /legacy request without structured topic fields/,
+  );
+});
+
+test("returns only model-selected grounded monitoring candidates", async () => {
   const response = {
     status: "completed",
     model: "gpt-5-mini",
     id: "resp_monitoring",
     output_text: JSON.stringify({
-      summary: "Found recent tailoring coverage",
+      summary: "Found useful editorial coverage",
       candidatePages: [
         {
           url: "https://example.ru/article-one",
-          title: "Классический костюм сегодня",
-          excerpt: "Новая публикация о классическом костюме",
+          title: "Новое московское ателье",
+          excerpt: "Редакционный материал об открытии нового ателье.",
         },
       ],
     }),
@@ -61,17 +94,17 @@ test("returns grounded web sources even when they are not all model-selected", a
         type: "web_search_call",
         action: {
           queries: [
-            "классический костюм Москва",
-            "мужской костюм ателье",
+            "новое ателье Москва открытие",
+            "индивидуальный пошив Москва интервью",
           ],
           sources: [
             {
               url: "https://example.ru/article-one",
-              title: "Классический костюм сегодня",
+              title: "Новое московское ателье",
             },
             {
-              url: "https://second.ru/article-two",
-              title: "Мужской костюм и ателье",
+              url: "https://directory.ru/moscow/atelier",
+              title: "Каталог ателье Москвы",
             },
           ],
         },
@@ -92,30 +125,34 @@ test("returns grounded web sources even when they are not all model-selected", a
 
   const result = await executePrStudioMonitoringDiscovery(
     {
-      topicName: "Классический костюм",
-      queryPreview: "\"классический костюм\" +костюм",
+      topicName: "Ателье Москвы",
+      exactPhrases: ["ателье Москва"],
+      requiredKeywords: ["ателье"],
       lookbackDays: 7,
+      sourceTypes: ["search", "media", "blogs", "sites"],
     },
     { client },
   );
 
-  assert.equal(result.sources.length, 2);
+  assert.equal(result.sources.length, 1);
   assert.equal(
     result.sources[0].url,
     "https://example.ru/article-one",
   );
   assert.match(
     result.sources[0].citedText,
-    /Новая публикация/,
+    /Редакционный материал/,
   );
   assert.equal(
-    result.sources[1].url,
-    "https://second.ru/article-two",
+    result.sources.some(({ url }) =>
+      url.includes("directory.ru"),
+    ),
+    false,
   );
-  assert.equal(result.sources[1].citedText, null);
+
   assert.deepEqual(result.queries, [
-    "классический костюм Москва",
-    "мужской костюм ателье",
+    "новое ателье Москва открытие",
+    "индивидуальный пошив Москва интервью",
   ]);
 });
 
@@ -140,7 +177,7 @@ test("does not admit invented candidate URLs outside grounded web sources", asyn
           {
             type: "web_search_call",
             action: {
-              query: "ателье Москва",
+              query: "ателье Москва интервью",
               sources: [
                 {
                   url: "https://real.ru/news",
@@ -157,14 +194,14 @@ test("does not admit invented candidate URLs outside grounded web sources", asyn
   const result = await executePrStudioMonitoringDiscovery(
     {
       topicName: "Ателье Москвы",
-      queryPreview: "\"ателье Москва\" +ателье",
+      exactPhrases: ["ателье Москва"],
+      requiredKeywords: ["ателье"],
       lookbackDays: 7,
     },
     { client },
   );
 
-  assert.equal(result.sources.length, 1);
-  assert.equal(result.sources[0].url, "https://real.ru/news");
+  assert.equal(result.sources.length, 0);
   assert.equal(
     result.sources.some(({ url }) =>
       url.includes("invented.example"),

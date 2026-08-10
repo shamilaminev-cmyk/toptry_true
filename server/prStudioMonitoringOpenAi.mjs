@@ -48,7 +48,11 @@ export function parsePrStudioMonitoringDiscoveryInput(value) {
   }
 
   const topicName = cleanString(value.topicName, 240);
-  const queryPreview = cleanString(value.queryPreview, 4_000);
+  const queryPreview = cleanNullableString(value.queryPreview, 4_000);
+  const exactPhrases = stringArray(value.exactPhrases, 20, 160);
+  const anyKeywords = stringArray(value.anyKeywords, 40, 120);
+  const requiredKeywords = stringArray(value.requiredKeywords, 20, 120);
+  const excludedKeywords = stringArray(value.excludedKeywords, 40, 120);
   const lookbackDays = boundedInteger(
     value.lookbackDays,
     7,
@@ -58,11 +62,25 @@ export function parsePrStudioMonitoringDiscoveryInput(value) {
   );
 
   if (!topicName) throw invalidInput("topicName is required");
-  if (!queryPreview) throw invalidInput("queryPreview is required");
+
+  if (
+    exactPhrases.length
+    + anyKeywords.length
+    + requiredKeywords.length === 0
+    && !queryPreview
+  ) {
+    throw invalidInput(
+      "Structured monitoring terms or queryPreview are required",
+    );
+  }
 
   return {
     topicName,
     queryPreview,
+    exactPhrases,
+    anyKeywords,
+    requiredKeywords,
+    excludedKeywords,
     lookbackDays,
     language: cleanString(value.language, 40) || "ru",
     region: cleanString(value.region, 120) || "RU",
@@ -103,23 +121,41 @@ export function buildPrStudioMonitoringDiscoveryRequest(parsed) {
     };
   }
 
+  const hasStructuredTopic =
+    parsed.exactPhrases.length
+    + parsed.anyKeywords.length
+    + parsed.requiredKeywords.length > 0;
+
   return {
     model,
     reasoning: { effort: "low" },
     instructions: [
       "You perform recall-first public-web discovery for a PR monitoring system.",
       "You must use web search. Do not answer from model memory.",
-      "Your job is to discover a broad set of potentially relevant standalone public pages, not to produce a canonical answer and not to decide whether evidence is sufficient.",
-      "Never stop merely because evidence is incomplete. Return the useful candidate pages you can ground in actual web-search results.",
-      "Run four to eight materially different searches when the topic supports them. Prefer different retrieval paths rather than lexical variations of one query.",
-      "Treat queryPreview as semantic search constraints, not necessarily as one literal finished search string.",
+      "Your job is to discover genuinely useful PR-monitoring signals, not to produce a canonical answer and not to decide whether evidence is sufficient.",
+      "The structured topic fields exactPhrases, anyKeywords, requiredKeywords and excludedKeywords are the authoritative description of what the user wants monitored.",
+      hasStructuredTopic
+        ? "queryPreview, if present, is legacy display text only. Do not treat it as a finished Boolean search query and do not copy its syntax into every search."
+        : "This is a legacy request without structured topic fields. Use queryPreview only as fallback semantic guidance and still create materially different searches.",
+      "Before searching, infer the monitoring intent from the topic itself. Distinguish direct entity or brand mentions, broader market or editorial topics, and reputation/review topics.",
+      "Run four to eight materially different searches when the topic supports them. Search different semantic angles, not lexical rewrites of one phrase.",
+      "For a broad market or editorial topic, useful angles can include direct terminology, adjacent terminology and synonyms, news and events, launches or collaborations, interviews and expert commentary, trend or market analysis, and relevant organizations or people. Use only angles that actually fit the topic.",
+      "For a direct entity or brand mention topic, stay narrow around the named entity and its explicit variants. Do not broaden it into generic industry coverage.",
+      "brandName and brandDescription are application context only. Never add the brand to an independent market or editorial search unless the structured topic itself explicitly mentions that brand or unmistakably refers to it.",
+      "requiredKeywords are topic constraints. Preserve their meaning when selecting candidate pages. excludedKeywords and excludedDomains are hard exclusions.",
+      "sourceTypes describe preferred source classes. media means editorial or news media; blogs means authored editorial or expert posts; sites means substantive standalone pages on organization, company or expert sites; search is the discovery transport and is not itself a page category.",
+      "Generic business directories, maps, review aggregators, classifieds, service marketplaces, homepages, generic service landing pages, tag pages and search-result pages are not PR signals and must not appear in candidatePages unless the topic explicitly asks for reviews, reputation, ratings, locations, directories or listings.",
+      "Prefer standalone articles, news items, interviews, opinion or expert pieces, announcements, event pages and other substantive pages whose content itself constitutes a monitoring signal.",
       "Prioritize material published inside the requested lookback period, but do not discard an otherwise relevant candidate merely because its publication date is unclear. PR Studio verifies publication freshness separately after discovery.",
       "Do not treat a recent modification, reindexing, repost signal or search-engine freshness as proof that an old article was newly published.",
-      "Return standalone articles, news items, interviews, posts, announcements and other substantive pages. Do not return search-result pages, homepages or generic section indexes unless they are themselves the monitored publication.",
-      "Open enough search results to create a useful candidate set instead of stopping after the first plausible result.",
+      "Open enough search results to evaluate the page itself before placing it in candidatePages.",
+      "candidatePages is the editorially selected monitoring result set. Include only directly relevant pages you would actually show to a PR professional.",
       "candidatePages must contain only URLs encountered through the web-search tool. Do not invent URLs.",
       parsed.runetOnly
-        ? "Restrict discovery to the Russian internet and Russian domain zones when possible. PR Studio will deterministically enforce its Runet domain policy after discovery."
+        ? "For this run, select only sources from the Russian internet and Russian domain zones. Do not spend search effort on foreign-domain sources that PR Studio will reject deterministically."
+        : null,
+      parsed.includedDomains.length
+        ? `Use only these explicitly allowed domains: ${parsed.includedDomains.join(", ")}.`
         : null,
       parsed.excludedDomains.length
         ? `Do not use these domains: ${parsed.excludedDomains.join(", ")}.`
@@ -222,18 +258,9 @@ export async function executePrStudioMonitoringDiscovery(
 
   for (const candidate of selected) {
     const key = comparableUrl(candidate.url);
-    if (key && !byUrl.has(key)) byUrl.set(key, candidate);
-  }
-
-  for (const source of metadata.sources) {
-    const key = comparableUrl(source.url);
     if (!key || byUrl.has(key)) continue;
 
-    byUrl.set(key, {
-      url: source.url,
-      title: source.title,
-      citedText: null,
-    });
+    byUrl.set(key, candidate);
 
     if (byUrl.size >= parsed.maxResults) break;
   }
@@ -242,7 +269,7 @@ export async function executePrStudioMonitoringDiscovery(
     summary:
       cleanString(output?.summary, 1_200)
       || "Monitoring discovery completed",
-    sources: [...byUrl.values()].slice(0, parsed.maxResults),
+    sources: [...byUrl.values()],
     queries: metadata.queries,
     model: response.model || request.model,
     responseId: response.id || null,
