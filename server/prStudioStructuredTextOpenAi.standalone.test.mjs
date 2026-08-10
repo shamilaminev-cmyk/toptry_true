@@ -118,6 +118,48 @@ test("routes Content Studio roles to gateway-controlled GPT-5.6 tiers", () => {
   }
 });
 
+test("accepts SMART goal review and keeps its model under gateway control", () => {
+  const previous = process.env.PR_STUDIO_STRATEGY_SMART_MODEL;
+  delete process.env.PR_STUDIO_STRATEGY_SMART_MODEL;
+
+  try {
+    const parsed = parsePrStudioStructuredTextInput(
+      validInput({ operation: "strategy.smart-review" }),
+    );
+    const request = buildPrStudioStructuredTextRequest(parsed);
+
+    assert.equal(parsed.operation, "strategy.smart-review");
+    assert.equal(request.model, "gpt-5.6-sol");
+    assert.equal(request.reasoning.effort, "medium");
+
+    process.env.PR_STUDIO_STRATEGY_SMART_MODEL =
+      "custom-strategy-model";
+
+    const overridden =
+      buildPrStudioStructuredTextRequest(
+        parsePrStudioStructuredTextInput(
+          validInput({ operation: "strategy.smart-review" }),
+        ),
+      );
+
+    assert.equal(
+      overridden.model,
+      "custom-strategy-model",
+    );
+    assert.equal(
+      overridden.reasoning.effort,
+      "medium",
+    );
+  } finally {
+    if (previous === undefined) {
+      delete process.env.PR_STUDIO_STRATEGY_SMART_MODEL;
+    } else {
+      process.env.PR_STUDIO_STRATEGY_SMART_MODEL =
+        previous;
+    }
+  }
+});
+
 test("requires strict closed JSON schemas", () => {
   const input = validInput();
   input.responseSchema.schema.additionalProperties = true;
