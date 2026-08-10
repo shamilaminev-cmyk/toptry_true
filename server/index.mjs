@@ -66,6 +66,7 @@ import {
 } from "./prStudioBrandMemoryOpenAi.mjs";
 import { executePrStudioStructuredText } from "./prStudioStructuredTextOpenAi.mjs";
 import { executePrStudioWebResearch } from "./prStudioWebResearchOpenAi.mjs";
+import { executePrStudioMonitoringDiscovery } from "./prStudioMonitoringOpenAi.mjs";
 import {
   executePrStudioImageGeneration,
   executePrStudioImageReview,
@@ -5586,6 +5587,7 @@ app.get("/internal/ai/pr-studio/health", (req, res) => {
     capabilities: {
       structuredText: true,
       webResearch: true,
+      monitoringDiscovery: true,
       contentProduction: true,
       imageSearch: true,
       imageGeneration: true,
@@ -5764,6 +5766,76 @@ app.post("/internal/ai/pr-studio/web/research", async (req, res) => {
   }
 });
 
+
+app.post("/internal/ai/pr-studio/monitoring/discover", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+
+  if (
+    String(process.env.AI_GATEWAY_ROLE || "")
+      .trim()
+      .toLowerCase() !== "gateway"
+  ) {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+
+  try {
+    const result = await executePrStudioMonitoringDiscovery(req.body);
+
+    console.info("PR Studio monitoring discovery completed", {
+      sourceCount: result.sources.length,
+      queryCount: result.queries.length,
+      model: result.model,
+      responseId: result.responseId,
+      usage: result.usage,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      summary: result.summary,
+      sources: result.sources,
+      queries: result.queries,
+      provider: {
+        model: result.model,
+        responseId: result.responseId,
+        usage: result.usage,
+      },
+    });
+  } catch (error) {
+    const code =
+      error?.code
+      || "PR_STUDIO_MONITORING_DISCOVERY_UPSTREAM_FAILED";
+
+    const status =
+      code === "PR_STUDIO_TRANSPORT_INVALID_INPUT"
+        ? 400
+        : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED"
+          ? 503
+          : 502;
+
+    console.error("PR Studio monitoring discovery failed", {
+      code,
+      message:
+        error instanceof Error
+          ? error.message.slice(0, 700)
+          : String(error).slice(0, 700),
+      providerStatus: error?.providerStatus ?? null,
+      providerRequestId: error?.providerRequestId ?? null,
+    });
+
+    return res.status(status).json({
+      ok: false,
+      error:
+        status === 400
+          ? error.message
+          : "Monitoring discovery is temporarily unavailable",
+      code,
+    });
+  }
+});
 
 app.post("/internal/ai/pr-studio/images/search", async (req, res) => {
   if (!assertPrStudioGatewayRequest(req, res)) return;
