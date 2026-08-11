@@ -160,6 +160,73 @@ test("accepts SMART goal review and keeps its model under gateway control", () =
   }
 });
 
+test("accepts SEO GEO interpretation and keeps its model under gateway control", () => {
+  const previous =
+    process.env.PR_STUDIO_SEO_GEO_MODEL;
+
+  delete process.env.PR_STUDIO_SEO_GEO_MODEL;
+
+  try {
+    const parsed =
+      parsePrStudioStructuredTextInput(
+        validInput({
+          operation:
+            "seo-geo.interpret",
+        }),
+      );
+
+    const request =
+      buildPrStudioStructuredTextRequest(
+        parsed,
+      );
+
+    assert.equal(
+      parsed.operation,
+      "seo-geo.interpret",
+    );
+
+    assert.equal(
+      request.model,
+      "gpt-5.6-sol",
+    );
+
+    assert.equal(
+      request.reasoning.effort,
+      "medium",
+    );
+
+    process.env.PR_STUDIO_SEO_GEO_MODEL =
+      "custom-seo-geo-model";
+
+    const overridden =
+      buildPrStudioStructuredTextRequest(
+        parsePrStudioStructuredTextInput(
+          validInput({
+            operation:
+              "seo-geo.interpret",
+          }),
+        ),
+      );
+
+    assert.equal(
+      overridden.model,
+      "custom-seo-geo-model",
+    );
+
+    assert.equal(
+      overridden.reasoning.effort,
+      "medium",
+    );
+  } finally {
+    if (previous === undefined) {
+      delete process.env.PR_STUDIO_SEO_GEO_MODEL;
+    } else {
+      process.env.PR_STUDIO_SEO_GEO_MODEL =
+        previous;
+    }
+  }
+});
+
 test("requires strict closed JSON schemas", () => {
   const input = validInput();
   input.responseSchema.schema.additionalProperties = true;
