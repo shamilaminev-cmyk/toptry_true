@@ -38,6 +38,13 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
       defaultModel: "gpt-5.6-sol",
     },
   ],
+  [
+    "seo-geo.search-query-suggestions",
+    {
+      environmentName: "PR_STUDIO_SEO_GEO_MODEL",
+      defaultModel: "gpt-5.6-sol",
+    },
+  ],
 ]);
 const REASONING_EFFORT_BY_OPERATION = new Map([
   ["brand-memory.website-batch-analysis", "medium"],
@@ -47,6 +54,7 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["content.edit", "high"],
   ["strategy.smart-review", "medium"],
   ["seo-geo.interpret", "medium"],
+  ["seo-geo.search-query-suggestions", "medium"],
 ]);
 const DEFAULT_MAX_OUTPUT_TOKENS = 6_000;
 const MIN_MAX_OUTPUT_TOKENS = 256;
@@ -71,6 +79,7 @@ const ALLOWED_OPERATIONS = new Set([
   "content.edit",
   "strategy.smart-review",
   "seo-geo.interpret",
+  "seo-geo.search-query-suggestions",
 ]);
 
 const ALLOWED_SCHEMA_KEYS = new Set([
