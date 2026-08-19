@@ -67,6 +67,7 @@ import {
 import { executePrStudioStructuredText } from "./prStudioStructuredTextOpenAi.mjs";
 import { executePrStudioWebResearch } from "./prStudioWebResearchOpenAi.mjs";
 import { executePrStudioGeoVisibilityMeasurement } from "./prStudioGeoVisibilityOpenAi.mjs";
+import { executePrStudioGeoVisibilityGoogleMeasurement } from "./prStudioGeoVisibilityGemini.mjs";
 import { executePrStudioMonitoringDiscovery } from "./prStudioMonitoringOpenAi.mjs";
 import {
   executePrStudioImageGeneration,
@@ -5589,6 +5590,7 @@ app.get("/internal/ai/pr-studio/health", (req, res) => {
       structuredText: true,
       webResearch: true,
       geoVisibilityMeasurement: true,
+      geoVisibilityGoogleMeasurement: true,
       monitoringDiscovery: true,
       contentProduction: true,
       imageSearch: true,
@@ -5597,6 +5599,9 @@ app.get("/internal/ai/pr-studio/health", (req, res) => {
     provider: {
       openaiConfigured: Boolean(
         String(process.env.OPENAI_API_KEY || "").trim()
+      ),
+      geminiConfigured: Boolean(
+        String(process.env.GEMINI_API_KEY || "").trim()
       ),
     },
   });
@@ -5753,6 +5758,85 @@ app.post("/internal/ai/pr-studio/geo/measure", async (req, res) => {
       error: status === 400
         ? error.message
         : "GEO visibility measurement is temporarily unavailable",
+      code,
+    });
+  }
+});
+
+app.post("/internal/ai/pr-studio/geo/measure/google", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+  if (
+    String(process.env.AI_GATEWAY_ROLE || "")
+      .trim()
+      .toLowerCase() !== "gateway"
+  ) {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+
+  const questionLength =
+    typeof req.body?.question === "string" ? req.body.question.trim().length : 0;
+
+  try {
+    const result = await executePrStudioGeoVisibilityGoogleMeasurement(req.body);
+    console.info("PR Studio GEO Google visibility measurement completed", {
+      surfaceKey: result.surfaceKey,
+      methodologyKey: result.methodologyKey,
+      methodologyVersion: result.methodologyVersion,
+      questionLength,
+      citationCount: result.citations.length,
+      sourceCount: result.sources.length,
+      queryCount: result.queries.length,
+      model: result.model,
+      responseId: result.responseId,
+      usage: result.usage,
+    });
+    return res.status(200).json({
+      ok: true,
+      surfaceKey: result.surfaceKey,
+      methodologyKey: result.methodologyKey,
+      methodologyVersion: result.methodologyVersion,
+      answerText: result.answerText,
+      citations: result.citations,
+      sources: result.sources,
+      queries: result.queries,
+      provider: {
+        model: result.model,
+        responseId: result.responseId,
+        usage: result.usage,
+      },
+    });
+  } catch (error) {
+    const code = error?.code || "PR_STUDIO_GEO_GOOGLE_UPSTREAM_FAILED";
+    const status =
+      code === "PR_STUDIO_TRANSPORT_INVALID_INPUT"
+        ? 400
+        : code === "PR_STUDIO_GEMINI_NOT_CONFIGURED"
+          ? 503
+          : 502;
+    console.error("PR Studio GEO Google visibility measurement failed", {
+      questionLength,
+      code,
+      message: error instanceof Error
+        ? error.message.slice(0, 700)
+        : String(error).slice(0, 700),
+      providerStatus: error?.providerStatus ?? null,
+      providerMessage: error?.providerMessage ?? null,
+      promptBlockReason: error?.promptBlockReason ?? null,
+      finishReason: error?.finishReason ?? null,
+      responseId: error?.responseId ?? null,
+      model: error?.model ?? null,
+      usage: error?.usage ?? null,
+      outputLength: error?.outputLength ?? null,
+    });
+    return res.status(status).json({
+      ok: false,
+      error: status === 400
+        ? error.message
+        : "GEO Google visibility measurement is temporarily unavailable",
       code,
     });
   }
