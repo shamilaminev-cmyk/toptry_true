@@ -294,6 +294,59 @@ test("accepts SEO GEO search-query suggestions and keeps its model under gateway
   }
 });
 
+test("accepts GEO recommendation classification and keeps its model cheap and gateway-controlled", () => {
+  const previous =
+    process.env.PR_STUDIO_GEO_RECOMMENDATION_MODEL;
+
+  delete process.env.PR_STUDIO_GEO_RECOMMENDATION_MODEL;
+
+  try {
+    const parsed =
+      parsePrStudioStructuredTextInput(
+        validInput({
+          operation:
+            "seo-geo.recommendation-classify",
+        }),
+      );
+
+    const request =
+      buildPrStudioStructuredTextRequest(parsed);
+
+    assert.equal(
+      parsed.operation,
+      "seo-geo.recommendation-classify",
+    );
+    assert.equal(request.model, "gpt-5-mini");
+    assert.equal(request.reasoning.effort, "low");
+
+    process.env.PR_STUDIO_GEO_RECOMMENDATION_MODEL =
+      "custom-recommendation-model";
+
+    const overridden =
+      buildPrStudioStructuredTextRequest(
+        parsePrStudioStructuredTextInput(
+          validInput({
+            operation:
+              "seo-geo.recommendation-classify",
+          }),
+        ),
+      );
+
+    assert.equal(
+      overridden.model,
+      "custom-recommendation-model",
+    );
+    assert.equal(overridden.reasoning.effort, "low");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.PR_STUDIO_GEO_RECOMMENDATION_MODEL;
+    } else {
+      process.env.PR_STUDIO_GEO_RECOMMENDATION_MODEL =
+        previous;
+    }
+  }
+});
+
 test("requires strict closed JSON schemas", () => {
   const input = validInput();
   input.responseSchema.schema.additionalProperties = true;

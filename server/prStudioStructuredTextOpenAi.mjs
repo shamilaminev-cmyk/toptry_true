@@ -45,6 +45,13 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
       defaultModel: "gpt-5.6-sol",
     },
   ],
+  [
+    "seo-geo.recommendation-classify",
+    {
+      environmentName: "PR_STUDIO_GEO_RECOMMENDATION_MODEL",
+      defaultModel: "gpt-5-mini",
+    },
+  ],
 ]);
 const REASONING_EFFORT_BY_OPERATION = new Map([
   ["brand-memory.website-batch-analysis", "medium"],
@@ -80,6 +87,7 @@ const ALLOWED_OPERATIONS = new Set([
   "strategy.smart-review",
   "seo-geo.interpret",
   "seo-geo.search-query-suggestions",
+  "seo-geo.recommendation-classify",
 ]);
 
 const ALLOWED_SCHEMA_KEYS = new Set([
