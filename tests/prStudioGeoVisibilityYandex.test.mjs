@@ -39,7 +39,7 @@ test("normalizes Yandex generative answer using only sources marked as used", as
     assert.equal(body.folderId, "folder-1");
     assert.equal(body.getPartialResults, false);
 
-    return new Response(JSON.stringify({
+    return new Response(JSON.stringify([{
       message: {
         role: "ROLE_ASSISTANT",
         content: "### Bourbaki\n\nСтоит рассмотреть как один из вариантов.",
@@ -54,7 +54,7 @@ test("normalizes Yandex generative answer using only sources marked as used", as
       ],
       isAnswerRejected: false,
       problematicAnswer: false,
-    }), { status: 200, headers: { "content-type": "application/json" } });
+    }]), { status: 200, headers: { "content-type": "application/json" } });
   };
 
   const result = await executePrStudioGeoVisibilityYandexMeasurement(
@@ -80,6 +80,23 @@ test("normalizes Yandex generative answer using only sources marked as used", as
   assert.equal(result.model, null);
   assert.equal(result.responseId, null);
   assert.deepEqual(result.usage, { searchQueries: 2, usedSources: 1 });
+});
+
+test("accepts a direct Yandex GenSearch object for compatibility", async () => {
+  const fetchImpl = async () => new Response(JSON.stringify({
+    message: { role: "ROLE_ASSISTANT", content: "Прямой ответ" },
+    sources: [{ url: "https://example.com/source", title: "Example", used: true }],
+    searchQueries: [{ text: "пример", reqId: "query-1" }],
+  }), { status: 200 });
+
+  const result = await executePrStudioGeoVisibilityYandexMeasurement(
+    { question: "Кого выбрать?", language: "ru", region: "Россия" },
+    { apiKey: "test-key", folderId: "folder-1", fetchImpl },
+  );
+
+  assert.equal(result.answerText, "Прямой ответ");
+  assert.equal(result.sources.length, 1);
+  assert.deepEqual(result.queries, ["пример"]);
 });
 
 test("rejects Yandex GEO measurement when no grounded source was used", async () => {

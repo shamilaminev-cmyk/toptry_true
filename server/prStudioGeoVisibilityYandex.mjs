@@ -97,31 +97,32 @@ export async function executePrStudioGeoVisibilityYandexMeasurement(
     throw wrapped;
   }
 
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+  const finalPayload = normalizeGenSearchPayload(payload);
+  if (!finalPayload) {
     throw invalidResponse("Yandex Search API returned an invalid GEO response");
   }
-  if (payload.isAnswerRejected === true) {
+  if (finalPayload.isAnswerRejected === true) {
     throw invalidResponse("Yandex Search API rejected GEO measurement answer", {
       code: "PR_STUDIO_TRANSPORT_REFUSAL",
     });
   }
-  if (payload.problematicAnswer === true) {
+  if (finalPayload.problematicAnswer === true) {
     throw invalidResponse("Yandex Search API marked GEO measurement answer as problematic");
   }
 
-  const answerText = cleanOutputText(payload?.message?.content, 30_000);
+  const answerText = cleanOutputText(finalPayload?.message?.content, 30_000);
   if (!answerText) {
     throw invalidResponse("Yandex Search API returned no GEO measurement answer");
   }
 
-  const allSources = Array.isArray(payload.sources)
-    ? payload.sources.map(normalizeSource).filter(Boolean)
+  const allSources = Array.isArray(finalPayload.sources)
+    ? finalPayload.sources.map(normalizeSource).filter(Boolean)
     : [];
   const usedSources = dedupeSources(
     allSources.filter((source) => source.used === true),
   ).slice(0, 300);
-  const queries = Array.isArray(payload.searchQueries)
-    ? payload.searchQueries
+  const queries = Array.isArray(finalPayload.searchQueries)
+    ? finalPayload.searchQueries
         .map((query) => cleanString(query?.text, 500))
         .filter(Boolean)
     : [];
@@ -159,6 +160,20 @@ export async function executePrStudioGeoVisibilityYandexMeasurement(
       usedSources: usedSources.length,
     },
   };
+}
+
+function normalizeGenSearchPayload(value) {
+  if (Array.isArray(value)) {
+    for (let index = value.length - 1; index >= 0; index -= 1) {
+      const candidate = value[index];
+      if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+  if (!value || typeof value !== "object") return null;
+  return value;
 }
 
 function buildUserMessage(parsed) {
