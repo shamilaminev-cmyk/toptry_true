@@ -294,6 +294,35 @@ test("accepts SEO GEO search-query suggestions and keeps its model under gateway
   }
 });
 
+test("accepts GEO question suggestions and keeps the stronger SEO GEO model under gateway control", () => {
+  const previous = process.env.PR_STUDIO_SEO_GEO_MODEL;
+  delete process.env.PR_STUDIO_SEO_GEO_MODEL;
+
+  try {
+    const parsed = parsePrStudioStructuredTextInput(
+      validInput({ operation: "seo-geo.question-suggestions" }),
+    );
+    const request = buildPrStudioStructuredTextRequest(parsed);
+
+    assert.equal(parsed.operation, "seo-geo.question-suggestions");
+    assert.equal(request.model, "gpt-5.6-sol");
+    assert.equal(request.reasoning.effort, "medium");
+
+    process.env.PR_STUDIO_SEO_GEO_MODEL = "custom-geo-question-model";
+    const overridden = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(
+        validInput({ operation: "seo-geo.question-suggestions" }),
+      ),
+    );
+
+    assert.equal(overridden.model, "custom-geo-question-model");
+    assert.equal(overridden.reasoning.effort, "medium");
+  } finally {
+    if (previous === undefined) delete process.env.PR_STUDIO_SEO_GEO_MODEL;
+    else process.env.PR_STUDIO_SEO_GEO_MODEL = previous;
+  }
+});
+
 test("accepts GEO recommendation classification and keeps its model cheap and gateway-controlled", () => {
   const previous =
     process.env.PR_STUDIO_GEO_RECOMMENDATION_MODEL;
