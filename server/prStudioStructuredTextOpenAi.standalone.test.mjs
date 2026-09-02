@@ -336,6 +336,70 @@ test("accepts Planning plan drafts and keeps the stronger Planning model under g
   }
 });
 
+
+test("accepts Planning execution suggestions and keeps the Planning model under gateway control", () => {
+  const previous =
+    process.env.PR_STUDIO_PLANNING_MODEL;
+  delete process.env.PR_STUDIO_PLANNING_MODEL;
+
+  try {
+    const parsed =
+      parsePrStudioStructuredTextInput(
+        validInput({
+          operation:
+            "planning.execution-suggestions",
+        }),
+      );
+
+    const request =
+      buildPrStudioStructuredTextRequest(
+        parsed,
+      );
+
+    assert.equal(
+      parsed.operation,
+      "planning.execution-suggestions",
+    );
+    assert.equal(
+      request.model,
+      "gpt-5.6-sol",
+    );
+    assert.equal(
+      request.reasoning.effort,
+      "medium",
+    );
+
+    process.env.PR_STUDIO_PLANNING_MODEL =
+      "custom-planning-model";
+
+    const overridden =
+      buildPrStudioStructuredTextRequest(
+        parsePrStudioStructuredTextInput(
+          validInput({
+            operation:
+              "planning.execution-suggestions",
+          }),
+        ),
+      );
+
+    assert.equal(
+      overridden.model,
+      "custom-planning-model",
+    );
+    assert.equal(
+      overridden.reasoning.effort,
+      "medium",
+    );
+  } finally {
+    if (previous === undefined) {
+      delete process.env.PR_STUDIO_PLANNING_MODEL;
+    } else {
+      process.env.PR_STUDIO_PLANNING_MODEL =
+        previous;
+    }
+  }
+});
+
 test("accepts GEO question suggestions and keeps the stronger SEO GEO model under gateway control", () => {
   const previous = process.env.PR_STUDIO_SEO_GEO_MODEL;
   delete process.env.PR_STUDIO_SEO_GEO_MODEL;
