@@ -46,6 +46,13 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
     },
   ],
   [
+    "planning.effectiveness-review",
+    {
+      environmentName: "PR_STUDIO_PLANNING_MODEL",
+      defaultModel: "gpt-5.6-sol",
+    },
+  ],
+  [
     "seo-geo.interpret",
     {
       environmentName: "PR_STUDIO_SEO_GEO_MODEL",
@@ -83,6 +90,7 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["strategy.smart-review", "medium"],
   ["planning.plan-draft", "medium"],
   ["planning.execution-suggestions", "medium"],
+  ["planning.effectiveness-review", "medium"],
   ["seo-geo.interpret", "medium"],
   ["seo-geo.search-query-suggestions", "medium"],
   ["seo-geo.question-suggestions", "medium"],
@@ -111,6 +119,7 @@ const ALLOWED_OPERATIONS = new Set([
   "strategy.smart-review",
   "planning.plan-draft",
   "planning.execution-suggestions",
+  "planning.effectiveness-review",
   "seo-geo.interpret",
   "seo-geo.search-query-suggestions",
   "seo-geo.recommendation-classify",
