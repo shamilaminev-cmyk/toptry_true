@@ -32,6 +32,13 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
     },
   ],
   [
+    "strategy.assessment-follow-up",
+    {
+      environmentName: "PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL",
+      defaultModel: "gpt-5.6-sol",
+    },
+  ],
+  [
     "planning.plan-draft",
     {
       environmentName: "PR_STUDIO_PLANNING_MODEL",
@@ -88,6 +95,7 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["content.copywrite", "high"],
   ["content.edit", "high"],
   ["strategy.smart-review", "medium"],
+  ["strategy.assessment-follow-up", "medium"],
   ["planning.plan-draft", "medium"],
   ["planning.execution-suggestions", "medium"],
   ["planning.effectiveness-review", "medium"],
@@ -117,6 +125,7 @@ const ALLOWED_OPERATIONS = new Set([
   "content.copywrite",
   "content.edit",
   "strategy.smart-review",
+  "strategy.assessment-follow-up",
   "planning.plan-draft",
   "planning.execution-suggestions",
   "planning.effectiveness-review",

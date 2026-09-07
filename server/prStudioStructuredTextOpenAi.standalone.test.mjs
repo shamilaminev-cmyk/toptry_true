@@ -429,6 +429,61 @@ test("accepts GEO question suggestions and keeps the stronger SEO GEO model unde
   }
 });
 
+test("accepts Strategy Assessment follow-up and keeps the stronger Strategy model under gateway control", () => {
+  const previous =
+    process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL;
+  delete process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL;
+
+  try {
+    const parsed = parsePrStudioStructuredTextInput(
+      validInput({
+        operation: "strategy.assessment-follow-up",
+      }),
+    );
+    const request =
+      buildPrStudioStructuredTextRequest(parsed);
+
+    assert.equal(
+      parsed.operation,
+      "strategy.assessment-follow-up",
+    );
+    assert.equal(request.model, "gpt-5.6-sol");
+    assert.equal(
+      request.reasoning.effort,
+      "medium",
+    );
+
+    process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL =
+      "custom-strategy-follow-up-model";
+
+    const overridden =
+      buildPrStudioStructuredTextRequest(
+        parsePrStudioStructuredTextInput(
+          validInput({
+            operation:
+              "strategy.assessment-follow-up",
+          }),
+        ),
+      );
+
+    assert.equal(
+      overridden.model,
+      "custom-strategy-follow-up-model",
+    );
+    assert.equal(
+      overridden.reasoning.effort,
+      "medium",
+    );
+  } finally {
+    if (previous === undefined) {
+      delete process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL;
+    } else {
+      process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL =
+        previous;
+    }
+  }
+});
+
 test("accepts Planning effectiveness review and keeps the stronger Planning model under gateway control", () => {
   const previous = process.env.PR_STUDIO_PLANNING_MODEL;
   delete process.env.PR_STUDIO_PLANNING_MODEL;
