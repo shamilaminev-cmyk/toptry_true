@@ -87,6 +87,13 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
       defaultModel: "gpt-5.6-sol",
     },
   ],
+  [
+    "reviews.analyze-and-draft",
+    {
+      environmentName: "PR_STUDIO_REVIEWS_MODEL",
+      defaultModel: "gpt-5.6-terra",
+    },
+  ],
 ]);
 const REASONING_EFFORT_BY_OPERATION = new Map([
   ["brand-memory.website-batch-analysis", "medium"],
@@ -102,6 +109,7 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["seo-geo.interpret", "medium"],
   ["seo-geo.search-query-suggestions", "medium"],
   ["seo-geo.question-suggestions", "medium"],
+  ["reviews.analyze-and-draft", "medium"],
 ]);
 const DEFAULT_MAX_OUTPUT_TOKENS = 6_000;
 const MIN_MAX_OUTPUT_TOKENS = 256;
@@ -133,6 +141,7 @@ const ALLOWED_OPERATIONS = new Set([
   "seo-geo.search-query-suggestions",
   "seo-geo.recommendation-classify",
   "seo-geo.question-suggestions",
+  "reviews.analyze-and-draft",
 ]);
 
 const ALLOWED_SCHEMA_KEYS = new Set([

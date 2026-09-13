@@ -71,6 +71,34 @@ test("accepts only the registered Content Studio roles", () => {
   );
 });
 
+test("accepts review analysis and drafting and keeps its model under gateway control", () => {
+  const previous = process.env.PR_STUDIO_REVIEWS_MODEL;
+  delete process.env.PR_STUDIO_REVIEWS_MODEL;
+
+  try {
+    const parsed = parsePrStudioStructuredTextInput(
+      validInput({ operation: "reviews.analyze-and-draft" }),
+    );
+    const request = buildPrStudioStructuredTextRequest(parsed);
+
+    assert.equal(parsed.operation, "reviews.analyze-and-draft");
+    assert.equal(request.model, "gpt-5.6-terra");
+    assert.equal(request.reasoning.effort, "medium");
+
+    process.env.PR_STUDIO_REVIEWS_MODEL = "custom-reviews-model";
+    const overridden = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(
+        validInput({ operation: "reviews.analyze-and-draft" }),
+      ),
+    );
+    assert.equal(overridden.model, "custom-reviews-model");
+    assert.equal(overridden.reasoning.effort, "medium");
+  } finally {
+    if (previous === undefined) delete process.env.PR_STUDIO_REVIEWS_MODEL;
+    else process.env.PR_STUDIO_REVIEWS_MODEL = previous;
+  }
+});
+
 test("routes Content Studio roles to gateway-controlled GPT-5.6 tiers", () => {
   const environmentNames = [
     "PR_STUDIO_TEXT_MODEL",
