@@ -807,3 +807,36 @@ test("accepts nullable primitive fields without allowing nullable objects", () =
     /type is not supported/,
   );
 });
+
+
+test("supports Editorial Planner operation with planning model and medium reasoning", () => {
+  const previous = process.env.PR_STUDIO_PLANNING_MODEL;
+  delete process.env.PR_STUDIO_PLANNING_MODEL;
+
+  try {
+    const parsed = parsePrStudioStructuredTextInput(
+      validInput({ operation: "content.editorial-plan-draft" }),
+    );
+    const request = buildPrStudioStructuredTextRequest(parsed);
+
+    assert.equal(parsed.operation, "content.editorial-plan-draft");
+    assert.equal(request.model, "gpt-5.6-sol");
+    assert.equal(request.reasoning.effort, "medium");
+
+    process.env.PR_STUDIO_PLANNING_MODEL = "custom-editorial-planning-model";
+    const overridden = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(
+        validInput({ operation: "content.editorial-plan-draft" }),
+      ),
+    );
+
+    assert.equal(overridden.model, "custom-editorial-planning-model");
+    assert.equal(overridden.reasoning.effort, "medium");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.PR_STUDIO_PLANNING_MODEL;
+    } else {
+      process.env.PR_STUDIO_PLANNING_MODEL = previous;
+    }
+  }
+});
