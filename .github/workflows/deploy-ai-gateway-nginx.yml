@@ -15,8 +15,8 @@ jobs:
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          username: root
+          key: ${{ secrets.AI_GATEWAY_NGINX_ROOT_SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
           source: "infra/nginx/toptry-ai-gateway.conf"
           target: "/tmp/toptry-ai-gateway-nginx-deploy"
@@ -27,8 +27,8 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          username: root
+          key: ${{ secrets.AI_GATEWAY_NGINX_ROOT_SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
             set -euo pipefail
@@ -36,11 +36,24 @@ jobs:
             test -f /tmp/toptry-ai-gateway-nginx-deploy/toptry-ai-gateway.conf
 
             TS="$(date -u +%Y%m%d-%H%M%S)"
-            sudo cp /etc/nginx/sites-available/toptry-ai-gateway "/etc/nginx/sites-available/toptry-ai-gateway.bak.${TS}"
+            BACKUP="/etc/nginx/sites-available/toptry-ai-gateway.bak.${TS}"
 
-            sudo cp /tmp/toptry-ai-gateway-nginx-deploy/toptry-ai-gateway.conf /etc/nginx/sites-available/toptry-ai-gateway
+            test -f /etc/nginx/sites-available/toptry-ai-gateway
 
-            sudo nginx -t
-            sudo systemctl reload nginx
+            cp /etc/nginx/sites-available/toptry-ai-gateway "$BACKUP"
+            cp /tmp/toptry-ai-gateway-nginx-deploy/toptry-ai-gateway.conf /etc/nginx/sites-available/toptry-ai-gateway
+
+            if ! nginx -t; then
+              cp "$BACKUP" /etc/nginx/sites-available/toptry-ai-gateway
+              nginx -t
+              exit 1
+            fi
+
+            if ! systemctl reload nginx; then
+              cp "$BACKUP" /etc/nginx/sites-available/toptry-ai-gateway
+              nginx -t
+              systemctl reload nginx
+              exit 1
+            fi
 
             echo "AI gateway nginx config deployed and reloaded"
