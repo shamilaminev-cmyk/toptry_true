@@ -312,6 +312,146 @@ export async function executePrStudioStructuredText(input, options = {}) {
   );
   const request = buildPrStudioStructuredTextRequest(parsed);
   const response = await client.responses.create(request);
+  return normalizeCompletedStructuredTextResponse(parsed, request, response);
+}
+
+export async function startPrStudioStructuredTextBackground(
+  input,
+  options = {},
+) {
+  const parsed = parsePrStudioStructuredTextInput(input);
+  if (parsed.operation !== "content.editorial-plan-draft") {
+    throw invalidInput(
+      "Background structured text is allowed only for content.editorial-plan-draft",
+    );
+  }
+
+  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+  const client = options.client || createOpenAiClient(
+    apiKey,
+    OPENAI_TIMEOUT_MS,
+    0,
+  );
+  const request = {
+    ...buildPrStudioStructuredTextRequest(parsed),
+    background: true,
+    store: true,
+  };
+  const response = await client.responses.create(request);
+
+  if (response?.status === "completed") {
+    return normalizeCompletedStructuredTextResponse(
+      parsed,
+      request,
+      response,
+    );
+  }
+
+  if (response?.status === "queued" || response?.status === "in_progress") {
+    if (typeof response?.id !== "string" || !response.id.trim()) {
+      throw invalidResponse(
+        "OpenAI background response did not include a response id",
+        {
+          code: "PR_STUDIO_TRANSPORT_INVALID_RESPONSE",
+          ...collectProviderDiagnostics(response),
+        },
+      );
+    }
+    return {
+      operation: parsed.operation,
+      promptVersion: parsed.promptVersion,
+      status: response.status,
+      output: null,
+      model: response.model || request.model,
+      responseId: response.id,
+      usage: normalizeUsage(response.usage),
+    };
+  }
+
+  throw backgroundTerminalError(response);
+}
+
+export async function retrievePrStudioStructuredTextBackground(
+  input,
+  options = {},
+) {
+  const parsed = parseBackgroundRetrieveInput(input);
+  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+  const client = options.client || createOpenAiClient(
+    apiKey,
+    OPENAI_TIMEOUT_MS,
+    0,
+  );
+  const response = await client.responses.retrieve(parsed.responseId);
+
+  if (response?.status === "completed") {
+    return normalizeCompletedStructuredTextResponse(
+      parsed,
+      {
+        model:
+          response?.model
+          || modelForOperation(parsed.operation),
+      },
+      response,
+    );
+  }
+
+  if (response?.status === "queued" || response?.status === "in_progress") {
+    return {
+      operation: parsed.operation,
+      promptVersion: parsed.promptVersion,
+      status: response.status,
+      output: null,
+      model:
+        response?.model
+        || modelForOperation(parsed.operation),
+      responseId:
+        typeof response?.id === "string"
+          ? response.id
+          : parsed.responseId,
+      usage: normalizeUsage(response?.usage),
+    };
+  }
+
+  throw backgroundTerminalError(response);
+}
+
+function parseBackgroundRetrieveInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalidInput("Background retrieve body must be an object");
+  }
+
+  const operation = cleanString(value.operation, 100);
+  if (operation !== "content.editorial-plan-draft") {
+    throw invalidInput(
+      "Background retrieve is allowed only for content.editorial-plan-draft",
+    );
+  }
+
+  const promptVersion = cleanString(value.promptVersion, 80);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(promptVersion)) {
+    throw invalidInput(
+      "promptVersion must use letters, numbers, dots, underscores or hyphens",
+    );
+  }
+
+  const responseId = cleanString(value.responseId, 200);
+  if (!/^resp_[A-Za-z0-9_-]+$/.test(responseId)) {
+    throw invalidInput("responseId must be a valid OpenAI response id");
+  }
+
+  return {
+    operation,
+    promptVersion,
+    responseId,
+  };
+}
+
+function normalizeCompletedStructuredTextResponse(
+  parsed,
+  request,
+  response,
+) {
   const diagnostics = collectProviderDiagnostics(response);
 
   if (response?.status === "incomplete") {
@@ -363,12 +503,40 @@ export async function executePrStudioStructuredText(input, options = {}) {
   return {
     operation: parsed.operation,
     promptVersion: parsed.promptVersion,
+    status: "completed",
     output,
     model: response.model || request.model,
     responseId: response.id || null,
     usage: normalizeUsage(response.usage),
   };
 }
+
+function backgroundTerminalError(response) {
+  const diagnostics = collectProviderDiagnostics(response);
+  if (response?.status === "incomplete") {
+    const reason = diagnostics.incompleteReason || "unknown_reason";
+    return invalidResponse(
+      `OpenAI background response was incomplete: ${reason}`,
+      {
+        code: "PR_STUDIO_TRANSPORT_INCOMPLETE_RESPONSE",
+        ...diagnostics,
+      },
+    );
+  }
+
+  return invalidResponse(
+    `OpenAI background response status was ${
+      typeof response?.status === "string"
+        ? response.status
+        : "unknown"
+    }`,
+    {
+      code: "PR_STUDIO_TRANSPORT_BACKGROUND_FAILED",
+      ...diagnostics,
+    },
+  );
+}
+
 
 function collectProviderDiagnostics(response) {
   return {

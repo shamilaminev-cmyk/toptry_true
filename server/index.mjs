@@ -64,7 +64,11 @@ import {
   parsePrStudioBrandMemoryInput,
   parsePrStudioBrandMemoryConsolidationInput,
 } from "./prStudioBrandMemoryOpenAi.mjs";
-import { executePrStudioStructuredText } from "./prStudioStructuredTextOpenAi.mjs";
+import {
+  executePrStudioStructuredText,
+  retrievePrStudioStructuredTextBackground,
+  startPrStudioStructuredTextBackground,
+} from "./prStudioStructuredTextOpenAi.mjs";
 import { executePrStudioWebResearch } from "./prStudioWebResearchOpenAi.mjs";
 import { executePrStudioGeoVisibilityMeasurement } from "./prStudioGeoVisibilityOpenAi.mjs";
 import { executePrStudioGeoVisibilityGoogleMeasurement } from "./prStudioGeoVisibilityGemini.mjs";
@@ -5611,6 +5615,149 @@ app.get("/internal/ai/pr-studio/health", (req, res) => {
       ),
     },
   });
+});
+
+app.post("/internal/ai/pr-studio/text/structured/background/start", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+  if (
+    String(process.env.AI_GATEWAY_ROLE || "")
+      .trim()
+      .toLowerCase() !== "gateway"
+  ) {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+
+  try {
+    const result = await startPrStudioStructuredTextBackground(req.body);
+    console.info("PR Studio structured text background started", {
+      operation: result.operation,
+      promptVersion: result.promptVersion,
+      status: result.status,
+      model: result.model,
+      responseId: result.responseId,
+      usage: result.usage,
+    });
+    return res.status(result.status === "completed" ? 200 : 202).json({
+      ok: true,
+      operation: result.operation,
+      promptVersion: result.promptVersion,
+      status: result.status,
+      output: result.output,
+      provider: {
+        model: result.model,
+        responseId: result.responseId,
+        usage: result.usage,
+      },
+    });
+  } catch (error) {
+    const code = error?.code || "PR_STUDIO_TRANSPORT_UPSTREAM_FAILED";
+    const status =
+      code === "PR_STUDIO_TRANSPORT_INVALID_INPUT"
+        ? 400
+        : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED"
+          ? 503
+          : 502;
+    console.error("PR Studio structured text background start failed", {
+      operation:
+        typeof req.body?.operation === "string"
+          ? req.body.operation.trim().slice(0, 100)
+          : null,
+      code,
+      message:
+        error instanceof Error
+          ? error.message.slice(0, 700)
+          : String(error).slice(0, 700),
+      providerStatus: error?.providerStatus ?? null,
+      responseId: error?.responseId ?? null,
+      model: error?.model ?? null,
+      usage: error?.usage ?? null,
+    });
+    return res.status(status).json({
+      ok: false,
+      error:
+        status === 400
+          ? error.message
+          : "Background structured text generation is temporarily unavailable",
+      code,
+    });
+  }
+});
+
+app.post("/internal/ai/pr-studio/text/structured/background/retrieve", async (req, res) => {
+  if (!assertPrStudioGatewayRequest(req, res)) return;
+  if (
+    String(process.env.AI_GATEWAY_ROLE || "")
+      .trim()
+      .toLowerCase() !== "gateway"
+  ) {
+    return res.status(409).json({
+      ok: false,
+      error: "This route is available only on the AI gateway",
+      code: "PR_STUDIO_GATEWAY_ROLE_REQUIRED",
+    });
+  }
+
+  try {
+    const result = await retrievePrStudioStructuredTextBackground(req.body);
+    console.info("PR Studio structured text background retrieved", {
+      operation: result.operation,
+      promptVersion: result.promptVersion,
+      status: result.status,
+      model: result.model,
+      responseId: result.responseId,
+      usage: result.usage,
+    });
+    return res.status(200).json({
+      ok: true,
+      operation: result.operation,
+      promptVersion: result.promptVersion,
+      status: result.status,
+      output: result.output,
+      provider: {
+        model: result.model,
+        responseId: result.responseId,
+        usage: result.usage,
+      },
+    });
+  } catch (error) {
+    const code = error?.code || "PR_STUDIO_TRANSPORT_UPSTREAM_FAILED";
+    const status =
+      code === "PR_STUDIO_TRANSPORT_INVALID_INPUT"
+        ? 400
+        : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED"
+          ? 503
+          : 502;
+    console.error("PR Studio structured text background retrieve failed", {
+      operation:
+        typeof req.body?.operation === "string"
+          ? req.body.operation.trim().slice(0, 100)
+          : null,
+      responseId:
+        typeof req.body?.responseId === "string"
+          ? req.body.responseId.trim().slice(0, 200)
+          : null,
+      code,
+      message:
+        error instanceof Error
+          ? error.message.slice(0, 700)
+          : String(error).slice(0, 700),
+      providerStatus: error?.providerStatus ?? null,
+      model: error?.model ?? null,
+      usage: error?.usage ?? null,
+    });
+    return res.status(status).json({
+      ok: false,
+      error:
+        status === 400
+          ? error.message
+          : "Background structured text retrieval is temporarily unavailable",
+      code,
+    });
+  }
 });
 
 app.post("/internal/ai/pr-studio/text/structured", async (req, res) => {
