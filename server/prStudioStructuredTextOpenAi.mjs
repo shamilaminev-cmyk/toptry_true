@@ -81,6 +81,13 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
     },
   ],
   [
+    "content.editorial-plan-critic",
+    {
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
+    },
+  ],
+  [
     "seo-geo.interpret",
     {
       environmentName: "PR_STUDIO_SEO_GEO_MODEL",
@@ -130,6 +137,7 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["planning.execution-orchestration", "max"],
   ["planning.effectiveness-review", "max"],
   ["content.editorial-plan-draft", "max"],
+  ["content.editorial-plan-critic", "max"],
   ["seo-geo.interpret", "medium"],
   ["seo-geo.search-query-suggestions", "medium"],
   ["seo-geo.question-suggestions", "medium"],
@@ -146,6 +154,7 @@ const MAX_OUTPUT_TOKENS_BY_OPERATION = new Map([
   ["planning.effectiveness-review", 32_000],
   ["planning.execution-orchestration", 32_000],
   ["content.editorial-plan-draft", 64_000],
+  ["content.editorial-plan-critic", 32_000],
 ]);
 const MAX_INSTRUCTIONS_LENGTH = 30_000;
 const MAX_INPUT_JSON_LENGTH = 300_000;
@@ -175,6 +184,7 @@ const ALLOWED_OPERATIONS = new Set([
   "planning.execution-orchestration",
   "planning.effectiveness-review",
   "content.editorial-plan-draft",
+  "content.editorial-plan-critic",
   "seo-geo.interpret",
   "seo-geo.search-query-suggestions",
   "seo-geo.recommendation-classify",
@@ -320,9 +330,14 @@ export async function startPrStudioStructuredTextBackground(
   options = {},
 ) {
   const parsed = parsePrStudioStructuredTextInput(input);
-  if (parsed.operation !== "content.editorial-plan-draft") {
+  if (
+    ![
+      "content.editorial-plan-draft",
+      "content.editorial-plan-critic",
+    ].includes(parsed.operation)
+  ) {
     throw invalidInput(
-      "Background structured text is allowed only for content.editorial-plan-draft",
+      "Background structured text is allowed only for Editorial Planner operations",
     );
   }
 
@@ -422,9 +437,14 @@ function parseBackgroundRetrieveInput(value) {
   }
 
   const operation = cleanString(value.operation, 100);
-  if (operation !== "content.editorial-plan-draft") {
+  if (
+    ![
+      "content.editorial-plan-draft",
+      "content.editorial-plan-critic",
+    ].includes(operation)
+  ) {
     throw invalidInput(
-      "Background retrieve is allowed only for content.editorial-plan-draft",
+      "Background retrieve is allowed only for Editorial Planner operations",
     );
   }
 

@@ -158,6 +158,6 @@ test("does not expose background mode to ordinary structured-text operations", a
           },
         },
       ),
-    /Background structured text is allowed only for content\.editorial-plan-draft/,
+    /Background structured text is allowed only for Editorial Planner operations/,
   );
 });
