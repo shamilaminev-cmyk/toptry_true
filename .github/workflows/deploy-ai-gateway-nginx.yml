@@ -1,0 +1,46 @@
+name: Deploy AI gateway nginx config
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-ai-gateway-nginx:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload AI gateway nginx config
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.TOPTRY_PROD_HOST }}
+          username: ${{ secrets.TOPTRY_PROD_USER }}
+          key: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          port: ${{ secrets.TOPTRY_PROD_PORT }}
+          source: "infra/nginx/toptry-ai-gateway.conf"
+          target: "/tmp/toptry-ai-gateway-nginx-deploy"
+          strip_components: 2
+          rm: true
+
+      - name: Validate and reload nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.TOPTRY_PROD_HOST }}
+          username: ${{ secrets.TOPTRY_PROD_USER }}
+          key: ${{ secrets.TOPTRY_PROD_SSH_KEY }}
+          port: ${{ secrets.TOPTRY_PROD_PORT }}
+          script: |
+            set -euo pipefail
+
+            test -f /tmp/toptry-ai-gateway-nginx-deploy/toptry-ai-gateway.conf
+
+            TS="$(date -u +%Y%m%d-%H%M%S)"
+            sudo cp /etc/nginx/sites-available/toptry-ai-gateway "/etc/nginx/sites-available/toptry-ai-gateway.bak.${TS}"
+
+            sudo cp /tmp/toptry-ai-gateway-nginx-deploy/toptry-ai-gateway.conf /etc/nginx/sites-available/toptry-ai-gateway
+
+            sudo nginx -t
+            sudo systemctl reload nginx
+
+            echo "AI gateway nginx config deployed and reloaded"
