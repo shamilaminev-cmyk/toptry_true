@@ -27,29 +27,29 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
   [
     "strategy.smart-review",
     {
-      environmentName: "PR_STUDIO_STRATEGY_SMART_MODEL",
-      defaultModel: "gpt-5.6-sol",
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
     },
   ],
   [
     "strategy.first-goal-options",
     {
-      environmentName: "PR_STUDIO_STRATEGY_GOAL_MODEL",
-      defaultModel: "gpt-5.6-sol",
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
     },
   ],
   [
     "strategy.assessment-follow-up",
     {
-      environmentName: "PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL",
-      defaultModel: "gpt-5.6-sol",
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
     },
   ],
   [
     "planning.plan-draft",
     {
-      environmentName: "PR_STUDIO_PLANNING_MODEL",
-      defaultModel: "gpt-5.6-sol",
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
     },
   ],
   [
@@ -60,17 +60,24 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
     },
   ],
   [
+    "planning.execution-orchestration",
+    {
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
+    },
+  ],
+  [
     "planning.effectiveness-review",
     {
-      environmentName: "PR_STUDIO_PLANNING_MODEL",
-      defaultModel: "gpt-5.6-sol",
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
     },
   ],
   [
     "content.editorial-plan-draft",
     {
-      environmentName: "PR_STUDIO_PLANNING_MODEL",
-      defaultModel: "gpt-5.6-sol",
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
     },
   ],
   [
@@ -115,13 +122,14 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["content.research", "medium"],
   ["content.copywrite", "high"],
   ["content.edit", "high"],
-  ["strategy.smart-review", "medium"],
-  ["strategy.first-goal-options", "medium"],
-  ["strategy.assessment-follow-up", "medium"],
-  ["planning.plan-draft", "medium"],
+  ["strategy.smart-review", "max"],
+  ["strategy.first-goal-options", "max"],
+  ["strategy.assessment-follow-up", "max"],
+  ["planning.plan-draft", "max"],
   ["planning.execution-suggestions", "medium"],
-  ["planning.effectiveness-review", "medium"],
-  ["content.editorial-plan-draft", "medium"],
+  ["planning.execution-orchestration", "max"],
+  ["planning.effectiveness-review", "max"],
+  ["content.editorial-plan-draft", "max"],
   ["seo-geo.interpret", "medium"],
   ["seo-geo.search-query-suggestions", "medium"],
   ["seo-geo.question-suggestions", "medium"],
@@ -130,6 +138,15 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
 const DEFAULT_MAX_OUTPUT_TOKENS = 6_000;
 const MIN_MAX_OUTPUT_TOKENS = 256;
 const MAX_MAX_OUTPUT_TOKENS = 12_000;
+const MAX_OUTPUT_TOKENS_BY_OPERATION = new Map([
+  ["strategy.smart-review", 24_000],
+  ["strategy.first-goal-options", 16_000],
+  ["strategy.assessment-follow-up", 24_000],
+  ["planning.plan-draft", 32_000],
+  ["planning.effectiveness-review", 32_000],
+  ["planning.execution-orchestration", 32_000],
+  ["content.editorial-plan-draft", 64_000],
+]);
 const MAX_INSTRUCTIONS_LENGTH = 30_000;
 const MAX_INPUT_JSON_LENGTH = 300_000;
 const MAX_SCHEMA_JSON_LENGTH = 60_000;
@@ -137,7 +154,9 @@ const MAX_SCHEMA_DEPTH = 12;
 const MAX_SCHEMA_PROPERTIES = 300;
 const MAX_SCHEMA_ENUM_VALUES = 1_500;
 const OPENAI_TIMEOUT_MS = 300_000;
+const DECISION_GRADE_TIMEOUT_MS = 600_000;
 const OPENAI_MAX_RETRIES = 1;
+const DECISION_GRADE_MAX_RETRIES = 0;
 
 const ALLOWED_OPERATIONS = new Set([
   "brand-memory.website-batch-analysis",
@@ -153,6 +172,7 @@ const ALLOWED_OPERATIONS = new Set([
   "strategy.assessment-follow-up",
   "planning.plan-draft",
   "planning.execution-suggestions",
+  "planning.execution-orchestration",
   "planning.effectiveness-review",
   "content.editorial-plan-draft",
   "seo-geo.interpret",
@@ -220,7 +240,7 @@ export function parsePrStudioStructuredTextInput(value) {
     value.maxOutputTokens,
     DEFAULT_MAX_OUTPUT_TOKENS,
     MIN_MAX_OUTPUT_TOKENS,
-    MAX_MAX_OUTPUT_TOKENS,
+    MAX_OUTPUT_TOKENS_BY_OPERATION.get(operation) || MAX_MAX_OUTPUT_TOKENS,
     "maxOutputTokens",
   );
 
@@ -270,10 +290,26 @@ function reasoningEffortForOperation(operation) {
   return REASONING_EFFORT_BY_OPERATION.get(operation) || DEFAULT_REASONING_EFFORT;
 }
 
+export function timeoutForOperation(operation) {
+  return CONTENT_MODEL_BY_OPERATION.get(operation)?.environmentName === "PR_STUDIO_DECISION_MODEL"
+    ? DECISION_GRADE_TIMEOUT_MS
+    : OPENAI_TIMEOUT_MS;
+}
+
+export function maxRetriesForOperation(operation) {
+  return CONTENT_MODEL_BY_OPERATION.get(operation)?.environmentName === "PR_STUDIO_DECISION_MODEL"
+    ? DECISION_GRADE_MAX_RETRIES
+    : OPENAI_MAX_RETRIES;
+}
+
 export async function executePrStudioStructuredText(input, options = {}) {
   const parsed = parsePrStudioStructuredTextInput(input);
   const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
-  const client = options.client || createOpenAiClient(apiKey);
+  const client = options.client || createOpenAiClient(
+    apiKey,
+    timeoutForOperation(parsed.operation),
+    maxRetriesForOperation(parsed.operation),
+  );
   const request = buildPrStudioStructuredTextRequest(parsed);
   const response = await client.responses.create(request);
   const diagnostics = collectProviderDiagnostics(response);
@@ -382,7 +418,11 @@ function extractRefusal(response) {
   return false;
 }
 
-function createOpenAiClient(apiKey) {
+function createOpenAiClient(
+  apiKey,
+  timeoutMs = OPENAI_TIMEOUT_MS,
+  maxRetries = OPENAI_MAX_RETRIES,
+) {
   if (!apiKey) {
     const error = new Error("OpenAI is not configured");
     error.code = "PR_STUDIO_OPENAI_NOT_CONFIGURED";
@@ -390,8 +430,8 @@ function createOpenAiClient(apiKey) {
   }
   return new OpenAI({
     apiKey,
-    timeout: OPENAI_TIMEOUT_MS,
-    maxRetries: OPENAI_MAX_RETRIES,
+    timeout: timeoutMs,
+    maxRetries,
   });
 }
 

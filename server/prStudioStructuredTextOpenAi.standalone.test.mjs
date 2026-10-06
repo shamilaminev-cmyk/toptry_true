@@ -53,6 +53,111 @@ test("accepts a bounded PR Studio structured text task", () => {
   assert.match(parsed.serializedInput, /founded in 2020/);
 });
 
+test("enforces operation-specific output ceilings for decision-grade work", () => {
+  const ceilings = [
+    ["strategy.smart-review", 24_000],
+    ["strategy.first-goal-options", 16_000],
+    ["strategy.assessment-follow-up", 24_000],
+    ["planning.plan-draft", 32_000],
+    ["planning.effectiveness-review", 32_000],
+    ["planning.execution-orchestration", 32_000],
+    ["content.editorial-plan-draft", 64_000],
+  ];
+
+  for (const [operation, ceiling] of ceilings) {
+    const parsed = parsePrStudioStructuredTextInput(
+      validInput({ operation, maxOutputTokens: ceiling }),
+    );
+    assert.equal(parsed.maxOutputTokens, ceiling);
+    assert.throws(
+      () =>
+        parsePrStudioStructuredTextInput(
+          validInput({
+            operation,
+            maxOutputTokens: ceiling + 1,
+          }),
+        ),
+      /maxOutputTokens must be an integer between 256 and/,
+    );
+  }
+
+  assert.throws(
+    () =>
+      parsePrStudioStructuredTextInput(
+        validInput({
+          operation: "content.edit",
+          maxOutputTokens: 12_001,
+        }),
+      ),
+    /maxOutputTokens must be an integer between 256 and 12000/,
+  );
+});
+
+test("routes whole-plan execution orchestration through the decision-grade model", () => {
+  const previous = process.env.PR_STUDIO_DECISION_MODEL;
+  delete process.env.PR_STUDIO_DECISION_MODEL;
+
+  try {
+    const parsed = parsePrStudioStructuredTextInput(
+      validInput({
+        operation: "planning.execution-orchestration",
+        maxOutputTokens: 32_000,
+      }),
+    );
+    const request = buildPrStudioStructuredTextRequest(parsed);
+
+    assert.equal(request.model, "gpt-6-astra");
+    assert.equal(request.reasoning.effort, "max");
+    assert.equal(request.max_output_tokens, 32_000);
+
+    process.env.PR_STUDIO_DECISION_MODEL = "custom-decision-model";
+    const overridden = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(
+        validInput({
+          operation: "planning.execution-orchestration",
+          maxOutputTokens: 32_000,
+        }),
+      ),
+    );
+    assert.equal(overridden.model, "custom-decision-model");
+    assert.equal(overridden.reasoning.effort, "max");
+  } finally {
+    if (previous === undefined) delete process.env.PR_STUDIO_DECISION_MODEL;
+    else process.env.PR_STUDIO_DECISION_MODEL = previous;
+  }
+});
+
+
+test("uses extended timeout without automatic retry for decision-grade operations", async () => {
+  const {
+    timeoutForOperation,
+    maxRetriesForOperation,
+  } = await import("./prStudioStructuredTextOpenAi.mjs");
+
+  for (const operation of [
+    "strategy.smart-review",
+    "strategy.first-goal-options",
+    "strategy.assessment-follow-up",
+    "planning.plan-draft",
+    "planning.effectiveness-review",
+    "planning.execution-orchestration",
+    "content.editorial-plan-draft",
+  ]) {
+    assert.equal(timeoutForOperation(operation), 600_000);
+    assert.equal(maxRetriesForOperation(operation), 0);
+  }
+
+  for (const operation of [
+    "content.edit",
+    "planning.execution-suggestions",
+    "seo-geo.interpret",
+    "reviews.analyze-and-draft",
+  ]) {
+    assert.equal(timeoutForOperation(operation), 300_000);
+    assert.equal(maxRetriesForOperation(operation), 1);
+  }
+});
+
 test("rejects unregistered operations", () => {
   assert.throws(
     () => parsePrStudioStructuredTextInput(validInput({ operation: "arbitrary.raw-proxy" })),
@@ -147,8 +252,8 @@ test("routes Content Studio roles to gateway-controlled GPT-5.6 tiers", () => {
 });
 
 test("accepts first-goal options and keeps its model under gateway control", () => {
-  const previous = process.env.PR_STUDIO_STRATEGY_GOAL_MODEL;
-  delete process.env.PR_STUDIO_STRATEGY_GOAL_MODEL;
+  const previous = process.env.PR_STUDIO_DECISION_MODEL;
+  delete process.env.PR_STUDIO_DECISION_MODEL;
 
   try {
     const parsed = parsePrStudioStructuredTextInput(
@@ -157,30 +262,30 @@ test("accepts first-goal options and keeps its model under gateway control", () 
     const request = buildPrStudioStructuredTextRequest(parsed);
 
     assert.equal(parsed.operation, "strategy.first-goal-options");
-    assert.equal(request.model, "gpt-5.6-sol");
-    assert.equal(request.reasoning.effort, "medium");
+    assert.equal(request.model, "gpt-6-astra");
+    assert.equal(request.reasoning.effort, "max");
 
-    process.env.PR_STUDIO_STRATEGY_GOAL_MODEL = "custom-goal-model";
+    process.env.PR_STUDIO_DECISION_MODEL = "custom-decision-model";
     const overridden = buildPrStudioStructuredTextRequest(
       parsePrStudioStructuredTextInput(
         validInput({ operation: "strategy.first-goal-options" }),
       ),
     );
 
-    assert.equal(overridden.model, "custom-goal-model");
-    assert.equal(overridden.reasoning.effort, "medium");
+    assert.equal(overridden.model, "custom-decision-model");
+    assert.equal(overridden.reasoning.effort, "max");
   } finally {
     if (previous === undefined) {
-      delete process.env.PR_STUDIO_STRATEGY_GOAL_MODEL;
+      delete process.env.PR_STUDIO_DECISION_MODEL;
     } else {
-      process.env.PR_STUDIO_STRATEGY_GOAL_MODEL = previous;
+      process.env.PR_STUDIO_DECISION_MODEL = previous;
     }
   }
 });
 
 test("accepts SMART goal review and keeps its model under gateway control", () => {
-  const previous = process.env.PR_STUDIO_STRATEGY_SMART_MODEL;
-  delete process.env.PR_STUDIO_STRATEGY_SMART_MODEL;
+  const previous = process.env.PR_STUDIO_DECISION_MODEL;
+  delete process.env.PR_STUDIO_DECISION_MODEL;
 
   try {
     const parsed = parsePrStudioStructuredTextInput(
@@ -189,11 +294,11 @@ test("accepts SMART goal review and keeps its model under gateway control", () =
     const request = buildPrStudioStructuredTextRequest(parsed);
 
     assert.equal(parsed.operation, "strategy.smart-review");
-    assert.equal(request.model, "gpt-5.6-sol");
-    assert.equal(request.reasoning.effort, "medium");
+    assert.equal(request.model, "gpt-6-astra");
+    assert.equal(request.reasoning.effort, "max");
 
-    process.env.PR_STUDIO_STRATEGY_SMART_MODEL =
-      "custom-strategy-model";
+    process.env.PR_STUDIO_DECISION_MODEL =
+      "custom-decision-model";
 
     const overridden =
       buildPrStudioStructuredTextRequest(
@@ -204,17 +309,17 @@ test("accepts SMART goal review and keeps its model under gateway control", () =
 
     assert.equal(
       overridden.model,
-      "custom-strategy-model",
+      "custom-decision-model",
     );
     assert.equal(
       overridden.reasoning.effort,
-      "medium",
+      "max",
     );
   } finally {
     if (previous === undefined) {
-      delete process.env.PR_STUDIO_STRATEGY_SMART_MODEL;
+      delete process.env.PR_STUDIO_DECISION_MODEL;
     } else {
-      process.env.PR_STUDIO_STRATEGY_SMART_MODEL =
+      process.env.PR_STUDIO_DECISION_MODEL =
         previous;
     }
   }
@@ -355,9 +460,9 @@ test("accepts SEO GEO search-query suggestions and keeps its model under gateway
 });
 
 
-test("accepts Planning plan drafts and keeps the stronger Planning model under gateway control", () => {
-  const previous = process.env.PR_STUDIO_PLANNING_MODEL;
-  delete process.env.PR_STUDIO_PLANNING_MODEL;
+test("routes Planning plan drafts through the decision-grade model", () => {
+  const previous = process.env.PR_STUDIO_DECISION_MODEL;
+  delete process.env.PR_STUDIO_DECISION_MODEL;
 
   try {
     const parsed = parsePrStudioStructuredTextInput(
@@ -366,11 +471,11 @@ test("accepts Planning plan drafts and keeps the stronger Planning model under g
     const request = buildPrStudioStructuredTextRequest(parsed);
 
     assert.equal(parsed.operation, "planning.plan-draft");
-    assert.equal(request.model, "gpt-5.6-sol");
-    assert.equal(request.reasoning.effort, "medium");
+    assert.equal(request.model, "gpt-6-astra");
+    assert.equal(request.reasoning.effort, "max");
 
-    process.env.PR_STUDIO_PLANNING_MODEL =
-      "custom-planning-model";
+    process.env.PR_STUDIO_DECISION_MODEL =
+      "custom-decision-model";
 
     const overridden = buildPrStudioStructuredTextRequest(
       parsePrStudioStructuredTextInput(
@@ -380,17 +485,17 @@ test("accepts Planning plan drafts and keeps the stronger Planning model under g
 
     assert.equal(
       overridden.model,
-      "custom-planning-model",
+      "custom-decision-model",
     );
     assert.equal(
       overridden.reasoning.effort,
-      "medium",
+      "max",
     );
   } finally {
     if (previous === undefined) {
-      delete process.env.PR_STUDIO_PLANNING_MODEL;
+      delete process.env.PR_STUDIO_DECISION_MODEL;
     } else {
-      process.env.PR_STUDIO_PLANNING_MODEL =
+      process.env.PR_STUDIO_DECISION_MODEL =
         previous;
     }
   }
@@ -489,10 +594,10 @@ test("accepts GEO question suggestions and keeps the stronger SEO GEO model unde
   }
 });
 
-test("accepts Strategy Assessment follow-up and keeps the stronger Strategy model under gateway control", () => {
+test("routes Strategy Assessment follow-up through the decision-grade model", () => {
   const previous =
-    process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL;
-  delete process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL;
+    process.env.PR_STUDIO_DECISION_MODEL;
+  delete process.env.PR_STUDIO_DECISION_MODEL;
 
   try {
     const parsed = parsePrStudioStructuredTextInput(
@@ -507,14 +612,14 @@ test("accepts Strategy Assessment follow-up and keeps the stronger Strategy mode
       parsed.operation,
       "strategy.assessment-follow-up",
     );
-    assert.equal(request.model, "gpt-5.6-sol");
+    assert.equal(request.model, "gpt-6-astra");
     assert.equal(
       request.reasoning.effort,
-      "medium",
+      "max",
     );
 
-    process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL =
-      "custom-strategy-follow-up-model";
+    process.env.PR_STUDIO_DECISION_MODEL =
+      "custom-decision-model";
 
     const overridden =
       buildPrStudioStructuredTextRequest(
@@ -528,25 +633,25 @@ test("accepts Strategy Assessment follow-up and keeps the stronger Strategy mode
 
     assert.equal(
       overridden.model,
-      "custom-strategy-follow-up-model",
+      "custom-decision-model",
     );
     assert.equal(
       overridden.reasoning.effort,
-      "medium",
+      "max",
     );
   } finally {
     if (previous === undefined) {
-      delete process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL;
+      delete process.env.PR_STUDIO_DECISION_MODEL;
     } else {
-      process.env.PR_STUDIO_STRATEGY_FOLLOW_UP_MODEL =
+      process.env.PR_STUDIO_DECISION_MODEL =
         previous;
     }
   }
 });
 
-test("accepts Planning effectiveness review and keeps the stronger Planning model under gateway control", () => {
-  const previous = process.env.PR_STUDIO_PLANNING_MODEL;
-  delete process.env.PR_STUDIO_PLANNING_MODEL;
+test("routes Planning effectiveness review through the decision-grade model", () => {
+  const previous = process.env.PR_STUDIO_DECISION_MODEL;
+  delete process.env.PR_STUDIO_DECISION_MODEL;
 
   try {
     const parsed = parsePrStudioStructuredTextInput(
@@ -555,21 +660,21 @@ test("accepts Planning effectiveness review and keeps the stronger Planning mode
     const request = buildPrStudioStructuredTextRequest(parsed);
 
     assert.equal(parsed.operation, "planning.effectiveness-review");
-    assert.equal(request.model, "gpt-5.6-sol");
-    assert.equal(request.reasoning.effort, "medium");
+    assert.equal(request.model, "gpt-6-astra");
+    assert.equal(request.reasoning.effort, "max");
 
-    process.env.PR_STUDIO_PLANNING_MODEL = "custom-planning-effectiveness-model";
+    process.env.PR_STUDIO_DECISION_MODEL = "custom-decision-model";
     const overridden = buildPrStudioStructuredTextRequest(
       parsePrStudioStructuredTextInput(
         validInput({ operation: "planning.effectiveness-review" }),
       ),
     );
 
-    assert.equal(overridden.model, "custom-planning-effectiveness-model");
-    assert.equal(overridden.reasoning.effort, "medium");
+    assert.equal(overridden.model, "custom-decision-model");
+    assert.equal(overridden.reasoning.effort, "max");
   } finally {
-    if (previous === undefined) delete process.env.PR_STUDIO_PLANNING_MODEL;
-    else process.env.PR_STUDIO_PLANNING_MODEL = previous;
+    if (previous === undefined) delete process.env.PR_STUDIO_DECISION_MODEL;
+    else process.env.PR_STUDIO_DECISION_MODEL = previous;
   }
 });
 
@@ -809,9 +914,9 @@ test("accepts nullable primitive fields without allowing nullable objects", () =
 });
 
 
-test("supports Editorial Planner operation with planning model and medium reasoning", () => {
-  const previous = process.env.PR_STUDIO_PLANNING_MODEL;
-  delete process.env.PR_STUDIO_PLANNING_MODEL;
+test("routes Editorial Planner through the decision-grade model with max reasoning", () => {
+  const previous = process.env.PR_STUDIO_DECISION_MODEL;
+  delete process.env.PR_STUDIO_DECISION_MODEL;
 
   try {
     const parsed = parsePrStudioStructuredTextInput(
@@ -820,23 +925,23 @@ test("supports Editorial Planner operation with planning model and medium reason
     const request = buildPrStudioStructuredTextRequest(parsed);
 
     assert.equal(parsed.operation, "content.editorial-plan-draft");
-    assert.equal(request.model, "gpt-5.6-sol");
-    assert.equal(request.reasoning.effort, "medium");
+    assert.equal(request.model, "gpt-6-astra");
+    assert.equal(request.reasoning.effort, "max");
 
-    process.env.PR_STUDIO_PLANNING_MODEL = "custom-editorial-planning-model";
+    process.env.PR_STUDIO_DECISION_MODEL = "custom-decision-model";
     const overridden = buildPrStudioStructuredTextRequest(
       parsePrStudioStructuredTextInput(
         validInput({ operation: "content.editorial-plan-draft" }),
       ),
     );
 
-    assert.equal(overridden.model, "custom-editorial-planning-model");
-    assert.equal(overridden.reasoning.effort, "medium");
+    assert.equal(overridden.model, "custom-decision-model");
+    assert.equal(overridden.reasoning.effort, "max");
   } finally {
     if (previous === undefined) {
-      delete process.env.PR_STUDIO_PLANNING_MODEL;
+      delete process.env.PR_STUDIO_DECISION_MODEL;
     } else {
-      process.env.PR_STUDIO_PLANNING_MODEL = previous;
+      process.env.PR_STUDIO_DECISION_MODEL = previous;
     }
   }
 });
