@@ -40,11 +40,11 @@ function directionTask(operation) {
         required: ["value"],
       },
     },
-    maxOutputTokens: isCritic ? 10_000 : 18_000,
+    maxOutputTokens: isCritic ? 20_000 : 32_000,
   };
 }
 
-test("routes direction discovery and Creative Critic through decision-grade Astra", () => {
+test("routes direction discovery and Creative Critic through bounded Astra reasoning", () => {
   const previous = process.env.PR_STUDIO_DECISION_MODEL;
   delete process.env.PR_STUDIO_DECISION_MODEL;
 
@@ -58,12 +58,12 @@ test("routes direction discovery and Creative Critic through decision-grade Astr
 
       assert.equal(parsed.operation, operation);
       assert.equal(request.model, "gpt-6-astra");
-      assert.equal(request.reasoning.effort, "max");
+      assert.equal(request.reasoning.effort, "high");
       assert.equal(
         request.max_output_tokens,
         operation === "content.editorial-directions-draft"
-          ? 18_000
-          : 10_000,
+          ? 32_000
+          : 20_000,
       );
       assert.equal(timeoutForOperation(operation), 600_000);
       assert.equal(maxRetriesForOperation(operation), 0);
@@ -76,8 +76,8 @@ test("routes direction discovery and Creative Critic through decision-grade Astr
 
 test("enforces operation-specific output ceilings for direction work", () => {
   for (const [operation, ceiling] of [
-    ["content.editorial-directions-draft", 18_000],
-    ["content.editorial-directions-critic", 10_000],
+    ["content.editorial-directions-draft", 32_000],
+    ["content.editorial-directions-critic", 20_000],
   ]) {
     assert.equal(
       parsePrStudioStructuredTextInput(

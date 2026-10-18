@@ -5725,12 +5725,16 @@ app.post("/internal/ai/pr-studio/text/structured/background/retrieve", async (re
     });
   } catch (error) {
     const code = error?.code || "PR_STUDIO_TRANSPORT_UPSTREAM_FAILED";
+    const terminalIncomplete =
+      code === "PR_STUDIO_TRANSPORT_INCOMPLETE_RESPONSE";
     const status =
       code === "PR_STUDIO_TRANSPORT_INVALID_INPUT"
         ? 400
         : code === "PR_STUDIO_OPENAI_NOT_CONFIGURED"
           ? 503
-          : 502;
+          : terminalIncomplete
+            ? 422
+            : 502;
     console.error("PR Studio structured text background retrieve failed", {
       operation:
         typeof req.body?.operation === "string"
@@ -5752,7 +5756,7 @@ app.post("/internal/ai/pr-studio/text/structured/background/retrieve", async (re
     return res.status(status).json({
       ok: false,
       error:
-        status === 400
+        status === 400 || terminalIncomplete
           ? error.message
           : "Background structured text retrieval is temporarily unavailable",
       code,

@@ -152,8 +152,8 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["planning.effectiveness-review", "max"],
   ["content.editorial-plan-draft", "max"],
   ["content.editorial-plan-critic", "max"],
-  ["content.editorial-directions-draft", "max"],
-  ["content.editorial-directions-critic", "max"],
+  ["content.editorial-directions-draft", "high"],
+  ["content.editorial-directions-critic", "high"],
   ["seo-geo.interpret", "medium"],
   ["seo-geo.search-query-suggestions", "medium"],
   ["seo-geo.question-suggestions", "medium"],
@@ -171,8 +171,8 @@ const MAX_OUTPUT_TOKENS_BY_OPERATION = new Map([
   ["planning.execution-orchestration", 32_000],
   ["content.editorial-plan-draft", 64_000],
   ["content.editorial-plan-critic", 32_000],
-  ["content.editorial-directions-draft", 18_000],
-  ["content.editorial-directions-critic", 10_000],
+  ["content.editorial-directions-draft", 32_000],
+  ["content.editorial-directions-critic", 20_000],
 ]);
 const MAX_INSTRUCTIONS_LENGTH = 30_000;
 const MAX_INPUT_JSON_LENGTH = 300_000;
