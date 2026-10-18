@@ -88,6 +88,20 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
     },
   ],
   [
+    "content.editorial-directions-draft",
+    {
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
+    },
+  ],
+  [
+    "content.editorial-directions-critic",
+    {
+      environmentName: "PR_STUDIO_DECISION_MODEL",
+      defaultModel: "gpt-6-astra",
+    },
+  ],
+  [
     "seo-geo.interpret",
     {
       environmentName: "PR_STUDIO_SEO_GEO_MODEL",
@@ -138,6 +152,8 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["planning.effectiveness-review", "max"],
   ["content.editorial-plan-draft", "max"],
   ["content.editorial-plan-critic", "max"],
+  ["content.editorial-directions-draft", "max"],
+  ["content.editorial-directions-critic", "max"],
   ["seo-geo.interpret", "medium"],
   ["seo-geo.search-query-suggestions", "medium"],
   ["seo-geo.question-suggestions", "medium"],
@@ -155,6 +171,8 @@ const MAX_OUTPUT_TOKENS_BY_OPERATION = new Map([
   ["planning.execution-orchestration", 32_000],
   ["content.editorial-plan-draft", 64_000],
   ["content.editorial-plan-critic", 32_000],
+  ["content.editorial-directions-draft", 18_000],
+  ["content.editorial-directions-critic", 10_000],
 ]);
 const MAX_INSTRUCTIONS_LENGTH = 30_000;
 const MAX_INPUT_JSON_LENGTH = 300_000;
@@ -185,6 +203,8 @@ const ALLOWED_OPERATIONS = new Set([
   "planning.effectiveness-review",
   "content.editorial-plan-draft",
   "content.editorial-plan-critic",
+  "content.editorial-directions-draft",
+  "content.editorial-directions-critic",
   "seo-geo.interpret",
   "seo-geo.search-query-suggestions",
   "seo-geo.recommendation-classify",
@@ -334,6 +354,8 @@ export async function startPrStudioStructuredTextBackground(
     ![
       "content.editorial-plan-draft",
       "content.editorial-plan-critic",
+      "content.editorial-directions-draft",
+      "content.editorial-directions-critic",
     ].includes(parsed.operation)
   ) {
     throw invalidInput(
@@ -441,6 +463,8 @@ function parseBackgroundRetrieveInput(value) {
     ![
       "content.editorial-plan-draft",
       "content.editorial-plan-critic",
+      "content.editorial-directions-draft",
+      "content.editorial-directions-critic",
     ].includes(operation)
   ) {
     throw invalidInput(
