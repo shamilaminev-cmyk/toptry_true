@@ -1117,3 +1117,84 @@ test("routes competitor identity eval batches to Luna and Sol with equal low rea
     }
   }
 });
+
+test("routes production competitor identity resolution to Luna with low reasoning", () => {
+  const environmentNames = [
+    "PR_STUDIO_COMPETITOR_IDENTITY_MODEL",
+    "PR_STUDIO_SEO_GEO_MODEL",
+  ];
+
+  const previous = Object.fromEntries(
+    environmentNames.map(
+      (name) => [name, process.env[name]],
+    ),
+  );
+
+  delete process.env.PR_STUDIO_COMPETITOR_IDENTITY_MODEL;
+
+  // Generic SEO/GEO model routing must not silently change the
+  // production identity resolver selected by its dedicated operation.
+  process.env.PR_STUDIO_SEO_GEO_MODEL =
+    "must-not-leak-into-production-identity";
+
+  try {
+    const request =
+      buildPrStudioStructuredTextRequest(
+        parsePrStudioStructuredTextInput(
+          validInput({
+            operation:
+              "seo-geo.competitor-identity-resolve",
+            maxOutputTokens: 4_000,
+          }),
+        ),
+      );
+
+    assert.equal(
+      request.model,
+      "gpt-5.6-luna",
+    );
+
+    assert.equal(
+      request.reasoning.effort,
+      "low",
+    );
+
+    assert.equal(
+      request.max_output_tokens,
+      4_000,
+    );
+
+    process.env.PR_STUDIO_COMPETITOR_IDENTITY_MODEL =
+      "custom-production-identity-model";
+
+    const overridden =
+      buildPrStudioStructuredTextRequest(
+        parsePrStudioStructuredTextInput(
+          validInput({
+            operation:
+              "seo-geo.competitor-identity-resolve",
+          }),
+        ),
+      );
+
+    assert.equal(
+      overridden.model,
+      "custom-production-identity-model",
+    );
+
+    assert.equal(
+      overridden.reasoning.effort,
+      "low",
+    );
+  } finally {
+    for (const name of environmentNames) {
+      const value = previous[name];
+
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+});

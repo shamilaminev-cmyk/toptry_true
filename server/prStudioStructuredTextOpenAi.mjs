@@ -123,6 +123,14 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
     },
   ],
   [
+    "seo-geo.competitor-identity-resolve",
+    {
+      environmentName:
+        "PR_STUDIO_COMPETITOR_IDENTITY_MODEL",
+      defaultModel: "gpt-5.6-luna",
+    },
+  ],
+  [
     "seo-geo.competitor-identity-eval-luna",
     {
       environmentName:
@@ -180,6 +188,7 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["seo-geo.interpret", "medium"],
   ["seo-geo.search-query-suggestions", "medium"],
   ["seo-geo.search-environment-classify", "medium"],
+  ["seo-geo.competitor-identity-resolve", "low"],
   ["seo-geo.competitor-identity-eval-luna", "low"],
   ["seo-geo.competitor-identity-eval-sol", "low"],
   ["seo-geo.question-suggestions", "medium"],
@@ -234,6 +243,7 @@ const ALLOWED_OPERATIONS = new Set([
   "seo-geo.interpret",
   "seo-geo.search-query-suggestions",
   "seo-geo.search-environment-classify",
+  "seo-geo.competitor-identity-resolve",
   "seo-geo.competitor-identity-eval-luna",
   "seo-geo.competitor-identity-eval-sol",
   "seo-geo.recommendation-classify",
