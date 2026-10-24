@@ -123,6 +123,22 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
     },
   ],
   [
+    "seo-geo.competitor-identity-eval-luna",
+    {
+      environmentName:
+        "PR_STUDIO_COMPETITOR_IDENTITY_EVAL_LUNA_MODEL",
+      defaultModel: "gpt-5.6-luna",
+    },
+  ],
+  [
+    "seo-geo.competitor-identity-eval-sol",
+    {
+      environmentName:
+        "PR_STUDIO_COMPETITOR_IDENTITY_EVAL_SOL_MODEL",
+      defaultModel: "gpt-5.6-sol",
+    },
+  ],
+  [
     "seo-geo.recommendation-classify",
     {
       environmentName: "PR_STUDIO_GEO_RECOMMENDATION_MODEL",
@@ -164,6 +180,8 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["seo-geo.interpret", "medium"],
   ["seo-geo.search-query-suggestions", "medium"],
   ["seo-geo.search-environment-classify", "medium"],
+  ["seo-geo.competitor-identity-eval-luna", "low"],
+  ["seo-geo.competitor-identity-eval-sol", "low"],
   ["seo-geo.question-suggestions", "medium"],
   ["reviews.analyze-and-draft", "medium"],
 ]);
@@ -216,6 +234,8 @@ const ALLOWED_OPERATIONS = new Set([
   "seo-geo.interpret",
   "seo-geo.search-query-suggestions",
   "seo-geo.search-environment-classify",
+  "seo-geo.competitor-identity-eval-luna",
+  "seo-geo.competitor-identity-eval-sol",
   "seo-geo.recommendation-classify",
   "seo-geo.question-suggestions",
   "reviews.analyze-and-draft",

@@ -988,3 +988,132 @@ test("accepts SEO GEO search-environment classification and keeps its model unde
     }
   }
 });
+
+test("routes competitor identity eval batches to Luna and Sol with equal low reasoning", () => {
+  const environmentNames = [
+    "PR_STUDIO_COMPETITOR_IDENTITY_EVAL_LUNA_MODEL",
+    "PR_STUDIO_COMPETITOR_IDENTITY_EVAL_SOL_MODEL",
+    "PR_STUDIO_SEO_GEO_MODEL",
+  ];
+
+  const previous = Object.fromEntries(
+    environmentNames.map(
+      (name) => [name, process.env[name]],
+    ),
+  );
+
+  delete process.env.PR_STUDIO_COMPETITOR_IDENTITY_EVAL_LUNA_MODEL;
+  delete process.env.PR_STUDIO_COMPETITOR_IDENTITY_EVAL_SOL_MODEL;
+
+  // Existing SEO/GEO routing must not leak into this controlled A/B.
+  process.env.PR_STUDIO_SEO_GEO_MODEL =
+    "must-not-leak-into-identity-eval";
+
+  try {
+    const luna = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(
+        validInput({
+          operation:
+            "seo-geo.competitor-identity-eval-luna",
+          maxOutputTokens: 4_000,
+        }),
+      ),
+    );
+
+    const sol = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(
+        validInput({
+          operation:
+            "seo-geo.competitor-identity-eval-sol",
+          maxOutputTokens: 4_000,
+        }),
+      ),
+    );
+
+    assert.equal(
+      luna.model,
+      "gpt-5.6-luna",
+    );
+
+    assert.equal(
+      sol.model,
+      "gpt-5.6-sol",
+    );
+
+    assert.equal(
+      luna.reasoning.effort,
+      "low",
+    );
+
+    assert.equal(
+      sol.reasoning.effort,
+      "low",
+    );
+
+    assert.equal(
+      luna.max_output_tokens,
+      sol.max_output_tokens,
+    );
+
+    assert.equal(
+      luna.max_output_tokens,
+      4_000,
+    );
+
+    process.env.PR_STUDIO_COMPETITOR_IDENTITY_EVAL_LUNA_MODEL =
+      "custom-identity-luna";
+
+    process.env.PR_STUDIO_COMPETITOR_IDENTITY_EVAL_SOL_MODEL =
+      "custom-identity-sol";
+
+    const overriddenLuna =
+      buildPrStudioStructuredTextRequest(
+        parsePrStudioStructuredTextInput(
+          validInput({
+            operation:
+              "seo-geo.competitor-identity-eval-luna",
+          }),
+        ),
+      );
+
+    const overriddenSol =
+      buildPrStudioStructuredTextRequest(
+        parsePrStudioStructuredTextInput(
+          validInput({
+            operation:
+              "seo-geo.competitor-identity-eval-sol",
+          }),
+        ),
+      );
+
+    assert.equal(
+      overriddenLuna.model,
+      "custom-identity-luna",
+    );
+
+    assert.equal(
+      overriddenSol.model,
+      "custom-identity-sol",
+    );
+
+    assert.equal(
+      overriddenLuna.reasoning.effort,
+      "low",
+    );
+
+    assert.equal(
+      overriddenSol.reasoning.effort,
+      "low",
+    );
+  } finally {
+    for (const name of environmentNames) {
+      const value = previous[name];
+
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+});
