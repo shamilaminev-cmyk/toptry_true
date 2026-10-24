@@ -945,3 +945,46 @@ test("routes Editorial Planner through the decision-grade model with max reasoni
     }
   }
 });
+
+test("accepts SEO GEO search-environment classification and keeps its model under gateway control", () => {
+  const previous = process.env.PR_STUDIO_SEO_GEO_MODEL;
+  delete process.env.PR_STUDIO_SEO_GEO_MODEL;
+
+  try {
+    const parsed = parsePrStudioStructuredTextInput(
+      validInput({
+        operation: "seo-geo.search-environment-classify",
+        maxOutputTokens: 5_300,
+      }),
+    );
+    const request = buildPrStudioStructuredTextRequest(parsed);
+
+    assert.equal(parsed.operation, "seo-geo.search-environment-classify");
+    assert.equal(parsed.maxOutputTokens, 5_300);
+    assert.equal(request.model, "gpt-5.6-sol");
+    assert.equal(request.reasoning.effort, "medium");
+    process.env.PR_STUDIO_SEO_GEO_MODEL =
+      "custom-search-environment-model";
+
+    const overridden = buildPrStudioStructuredTextRequest(
+      parsePrStudioStructuredTextInput(
+        validInput({
+          operation: "seo-geo.search-environment-classify",
+          maxOutputTokens: 5_300,
+        }),
+      ),
+    );
+
+    assert.equal(
+      overridden.model,
+      "custom-search-environment-model",
+    );
+    assert.equal(overridden.reasoning.effort, "medium");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.PR_STUDIO_SEO_GEO_MODEL;
+    } else {
+      process.env.PR_STUDIO_SEO_GEO_MODEL = previous;
+    }
+  }
+});

@@ -116,6 +116,13 @@ const CONTENT_MODEL_BY_OPERATION = new Map([
     },
   ],
   [
+    "seo-geo.search-environment-classify",
+    {
+      environmentName: "PR_STUDIO_SEO_GEO_MODEL",
+      defaultModel: "gpt-5.6-sol",
+    },
+  ],
+  [
     "seo-geo.recommendation-classify",
     {
       environmentName: "PR_STUDIO_GEO_RECOMMENDATION_MODEL",
@@ -156,6 +163,7 @@ const REASONING_EFFORT_BY_OPERATION = new Map([
   ["content.editorial-directions-critic", "high"],
   ["seo-geo.interpret", "medium"],
   ["seo-geo.search-query-suggestions", "medium"],
+  ["seo-geo.search-environment-classify", "medium"],
   ["seo-geo.question-suggestions", "medium"],
   ["reviews.analyze-and-draft", "medium"],
 ]);
@@ -207,6 +215,7 @@ const ALLOWED_OPERATIONS = new Set([
   "content.editorial-directions-critic",
   "seo-geo.interpret",
   "seo-geo.search-query-suggestions",
+  "seo-geo.search-environment-classify",
   "seo-geo.recommendation-classify",
   "seo-geo.question-suggestions",
   "reviews.analyze-and-draft",
