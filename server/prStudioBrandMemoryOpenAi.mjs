@@ -309,17 +309,17 @@ export function buildPrStudioBrandMemoryConsolidationInstructions(
     "Never add facts, infer facts, or broaden the scope beyond the union of the member claims.",
     "Do not merge conflicting dates, prices, numbers, names, addresses, contacts, product scopes, roles, or other qualifiers.",
     "A legal-address claim remains distinct from operational-location claims unless the claims explicitly state that the legal and operational addresses are the same.",
-    "Compatible labels such as atelier, salon, and workshop may describe one location when the claims share the same precise address and do not contradict one another.",
+    "Compatible labels such as reception, office, and workspace may describe one location when claims share the same precise address and do not contradict each other.",
     "When uncertain whether the subjects match or whether the union is lossless, leave claims separate.",
     "Every claim ID may occur in at most one returned group.",
     "canonicalValue must be the clearest complete formulation supported only by that group's member claims and must remain in the source language.",
     "Do not return singleton groups.",
     [
       "Positive example: these Russian claims should form one group when the applicable section and review-status rules above are satisfied:",
-      "\"Салон и мастерская Bourbaki находятся по адресу: Москва, ул. Малая Дмитровка, д. 23/15, стр. 2.\"",
-      "\"Адрес ателье Bourbaki: Москва, улица Малая Дмитровка, дом 23/15, строение 2.\"",
-      "\"Основные работы выполняются в мастерской Bourbaki на втором этаже по адресу: Москва, ул. Малая Дмитровка, д. 23/15, стр. 2.\"",
-      "The canonical value must preserve the shared address and may mention the second floor and the compatible atelier, salon, and workshop labels because those details are explicitly present.",
+      "\"Офис организации «Пример» находится по адресу: г. Примерск, ул. Тестовая, д. 5.\"",
+      "\"Адрес офиса компании «Пример»: город Примерск, улица Тестовая, дом 5.\"",
+      "\"Приём посетителей ведётся на втором этаже офиса организации «Пример» по адресу: г. Примерск, ул. Тестовая, д. 5.\"",
+      "The canonical value must preserve the shared address and may mention the second floor, because those details are explicitly present. The fictional organization and address are examples, not defaults.",
     ].join(" "),
   ].join("\n");
 }

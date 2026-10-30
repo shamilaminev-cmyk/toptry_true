@@ -77,13 +77,21 @@ test("accepts reviewed claims for conservative consolidation", () => {
   assert.equal(parsed.claims[0].status, "confirmed");
 });
 
-test("instructs consolidation to merge compatible Bourbaki address claims", () => {
+test("instructs consolidation to merge compatible address claims without losing details", () => {
   const instructions = buildPrStudioBrandMemoryConsolidationInstructions();
 
   assert.match(instructions, /fully subsumed by a more complete claim/);
   assert.match(instructions, /compatible partially overlapping claims/);
   assert.match(instructions, /Claims do not need identical factual breadth/);
-  assert.match(instructions, /Малая Дмитровка/);
+  assert.match(
+    instructions,
+    /canonical value must preserve the shared address/i,
+  );
+  assert.match(instructions, /second floor/i);
+  assert.doesNotMatch(
+    instructions,
+    /Bourbaki|Малая Дмитровка/i,
+  );
   assert.match(instructions, /should form one group/);
   assert.match(instructions, /Do not merge conflicting dates, prices, numbers/);
   assert.match(instructions, /legal-address claim remains distinct/);
